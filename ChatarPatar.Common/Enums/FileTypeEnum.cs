@@ -17,20 +17,6 @@ public enum FileTypeEnum
 
 public static class FileTypeExtensions
 {
-    /// <summary>
-    /// Resolve folder name for cloudinary against the FileType.
-    /// </summary
-    public static FileFolderEnum ToMessageFolder(this FileTypeEnum fileType)
-    {
-        return fileType switch
-        {
-            FileTypeEnum.Image => FileFolderEnum.MessageImage,
-            FileTypeEnum.Video => FileFolderEnum.MessageVideo,
-            FileTypeEnum.Audio => FileFolderEnum.MessageAudio,
-            _ => FileFolderEnum.MessageFile
-        };
-    }
-
     public static FileTypeEnum ValidateFile(this IFormFile file, FileUsageContextEnum context)
     {
         var fileType = file.GetFileType();
@@ -96,7 +82,8 @@ public static class FileTypeExtensions
         {
             FileUsageContextEnum.Avatar or
             FileUsageContextEnum.Org_Logo or
-            FileUsageContextEnum.Team_Icon => new[] { FileTypeEnum.Image },
+            FileUsageContextEnum.Team_Icon or
+            FileUsageContextEnum.Conversation_Logo => new[] { FileTypeEnum.Image },
 
             FileUsageContextEnum.Attachment => new[]
             {

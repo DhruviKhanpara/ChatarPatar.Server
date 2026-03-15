@@ -38,7 +38,7 @@ CREATE TABLE Users (
     CONSTRAINT PK_Users PRIMARY KEY (Id),
     CONSTRAINT UQ_Users_Email     UNIQUE (Email),
     CONSTRAINT UQ_Users_Username  UNIQUE (Username),
-    CONSTRAINT FK_Users_DeletedBy FOREIGN KEY (DeletedBy) REFERENCES Users(Id) ON DELETE SET NULL
+    CONSTRAINT FK_Users_DeletedBy FOREIGN KEY (DeletedBy) REFERENCES Users(Id) ON DELETE NO ACTION
 );
 
 -- ══════════════════════════════════════════════════════════════
@@ -62,7 +62,7 @@ CREATE TABLE Files (
         -- 'code', // js, ts, py, json, html, css etc.
         -- 'archive', // zip, rar, tar, gz
         -- 'other'
-    UsageContext      NVARCHAR(50)        NOT NULL,   -- 'avatar','attachment','org_logo','team_icon'
+    UsageContext      NVARCHAR(50)        NOT NULL,   -- 'avatar','attachment','org_logo','team_icon', 'conversation_logo'
     MimeType          NVARCHAR(100)       NOT NULL,
     SizeInBytes     BIGINT              NOT NULL,
     OriginalName  NVARCHAR(255)       NOT NULL,
@@ -83,11 +83,11 @@ CREATE TABLE Files (
 
     CONSTRAINT PK_Files PRIMARY KEY (Id),
     CONSTRAINT FK_Files_UploadedBy FOREIGN KEY (UploadedByUserId) REFERENCES Users(Id),
-	CONSTRAINT FK_Files_CreatedBy FOREIGN KEY (CreatedBy) REFERENCES Users(Id) ON DELETE SET NULL,
-	CONSTRAINT FK_Files_UpdatedBy FOREIGN KEY (UpdatedBy) REFERENCES Users(Id) ON DELETE SET NULL,
-	CONSTRAINT FK_Files_DeletedBy FOREIGN KEY (DeletedBy) REFERENCES Users(Id) ON DELETE SET NULL,
+	CONSTRAINT FK_Files_CreatedBy FOREIGN KEY (CreatedBy) REFERENCES Users(Id) ON DELETE NO ACTION,
+	CONSTRAINT FK_Files_UpdatedBy FOREIGN KEY (UpdatedBy) REFERENCES Users(Id) ON DELETE NO ACTION,
+	CONSTRAINT FK_Files_DeletedBy FOREIGN KEY (DeletedBy) REFERENCES Users(Id) ON DELETE NO ACTION,
     CONSTRAINT CK_Files_FileType  CHECK (FileType IN ('image','video','audio','document', 'code', 'archive', 'other')),
-    CONSTRAINT CK_Files_UsageContext CHECK (UsageContext IN ('avatar','attachment','org_logo','team_icon')),
+    CONSTRAINT CK_Files_UsageContext CHECK (UsageContext IN ('avatar','attachment','org_logo','team_icon', 'conversation_logo')),
     CONSTRAINT CK_Files_OnlyOneScope CHECK (
         (
             (CASE WHEN UserId IS NOT NULL THEN 1 ELSE 0 END) +
@@ -129,10 +129,10 @@ CREATE TABLE Organizations (
 
     CONSTRAINT PK_Organizations       PRIMARY KEY (Id),
     CONSTRAINT UQ_Organizations_Slug  UNIQUE (Slug),
-    CONSTRAINT FK_Organizations_Logo  FOREIGN KEY (LogoFileId)       REFERENCES Files(Id) ON DELETE SET NULL,
-    CONSTRAINT FK_Organizations_CreatedBy FOREIGN KEY (CreatedBy) REFERENCES Users(Id) ON DELETE SET NULL,
-	CONSTRAINT FK_Organizations_UpdatedBy FOREIGN KEY (UpdatedBy) REFERENCES Users(Id) ON DELETE SET NULL,
-	CONSTRAINT FK_Organizations_DeletedBy FOREIGN KEY (DeletedBy) REFERENCES Users(Id) ON DELETE SET NULL
+    CONSTRAINT FK_Organizations_Logo  FOREIGN KEY (LogoFileId)       REFERENCES Files(Id) ON DELETE NO ACTION,
+    CONSTRAINT FK_Organizations_CreatedBy FOREIGN KEY (CreatedBy) REFERENCES Users(Id) ON DELETE NO ACTION,
+	CONSTRAINT FK_Organizations_UpdatedBy FOREIGN KEY (UpdatedBy) REFERENCES Users(Id) ON DELETE NO ACTION,
+	CONSTRAINT FK_Organizations_DeletedBy FOREIGN KEY (DeletedBy) REFERENCES Users(Id) ON DELETE NO ACTION
 );
 
 CREATE TABLE OrganizationMembers (
@@ -157,10 +157,10 @@ CREATE TABLE OrganizationMembers (
     CONSTRAINT UQ_OrgMembers_OrgUser     UNIQUE (OrgId, UserId, IsDeleted),
     CONSTRAINT FK_OrgMembers_Org         FOREIGN KEY (OrgId)            REFERENCES Organizations(Id) ON DELETE NO ACTION,
     CONSTRAINT FK_OrgMembers_User        FOREIGN KEY (UserId)           REFERENCES Users(Id)         ON DELETE NO ACTION,
-    CONSTRAINT FK_OrgMembers_InvitedBy   FOREIGN KEY (InvitedByUserId)  REFERENCES Users(Id) ON DELETE SET NULL,
-	CONSTRAINT FK_OrgMembers_CreatedBy	 FOREIGN KEY (CreatedBy)		REFERENCES Users(Id) ON DELETE SET NULL,
-	CONSTRAINT FK_OrgMembers_UpdatedBy	 FOREIGN KEY (UpdatedBy)		REFERENCES Users(Id) ON DELETE SET NULL,
-	CONSTRAINT FK_OrgMembers_DeletedBy	 FOREIGN KEY (DeletedBy)		REFERENCES Users(Id) ON DELETE SET NULL,
+    CONSTRAINT FK_OrgMembers_InvitedBy   FOREIGN KEY (InvitedByUserId)  REFERENCES Users(Id) ON DELETE NO ACTION,
+	CONSTRAINT FK_OrgMembers_CreatedBy	 FOREIGN KEY (CreatedBy)		REFERENCES Users(Id) ON DELETE NO ACTION,
+	CONSTRAINT FK_OrgMembers_UpdatedBy	 FOREIGN KEY (UpdatedBy)		REFERENCES Users(Id) ON DELETE NO ACTION,
+	CONSTRAINT FK_OrgMembers_DeletedBy	 FOREIGN KEY (DeletedBy)		REFERENCES Users(Id) ON DELETE NO ACTION,
     CONSTRAINT CK_OrgMembers_Role        CHECK (Role IN ('OrgOwner','OrgAdmin','OrgMember','OrgGuest'))
 );
 
@@ -194,11 +194,11 @@ CREATE TABLE Teams (
 
     CONSTRAINT PK_Teams            PRIMARY KEY (Id),
     CONSTRAINT FK_Teams_Org        FOREIGN KEY (OrgId)            REFERENCES Organizations(Id) ON DELETE NO ACTION,
-    CONSTRAINT FK_Teams_Icon       FOREIGN KEY (IconFileId)       REFERENCES Files(Id) ON DELETE SET NULL,
-    CONSTRAINT FK_Teams_Archiver   FOREIGN KEY (ArchivedBy) REFERENCES Users(Id) ON DELETE SET NULL,
-	CONSTRAINT FK_Teams_CreatedBy  FOREIGN KEY (CreatedBy)		  REFERENCES Users(Id) ON DELETE SET NULL,
-	CONSTRAINT FK_Teams_UpdatedBy  FOREIGN KEY (UpdatedBy)		  REFERENCES Users(Id) ON DELETE SET NULL,
-	CONSTRAINT FK_Teams_DeletedBy  FOREIGN KEY (DeletedBy)		  REFERENCES Users(Id) ON DELETE SET NULL,
+    CONSTRAINT FK_Teams_Icon       FOREIGN KEY (IconFileId)       REFERENCES Files(Id) ON DELETE NO ACTION,
+    CONSTRAINT FK_Teams_Archiver   FOREIGN KEY (ArchivedBy)       REFERENCES Users(Id) ON DELETE NO ACTION,
+	CONSTRAINT FK_Teams_CreatedBy  FOREIGN KEY (CreatedBy)		  REFERENCES Users(Id) ON DELETE NO ACTION,
+	CONSTRAINT FK_Teams_UpdatedBy  FOREIGN KEY (UpdatedBy)		  REFERENCES Users(Id) ON DELETE NO ACTION,
+	CONSTRAINT FK_Teams_DeletedBy  FOREIGN KEY (DeletedBy)		  REFERENCES Users(Id) ON DELETE NO ACTION,
     CONSTRAINT CK_Teams_ArchiveState CHECK (
         (IsArchived = 0 AND ArchivedAt IS NULL AND ArchivedBy IS NULL)
         OR
@@ -231,10 +231,10 @@ CREATE TABLE TeamMembers (
     CONSTRAINT PK_TeamMembers			PRIMARY KEY (Id),
     CONSTRAINT FK_TeamMembers_Team		FOREIGN KEY (TeamId)            REFERENCES Teams(Id) ON DELETE NO ACTION,
     CONSTRAINT FK_TeamMembers_User		FOREIGN KEY (UserId)            REFERENCES Users(Id) ON DELETE NO ACTION,
-    CONSTRAINT FK_TeamMembers_Inviter   FOREIGN KEY (InvitedByUserId)   REFERENCES Users(Id) ON DELETE SET NULL,
-	CONSTRAINT FK_TeamMembers_CreatedBy	FOREIGN KEY (CreatedBy)			REFERENCES Users(Id) ON DELETE SET NULL,
-	CONSTRAINT FK_TeamMembers_UpdatedBy	FOREIGN KEY (UpdatedBy)			REFERENCES Users(Id) ON DELETE SET NULL,
-	CONSTRAINT FK_TeamMembers_DeletedBy	FOREIGN KEY (DeletedBy)			REFERENCES Users(Id) ON DELETE SET NULL,
+    CONSTRAINT FK_TeamMembers_Inviter   FOREIGN KEY (InvitedByUserId)   REFERENCES Users(Id) ON DELETE NO ACTION,
+	CONSTRAINT FK_TeamMembers_CreatedBy	FOREIGN KEY (CreatedBy)			REFERENCES Users(Id) ON DELETE NO ACTION,
+	CONSTRAINT FK_TeamMembers_UpdatedBy	FOREIGN KEY (UpdatedBy)			REFERENCES Users(Id) ON DELETE NO ACTION,
+	CONSTRAINT FK_TeamMembers_DeletedBy	FOREIGN KEY (DeletedBy)			REFERENCES Users(Id) ON DELETE NO ACTION,
     CONSTRAINT CK_TeamMembers_Role  CHECK (Role IN ('TeamAdmin','TeamMember','TeamGuest'))
 );
 
@@ -271,10 +271,10 @@ CREATE TABLE Channels (
     CONSTRAINT PK_Channels          PRIMARY KEY (Id),
     CONSTRAINT FK_Channels_Team     FOREIGN KEY (TeamId)          REFERENCES Teams(Id) ON DELETE NO ACTION,
     CONSTRAINT FK_Channels_Org      FOREIGN KEY (OrgId)           REFERENCES Organizations(Id) ON DELETE NO ACTION,
-    CONSTRAINT FK_Channels_Archiver  FOREIGN KEY (ArchivedBy)	  REFERENCES Users(Id) ON DELETE SET NULL,
-    CONSTRAINT FK_Channels_CreatedBy  FOREIGN KEY (CreatedBy)	  REFERENCES Users(Id) ON DELETE SET NULL,
-    CONSTRAINT FK_Channels_UpdatedBy  FOREIGN KEY (UpdatedBy)	  REFERENCES Users(Id) ON DELETE SET NULL,
-    CONSTRAINT FK_Channels_DeletedBy  FOREIGN KEY (DeletedBy)	  REFERENCES Users(Id) ON DELETE SET NULL,
+    CONSTRAINT FK_Channels_Archiver  FOREIGN KEY (ArchivedBy)	  REFERENCES Users(Id) ON DELETE NO ACTION,
+    CONSTRAINT FK_Channels_CreatedBy  FOREIGN KEY (CreatedBy)	  REFERENCES Users(Id) ON DELETE NO ACTION,
+    CONSTRAINT FK_Channels_UpdatedBy  FOREIGN KEY (UpdatedBy)	  REFERENCES Users(Id) ON DELETE NO ACTION,
+    CONSTRAINT FK_Channels_DeletedBy  FOREIGN KEY (DeletedBy)	  REFERENCES Users(Id) ON DELETE NO ACTION,
     CONSTRAINT CK_Channels_Type     CHECK (Type IN ('Text','Announcement')),
     CONSTRAINT CK_Channels_ArchiveState CHECK (
         (IsArchived = 0 AND ArchivedAt IS NULL AND ArchivedBy IS NULL)
@@ -309,10 +309,10 @@ CREATE TABLE ChannelMembers (
     CONSTRAINT PK_ChannelMembers			PRIMARY KEY (Id),
     CONSTRAINT FK_ChannelMembers_Channel	FOREIGN KEY (ChannelId)		REFERENCES Channels(Id) ON DELETE NO ACTION,
     CONSTRAINT FK_ChannelMembers_User		FOREIGN KEY (UserId)		REFERENCES Users(Id)    ON DELETE NO ACTION,
-    CONSTRAINT FK_ChannelMembers_AddedBy	FOREIGN KEY (AddedByUserId) REFERENCES Users(Id) ON DELETE SET NULL,
-	CONSTRAINT FK_ChannelMembers_CreatedBy  FOREIGN KEY (CreatedBy)		REFERENCES Users(Id) ON DELETE SET NULL,
-    CONSTRAINT FK_ChannelMembers_UpdatedBy  FOREIGN KEY (UpdatedBy)		REFERENCES Users(Id) ON DELETE SET NULL,
-    CONSTRAINT FK_ChannelMembers_DeletedBy  FOREIGN KEY (DeletedBy)		REFERENCES Users(Id) ON DELETE SET NULL,
+    CONSTRAINT FK_ChannelMembers_AddedBy	FOREIGN KEY (AddedByUserId) REFERENCES Users(Id) ON DELETE NO ACTION,
+	CONSTRAINT FK_ChannelMembers_CreatedBy  FOREIGN KEY (CreatedBy)		REFERENCES Users(Id) ON DELETE NO ACTION,
+    CONSTRAINT FK_ChannelMembers_UpdatedBy  FOREIGN KEY (UpdatedBy)		REFERENCES Users(Id) ON DELETE NO ACTION,
+    CONSTRAINT FK_ChannelMembers_DeletedBy  FOREIGN KEY (DeletedBy)		REFERENCES Users(Id) ON DELETE NO ACTION,
     CONSTRAINT CK_ChannelMembers_Role   CHECK (Role IN ('ChannelModerator','ChannelMember','ChannelReadOnly'))
 );
 
@@ -343,10 +343,10 @@ CREATE TABLE Conversations (
 
     CONSTRAINT PK_Conversations				PRIMARY KEY (Id),
     CONSTRAINT FK_Conversations_Org			FOREIGN KEY (OrgId)         REFERENCES Organizations(Id) ON DELETE NO ACTION,
-    CONSTRAINT FK_Conversations_Logo        FOREIGN KEY (LogoFileId)    REFERENCES Files(Id) ON DELETE SET NULL,
-	CONSTRAINT FK_Conversations_CreatedBy	FOREIGN KEY (CreatedBy)		REFERENCES Users(Id) ON DELETE SET NULL,
-    CONSTRAINT FK_Conversations_UpdatedBy	FOREIGN KEY (UpdatedBy)		REFERENCES Users(Id) ON DELETE SET NULL,
-    CONSTRAINT FK_Conversations_DeletedBy	FOREIGN KEY (DeletedBy)		REFERENCES Users(Id) ON DELETE SET NULL,
+    CONSTRAINT FK_Conversations_Logo        FOREIGN KEY (LogoFileId)    REFERENCES Files(Id) ON DELETE NO ACTION,
+	CONSTRAINT FK_Conversations_CreatedBy	FOREIGN KEY (CreatedBy)		REFERENCES Users(Id) ON DELETE NO ACTION,
+    CONSTRAINT FK_Conversations_UpdatedBy	FOREIGN KEY (UpdatedBy)		REFERENCES Users(Id) ON DELETE NO ACTION,
+    CONSTRAINT FK_Conversations_DeletedBy	FOREIGN KEY (DeletedBy)		REFERENCES Users(Id) ON DELETE NO ACTION,
     CONSTRAINT CK_Conversations_Type		CHECK (Type IN ('Direct','Group')),
     CONSTRAINT CK_Conversations_NameRule CHECK (
         (Type = 'Direct' AND Name IS NULL)
@@ -427,7 +427,7 @@ CREATE TABLE Messages (
     CONSTRAINT FK_Messages_Conversation FOREIGN KEY (ConversationId)  REFERENCES Conversations(Id) ON DELETE NO ACTION,
     CONSTRAINT FK_Messages_Sender       FOREIGN KEY (SenderId)        REFERENCES Users(Id),
     CONSTRAINT FK_Messages_Thread       FOREIGN KEY (ThreadRootMessageId)        REFERENCES Messages(Id) ON DELETE NO ACTION,
-    CONSTRAINT FK_Messages_DeletedBy    FOREIGN KEY (DeletedBy)       REFERENCES Users(Id) ON DELETE SET NULL,
+    CONSTRAINT FK_Messages_DeletedBy    FOREIGN KEY (DeletedBy)       REFERENCES Users(Id) ON DELETE NO ACTION,
     -- Enforce exactly one source
     CONSTRAINT CK_Messages_Source CHECK (
         (ChannelId IS NOT NULL AND ConversationId IS NULL) OR
@@ -443,7 +443,7 @@ CREATE TABLE Messages (
 );
 
 CREATE INDEX IX_Messages_ThreadRootMessageId 
-ON Messages(ThreadRootMessageId, CreatedAt);
+ON Messages(ThreadRootMessageId, CreatedAt)
 WHERE IsDeleted = 0 AND ThreadRootMessageId IS NOT NULL;
 
 CREATE INDEX IX_Messages_Channel_Active
@@ -837,4 +837,4 @@ ALTER TABLE Files
         CONSTRAINT FK_Files_Team          FOREIGN KEY (TeamId)           REFERENCES Teams(Id) ON DELETE NO ACTION,
         CONSTRAINT FK_Files_Channel       FOREIGN KEY (ChannelId)        REFERENCES Channels(Id) ON DELETE NO ACTION,
         CONSTRAINT FK_Files_Conversation  FOREIGN KEY (ConversationId)   REFERENCES Conversations(Id) ON DELETE NO ACTION,
-        CONSTRAINT FK_Files_UserId        FOREIGN KEY (UserId)           REFERENCES Users(Id) ON DELETE SET NULL,
+        CONSTRAINT FK_Files_UserId        FOREIGN KEY (UserId)           REFERENCES Users(Id) ON DELETE NO ACTION

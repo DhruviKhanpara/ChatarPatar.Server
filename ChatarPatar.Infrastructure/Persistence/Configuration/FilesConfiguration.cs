@@ -22,7 +22,7 @@ public class FilesConfiguration : IEntityTypeConfiguration<Files>
 
             t.HasCheckConstraint(
                 "CK_Files_UsageContext",
-                "UsageContext IN ('avatar','attachment','org_logo','team_icon')");
+                "UsageContext IN ('avatar','attachment','org_logo','team_icon', 'conversation_logo')");
 
             t.HasCheckConstraint(
                 "CK_Files_OnlyOneScope",
