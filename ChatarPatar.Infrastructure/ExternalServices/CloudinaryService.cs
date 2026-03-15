@@ -93,6 +93,36 @@ internal class CloudinaryService : ICloudinaryService
         return result.Result == "ok";
     }
 
+    public async Task<int> DeleteByPrefixAsync(string prefix)
+    {
+        string nextCursor = null;
+        int deleted = 0;
+
+        do
+        {
+            var deleteParams = new DelResParams
+            {
+                Prefix = prefix,
+                ResourceType = ResourceType.Auto,
+                All = true,
+                NextCursor = nextCursor
+            };
+
+            var result = await _cloudinary.DeleteResourcesAsync(deleteParams);
+
+            if (result.Error != null)
+            {
+                throw new AppException($"Cloudinary error: {result.Error.Message}");
+            }
+
+            deleted += result.Deleted.Count;
+            nextCursor = result.NextCursor;
+
+        } while (!string.IsNullOrEmpty(nextCursor));
+
+        return deleted;
+    }
+
     #region Private Section
 
     #region Upload Helpers

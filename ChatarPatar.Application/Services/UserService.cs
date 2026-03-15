@@ -4,7 +4,9 @@ using ChatarPatar.Application.RepositoryContracts;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.Enums;
+using ChatarPatar.Common.Helpers;
 using ChatarPatar.Common.HttpUserDetails;
+using ChatarPatar.Common.Models;
 using ChatarPatar.Common.Security;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.ExternalServiceContracts;
@@ -160,7 +162,7 @@ internal class UserService : IUserService
         if (user == null)
             throw new NotFoundAppException("User");
 
-        var uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(file, FileFolderEnum.Avatar.BuildFolder(), FileFolderEnum.Avatar.BuildPublicId(user.Id));
+        var uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(file, CloudinaryPath.Users().Avatars(), CloudinaryPublicId.UserAvatar(user.Id));
 
         user.AvatarFile = new Files()
         {
