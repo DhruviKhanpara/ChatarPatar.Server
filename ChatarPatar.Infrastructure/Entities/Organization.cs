@@ -8,7 +8,7 @@ public class Organization : AuditableEntity
 {
     #region Table References
     [ForeignKey(nameof(LogoFileId))]
-    public Files? LogoFile { get; set; }
+    public FileEntity? LogoFile { get; set; }
 
     public virtual List<OrganizationMember> OrganizationMembers { get; set; } = new List<OrganizationMember>();
     public virtual List<Team> Teams { get; set; } = new List<Team>();

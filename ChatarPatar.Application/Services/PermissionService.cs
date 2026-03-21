@@ -1,23 +1,49 @@
 ﻿using ChatarPatar.Application.RepositoryContracts;
 using ChatarPatar.Application.ServiceContracts;
+using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.Consts;
 using ChatarPatar.Common.Enums;
 using ChatarPatar.Common.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace ChatarPatar.Application.Services;
 
 internal class PermissionService : IPermissionService
 {
     private readonly IRepositoryManager _repositories;
+    private readonly IMemoryCache _cache;
 
-    public PermissionService(IRepositoryManager repositories)
+    public PermissionService(IRepositoryManager repositories, IMemoryCache cache)
     {
         _repositories = repositories;
+        _cache = cache;
     }
 
-    public async Task<bool> HasPermissionAsync(PermissionContext ctx, string[] permission)
+    public async Task<bool> HasPermissionAsync(PermissionContext ctx, string[] permissions, PermissionCheckLogicEnum logic)
     {
+        var permKey = string.Join(",", permissions.OrderBy(x => x));
+        var cacheKey = $"perm:{ctx.UserId}:{ctx.OrgId}:{ctx.TeamId}:{ctx.ChannelId}:{ctx.ConversationId}:{logic}:{permKey}";
+        if (_cache.TryGetValue(cacheKey, out bool cached)) return cached;
+
+        var result = await ComputePermissionAsync(ctx, permissions, logic);
+
+        _cache.Set(cacheKey, result, new MemoryCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30),
+            SlidingExpiration = TimeSpan.FromSeconds(10)
+        });
+
+        return result;
+    }
+
+    #region Private Section
+
+    private async Task<bool> ComputePermissionAsync(PermissionContext ctx, string[] permissions, PermissionCheckLogicEnum logic)
+    {
+        if (ctx.ChannelId.HasValue && !ctx.TeamId.HasValue)
+            throw new ArgumentException("teamId is required when channelId is provided.");
+
         // 1. Load org role — always present
         var orgRole = await _repositories.OrganizationMemberRepository
             .GetOrgMemberAsync(ctx.UserId, ctx.OrgId)
@@ -27,14 +53,14 @@ internal class PermissionService : IPermissionService
 
         if (orgRole == null) return false;
 
-        if (orgRole == OrganizationRoleEnum.OrgOwner)
-            return true; // wildcard short-circuit
-
         var combined = new HashSet<string>(32);
 
         // 2. Add org-level permissions
         if (RolePermissions.OrganizationRolePermissions.TryGetValue((OrganizationRoleEnum)orgRole, out var orgPerms))
             combined.UnionWith(orgPerms);
+
+        if (combined.Contains("*"))
+            return true; // wildcard short-circuit for org only
 
         // 3. Add team-level permissions (scoped to THIS team only)
         if (ctx.TeamId != null)
@@ -62,10 +88,10 @@ internal class PermissionService : IPermissionService
         if (ctx.ChannelId is not null)
         {
             var channel = await _repositories.ChannelRepository
-                .FindByCondition(x => x.Id == ctx.ChannelId && x.OrgId == ctx.OrgId && (ctx.TeamId == null || x.TeamId == ctx.TeamId))
+                .FindByCondition(x => x.Id == ctx.ChannelId && x.OrgId == ctx.OrgId && x.TeamId == ctx.TeamId)
                 .AsNoTracking()
-                .Select(x => new 
-                { 
+                .Select(x => new
+                {
                     x.IsPrivate,
                     Role = x.ChannelMembers
                         .Where(m => !m.IsDeleted && m.UserId == ctx.UserId)
@@ -119,6 +145,13 @@ internal class PermissionService : IPermissionService
                 combined.UnionWith(convPerms);
         }
 
-        return combined.Contains("*") || permission.Any(combined.Contains);
+        return logic switch
+        {
+            PermissionCheckLogicEnum.All => permissions.All(combined.Contains),
+            PermissionCheckLogicEnum.Any => permissions.Any(combined.Contains),
+            _ => throw new AppException($"{nameof(logic)} not configured")
+        };
     }
+
+    #endregion
 }

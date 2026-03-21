@@ -46,14 +46,17 @@ public class PermissionFilter : IAsyncActionFilter
         Guid? channelId = null;
         Guid? conversationId = null;
 
-        if (context.ActionArguments.TryGetValue("channelId", out var ch))
-            channelId = (Guid)ch;
+        var data = GetValue(context, "channelId");
+        if (data is Guid chId)
+            channelId = chId;
 
-        if (context.ActionArguments.TryGetValue("teamId", out var t))
-            teamId = (Guid)t;
+        data = GetValue(context, "teamId");
+        if (data is Guid tId)
+            teamId = tId;
 
-        if (context.ActionArguments.TryGetValue("conversationId", out var c))
-            conversationId = (Guid)c;
+        data = GetValue(context, "conversationId");
+        if (data is Guid covId)
+            conversationId = covId;
 
         var permissionContext = new PermissionContext(
             userId,
@@ -63,7 +66,7 @@ public class PermissionFilter : IAsyncActionFilter
             conversationId
         );
 
-        var allowed = await _services.PermissionService.HasPermissionAsync(permissionContext, attribute.Permissions);
+        var allowed = await _services.PermissionService.HasPermissionAsync(permissionContext, attribute.Permissions, attribute.Logic);
 
         if (!allowed)
         {
@@ -73,4 +76,19 @@ public class PermissionFilter : IAsyncActionFilter
 
         await next();
     }
+
+    #region Private section
+
+    private object? GetValue(ActionExecutingContext context, string key)
+    {
+        if (context.ActionArguments.TryGetValue(key, out var val))
+            return val;
+
+        if (context.RouteData.Values.TryGetValue(key, out var routeVal))
+            return routeVal;
+
+        return null;
+    }
+
+    #endregion
 }

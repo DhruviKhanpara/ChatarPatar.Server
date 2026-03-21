@@ -7,7 +7,7 @@ public class User : BaseEntity
 {
     #region Table References
     [ForeignKey(nameof(AvatarFileId))]
-    public Files? AvatarFile { get; set; }
+    public FileEntity? AvatarFile { get; set; }
     [ForeignKey(nameof(DeletedBy))]
     public User? DeletedByUser { get; set; }
     #endregion
