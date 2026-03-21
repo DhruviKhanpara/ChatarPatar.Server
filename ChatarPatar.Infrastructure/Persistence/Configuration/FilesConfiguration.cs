@@ -6,9 +6,9 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace ChatarPatar.Infrastructure.Persistence.Configuration;
 
-public class FilesConfiguration : IEntityTypeConfiguration<Files>
+public class FilesConfiguration : IEntityTypeConfiguration<FileEntity>
 {
-    public void Configure(EntityTypeBuilder<Files> builder)
+    public void Configure(EntityTypeBuilder<FileEntity> builder)
     {
         builder.ToTable("Files", t =>
         {

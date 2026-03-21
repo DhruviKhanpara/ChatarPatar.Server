@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ChatarPatar.Infrastructure.Entities;
 
-public class Files : AuditableEntity
+public class FileEntity : AuditableEntity
 {
     #region Table References
     [ForeignKey(nameof(OrgId))]

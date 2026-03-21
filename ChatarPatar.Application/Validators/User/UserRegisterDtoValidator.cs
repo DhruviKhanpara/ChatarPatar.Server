@@ -30,13 +30,5 @@ internal class UserRegisterDtoValidator : AbstractValidator<UserRegisterDto>
             .Matches("[A-Z]").WithMessage("Password must contain at least one uppercase letter.")
             .Matches("[a-z]").WithMessage("Password must contain at least one lowercase letter.")
             .Matches("[0-9]").WithMessage("Password must contain at least one number.");
-
-        RuleFor(x => x.ConfirmPassword)
-            .NotEmpty().WithMessage("Confirm password is required.")
-            .Equal(x => x.Password).WithMessage("Passwords do not match.");
-
-        RuleFor(x => x.Bio)
-            .MaximumLength(FieldLengths.UserFields.Bio).WithMessage($"Bio must not exceed {FieldLengths.UserFields.Bio} characters.")
-            .When(x => !string.IsNullOrWhiteSpace(x.Bio));
     }
 }

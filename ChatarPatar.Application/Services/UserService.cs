@@ -6,7 +6,6 @@ using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.Enums;
 using ChatarPatar.Common.Helpers;
 using ChatarPatar.Common.HttpUserDetails;
-using ChatarPatar.Common.Models;
 using ChatarPatar.Common.Security;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.ExternalServiceContracts;
@@ -50,10 +49,10 @@ internal class UserService : IUserService
     {
         _validationService.Validate<UserLoginDto>(user);
 
-        var identifier = user.Identifier.Trim().ToLower();
+        var identifier = user.Identifier?.Trim().ToLower();
 
         var existUser = await _repositories.UserRepository
-            .FindByCondition(x => (x.Email.ToLower() == identifier || x.Username.ToLower() == identifier))
+            .FindByCondition(x => (x.Email == identifier || x.Username == identifier))
             .AsNoTracking()
             .FirstOrDefaultAsync();
 
@@ -98,7 +97,11 @@ internal class UserService : IUserService
 
             if (storedToken != null)
             {
-                RevokeToken(storedToken);
+                storedToken.IsRevoked = true;
+                storedToken.RevokedAt = DateTime.UtcNow;
+                storedToken.UpdatedAt = DateTime.UtcNow;
+
+                //RevokeToken(storedToken);
                 await _repositories.UnitOfWork.SaveChangesAsync();
             }
         }
@@ -115,7 +118,11 @@ internal class UserService : IUserService
 
         foreach (var token in tokens)
         {
-            RevokeToken(token);
+            token.IsRevoked = true;
+            token.RevokedAt = DateTime.UtcNow;
+            token.UpdatedAt = DateTime.UtcNow;
+
+            //RevokeToken(token);
         }
         await _repositories.UnitOfWork.SaveChangesAsync();
 
@@ -127,22 +134,25 @@ internal class UserService : IUserService
     {
         _validationService.Validate<UserRegisterDto>(user);
 
-        var username = user.Username.Trim().ToLower();
+        var username = user.Username.Trim();
         var email = user.Email.Trim().ToLower();
 
         var existingUser = await _repositories.UserRepository
-            .FindByCondition(x => x.Username.ToLower() == username || x.Email.ToLower() == email)
+            .FindByCondition(x => x.Username == username || x.Email == email)
             .AsNoTracking()
             .FirstOrDefaultAsync();
 
         if (existingUser != null)
         {
-            if (existingUser.Username.ToLower() == username)
+            if (existingUser.Username == username)
                 throw new InvalidDataAppException("Username is already registered");
 
-            if (existingUser.Email.ToLower() == email)
+            if (existingUser.Email == email)
                 throw new InvalidDataAppException("Email is already registered");
         }
+
+        user.Username = username;
+        user.Email = email;
 
         var userEntity = _mapper.Map<User>(user);
         userEntity.PasswordHash = PasswordHasher.HashPassword(user.Password);
@@ -162,9 +172,25 @@ internal class UserService : IUserService
         if (user == null)
             throw new NotFoundAppException("User");
 
-        var uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(file, CloudinaryPath.Users().Avatars(), CloudinaryPublicId.UserAvatar(user.Id));
+        var publicId = string.Empty;
 
-        user.AvatarFile = new Files()
+        if (user.AvatarFileId != null)
+        {
+            var userAvatarFile = await _repositories.FileRepository.GetByIdAsync((Guid)user.AvatarFileId).FirstOrDefaultAsync();
+
+            if (userAvatarFile == null)
+                throw new NotFoundAppException("User Avatar exist file data");
+
+            userAvatarFile.IsDeleted = true;
+
+            publicId = userAvatarFile.PublicId;
+        }
+        else
+            publicId = CloudinaryPublicId.UserAvatar(user.Id);
+
+        var uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(file, CloudinaryPath.Users().Avatars(), publicId);
+
+        user.AvatarFile = new FileEntity()
         {
             UploadedByUserId = user.Id,
             UserId = user.Id,
@@ -242,7 +268,11 @@ internal class UserService : IUserService
 
             foreach (var token in tokensToRevoke)
             {
-                RevokeToken(token);
+                token.IsRevoked = true;
+                token.RevokedAt = DateTime.UtcNow;
+                token.UpdatedAt = DateTime.UtcNow;
+                
+                //RevokeToken(token);
             }
 
             await _repositories.RefreshTokenRepository.AddAsync(refreshTokenEntity);

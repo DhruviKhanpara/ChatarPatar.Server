@@ -10,7 +10,7 @@ public class Conversation : AuditableEntity
     [ForeignKey(nameof(OrgId))]
     public Organization Organization { get; set; } = null!;
     [ForeignKey(nameof(LogoFileId))]
-    public Files? LogoFile { get; set; }
+    public FileEntity? LogoFile { get; set; }
 
     public virtual List<ConversationParticipant> ConversationParticipants { get; set; } = new List<ConversationParticipant>();
     #endregion

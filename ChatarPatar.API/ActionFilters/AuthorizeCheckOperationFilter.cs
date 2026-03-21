@@ -46,5 +46,8 @@ public class AuthorizeCheckOperationFilter : IOperationFilter
                 }
             }
         };
+
+        operation.Responses.Add("401", new OpenApiResponse { Description = "Unauthorized" });
+        operation.Responses.Add("403", new OpenApiResponse { Description = "Forbidden" });
     }
 }

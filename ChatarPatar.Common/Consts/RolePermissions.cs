@@ -47,8 +47,6 @@ public static class RolePermissions
 
         [OrganizationRoleEnum.OrgGuest] = new()
         {
-            Permissions.MESSAGE_THREAD_REPLY,
-            Permissions.MESSAGE_REACT
         }
     };
 
@@ -92,9 +90,7 @@ public static class RolePermissions
 
         [TeamRoleEnum.TeamGuest] = new()
         {
-            Permissions.MESSAGE_SEND,
             Permissions.MESSAGE_EDIT_OWN,
-            Permissions.MESSAGE_REACT,
             Permissions.MESSAGE_THREAD_REPLY,
         }
     };

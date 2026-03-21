@@ -12,6 +12,11 @@ public class ValidationAppException : AppException
         Errors = failures.Select(err => new ValidationError(err.PropertyName, err.ErrorMessage)).ToList();
     }
 
+    public IReadOnlyDictionary<string, string[]> GroupedErrors =>
+        Errors
+            .GroupBy(e => e.PropertyName)
+            .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray());
+
     public override string ToString()
     {
         return string.Join(Environment.NewLine, Errors.Select(e => $"{e.PropertyName}: {e.ErrorMessage}"));

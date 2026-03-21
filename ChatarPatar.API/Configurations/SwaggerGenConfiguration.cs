@@ -1,5 +1,4 @@
 ﻿using ChatarPatar.API.ActionFilters;
-using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 
 namespace ChatarPatar.API.Configuration;

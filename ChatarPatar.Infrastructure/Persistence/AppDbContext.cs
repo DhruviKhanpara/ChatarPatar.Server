@@ -19,7 +19,7 @@ public partial class AppDbContext : DbContext
     public virtual DbSet<ChannelMember> ChannelMembers { get; set; }
     public virtual DbSet<Conversation> Conversations { get; set; }
     public virtual DbSet<ConversationParticipant> ConversationParticipants { get; set; }
-    public virtual DbSet<Files> Files { get; set; }
+    public virtual DbSet<FileEntity> Files { get; set; }
     public virtual DbSet<Message> Messages { get; set; }
     public virtual DbSet<MessageAttachment> MessagesAttachments { get; set; }
     public virtual DbSet<MessageMention> MessagesMentions { get; set; }

@@ -11,8 +11,11 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddService(this IServiceCollection services, IConfiguration configuration)
     {
+        // Add http context support
         //services.AddTransient<IHttpContextAccessor, HttpContextAccessor>();
         services.AddHttpContextAccessor();
+        // Add memory cache support
+        services.AddMemoryCache();
 
         services.AddValidatorsFromAssemblyContaining<UserLoginDtoValidator>();
         services.AddScoped<IValidationService, ValidationService>();

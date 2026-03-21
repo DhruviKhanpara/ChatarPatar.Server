@@ -4,7 +4,6 @@ using ChatarPatar.API.Configuration;
 using ChatarPatar.API.Middlewares;
 using ChatarPatar.Application.Services.DependencyInjection;
 using ChatarPatar.Infrastructure.DependencyInjection;
-using FluentValidation.AspNetCore;
 using Serilog;
 using Serilog.Events;
 
@@ -45,10 +44,6 @@ public class Program
 
         //serilog
         //builder.BuildLogging();
-
-        //Client side fluent validation setup
-        builder.Services.AddFluentValidationAutoValidation();
-        builder.Services.AddFluentValidationClientsideAdapters();
 
         //Automapper setup
         builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());

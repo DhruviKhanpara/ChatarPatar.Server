@@ -10,7 +10,7 @@ public class Team : AuditableEntity
     [ForeignKey(nameof(OrgId))]
     public Organization Organization { get; set; } = null!;
     [ForeignKey(nameof(IconFileId))]
-    public Files? IconFile { get; set; }
+    public FileEntity? IconFile { get; set; }
     [ForeignKey(nameof(ArchivedBy))]
     public User? ArchivedByUser { get; set; }
 

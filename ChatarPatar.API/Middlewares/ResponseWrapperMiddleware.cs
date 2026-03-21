@@ -19,7 +19,8 @@ public class ResponseWrapperMiddleware
             "application/xml; charset=utf-8",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/pdf",
-            "application/png"
+            "application/png",
+            "image/"
         };
 
     public ResponseWrapperMiddleware(RequestDelegate next, ILogger<ResponseWrapperMiddleware> logger)
@@ -34,7 +35,8 @@ public class ResponseWrapperMiddleware
 
         Stream originalStream = httpContext.Response.Body;
 
-        httpContext.Response.Body = new MemoryStream();
+        await using var memoryStream = new MemoryStream();
+        httpContext.Response.Body = memoryStream;
 
         HttpStatusCode statusCode = HttpStatusCode.OK;
         string statusMessage = "Success";
@@ -49,11 +51,13 @@ public class ResponseWrapperMiddleware
 
             statusCode = httpContext.Response.StatusCode == (int)HttpStatusCode.NoContent ? HttpStatusCode.OK : (HttpStatusCode)httpContext.Response.StatusCode;
             contentType = httpContext.Response.ContentType ?? "";
-            responseBody = await GetResponseBodyFromStream(httpContext.Response.Body);
+
+            memoryStream.Position = 0;
+            responseBody = await GetResponseBodyFromStream(memoryStream);
 
             useResponseWrapper &= (int)statusCode > 199 && !new[] { HttpStatusCode.NotModified, HttpStatusCode.ResetContent }.Contains(statusCode);
 
-            if (!_excludedContentTypes.Contains(contentType) && useResponseWrapper)
+            if (!IsExcluded(contentType) && useResponseWrapper)
             {
                 object? objResult = null;
                 try { objResult = JsonConvert.DeserializeObject(responseBody); }
@@ -62,7 +66,7 @@ public class ResponseWrapperMiddleware
                 (statusMessage, objResult) = GetMessageByStatusCode(statusCode, objResult, httpContext);
                 contentType = "application/json";
 
-                responseBody = JsonConvert.SerializeObject(new ApiResponse(statusCode, "None", objResult, statusMessage));
+                responseBody = JsonConvert.SerializeObject(new ApiResponse(statusCode, httpContext.Items["ExceptionCode"]?.ToString() ?? "None", objResult, statusMessage));
             }
         }
         catch (Exception ex)
@@ -101,6 +105,11 @@ public class ResponseWrapperMiddleware
         }
     }
 
+    private bool IsExcluded(string contentType)
+    {
+        return _excludedContentTypes.Any(x => contentType.Contains(x, StringComparison.OrdinalIgnoreCase));
+    }
+
     private async Task<string> GetResponseBodyFromStream(Stream stream)
     {
         string responseBody = String.Empty;
@@ -132,7 +141,7 @@ public class ResponseWrapperMiddleware
             case HttpStatusCode.NotFound:
                 return (message?.ToString() ?? "Not Found", null);
             case HttpStatusCode.BadRequest:
-                return (message?.ToString() ?? "Bad Request. Verify the request structure/data and try again", null);
+                return (message?.ToString() ?? "Bad Request. Verify the request structure/data and try again", httpContext.Items["ErrorData"]);
             default:
                 return (message?.ToString() ?? "Something went wrong", null);
         }

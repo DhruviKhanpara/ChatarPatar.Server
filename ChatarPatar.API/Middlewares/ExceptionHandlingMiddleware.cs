@@ -21,7 +21,34 @@ public class ExceptionHandlingMiddleware
         }
         catch (AppException ex)
         {
-            _logger.LogError(ex, $"App exception at {httpContext?.GetEndpoint()?.DisplayName ?? "[Unknown endpoint]"} : {ex.Message} {ex.InnerException?.Message}", httpContext?.GetEndpoint()?.Metadata);
+            if (ex is ValidationAppException validationEx)
+            {
+                _logger.LogWarning(
+                    "Validation failed at {Endpoint} — {ErrorCount} error(s): {ValidationErrors}",
+                    httpContext?.GetEndpoint()?.DisplayName ?? "[Unknown]",
+                    validationEx.Errors.Count,
+                    validationEx.GroupedErrors
+                );
+
+                httpContext.Items["ErrorData"] = validationEx.GroupedErrors;
+            }
+            else
+            {
+                _logger.LogError(
+                    ex,
+                    "App exception at {Endpoint}: {Message} {InnerException}",
+                    httpContext?.GetEndpoint()?.DisplayName ?? "[Unknown endpoint]",
+                    ex.Message,
+                    ex.InnerException?.Message
+                );
+
+                _logger.LogError(
+                    ex, 
+                    $"App exception at {httpContext?.GetEndpoint()?.DisplayName ?? "[Unknown endpoint]"} : {ex.Message} {ex.InnerException?.Message}", 
+                    httpContext?.GetEndpoint()?.Metadata
+                );
+
+            }
 
             string exceptionMessage = !string.IsNullOrEmpty(ex.UserFriendlyMessage) ? ex.UserFriendlyMessage : ex.Message;
 
@@ -35,6 +62,7 @@ public class ExceptionHandlingMiddleware
             };
 
             httpContext.Items.Add("StatusMessage", exceptionMessage);
+            httpContext.Items["ExceptionCode"] = ex.GetType().Name;
 
             var errorPayload = new { exceptionCode = ex.GetType().Name, message = ex.UserFriendlyMessage ?? ex.Message };
 

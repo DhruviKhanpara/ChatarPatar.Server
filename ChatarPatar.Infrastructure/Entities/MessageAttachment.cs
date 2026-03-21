@@ -9,7 +9,7 @@ public class MessageAttachment : BaseEntity
     [ForeignKey(nameof(MessageId))]
     public Message Message { get; set; } = null!;
     [ForeignKey(nameof(FileId))]
-    public Files File { get; set; } = null!;
+    public FileEntity File { get; set; } = null!;
     #endregion
 
     public Guid MessageId { get; set; }
