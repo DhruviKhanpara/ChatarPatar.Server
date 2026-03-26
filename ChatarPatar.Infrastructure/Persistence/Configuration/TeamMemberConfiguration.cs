@@ -26,7 +26,7 @@ public class TeamMemberConfiguration : IEntityTypeConfiguration<TeamMember>
                .HasConversion(
                    v => v.ToString(),
                    v => Enum.Parse<TeamRoleEnum>(v))
-               .HasMaxLength(FieldLengths.TeamFields.Role)
+               .HasMaxLength(ValidationConstants.Team.Lengths.Role)
                .HasDefaultValue(TeamRoleEnum.TeamMember)
                .IsRequired()
                .IsUnicode(true);

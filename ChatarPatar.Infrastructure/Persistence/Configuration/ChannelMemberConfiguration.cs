@@ -26,7 +26,7 @@ public class ChannelMemberConfiguration : IEntityTypeConfiguration<ChannelMember
                .HasConversion(
                    v => v.ToString(),
                    v => Enum.Parse<ChannelRoleEnum>(v))
-               .HasMaxLength(FieldLengths.ChannelFields.Role)
+               .HasMaxLength(ValidationConstants.Channel.Lengths.Role)
                .HasDefaultValue(ChannelRoleEnum.ChannelMember)
                .IsRequired()
                .IsUnicode(true);

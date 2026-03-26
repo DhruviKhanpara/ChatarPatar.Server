@@ -33,7 +33,7 @@ public class PinnedMessageConfiguration : IEntityTypeConfiguration<PinnedMessage
                .HasDefaultValueSql("SYSUTCDATETIME()");
 
         builder.Property(p => p.ContentSnapshot)
-               .HasMaxLength(FieldLengths.MessageFields.ContentSnapshot)
+               .HasMaxLength(ValidationConstants.Message.Lengths.ContentSnapshot)
                .IsUnicode(true);
 
         builder.Property(x => x.RowVersion)

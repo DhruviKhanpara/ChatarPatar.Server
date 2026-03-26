@@ -29,18 +29,18 @@ public class ChannelConfiguration : IEntityTypeConfiguration<Channel>
 
         builder.Property(c => c.Name)
                .IsRequired()
-               .HasMaxLength(FieldLengths.ChannelFields.Name)
+               .HasMaxLength(ValidationConstants.Channel.Lengths.Name)
                .IsUnicode(true);
 
         builder.Property(c => c.Description)
-               .HasMaxLength(FieldLengths.ChannelFields.Description)
+               .HasMaxLength(ValidationConstants.Channel.Lengths.Description)
                .IsUnicode(true);
 
         builder.Property(c => c.Type)
                .HasConversion(
                    v => v.ToString(),
                    v => Enum.Parse<ChannelTypeEnum>(v))
-               .HasMaxLength(FieldLengths.ChannelFields.Type)
+               .HasMaxLength(ValidationConstants.Channel.Lengths.Type)
                .HasDefaultValue(ChannelTypeEnum.Text)
                .IsRequired()
                .IsUnicode(true);

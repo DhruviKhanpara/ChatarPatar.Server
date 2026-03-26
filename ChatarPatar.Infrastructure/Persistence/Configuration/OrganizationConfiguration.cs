@@ -18,7 +18,7 @@ public class OrganizationConfiguration : IEntityTypeConfiguration<Organization>
 
         builder.Property(o => o.Name)
                .IsRequired()
-               .HasMaxLength(FieldLengths.OrganizationFields.Name)
+               .HasMaxLength(ValidationConstants.Organization.Lengths.Name)
                .IsUnicode(true);
 
         builder.Property(o => o.Slug)
@@ -26,7 +26,7 @@ public class OrganizationConfiguration : IEntityTypeConfiguration<Organization>
                     v => v.ToLower(),
                     v => v)
                .IsRequired()
-               .HasMaxLength(FieldLengths.OrganizationFields.Slug)
+               .HasMaxLength(ValidationConstants.Organization.Lengths.Slug)
                .IsUnicode(true);
 
         builder.HasIndex(o => o.Slug)

@@ -24,6 +24,22 @@ namespace ChatarPatar.API.Controllers
             return Ok(authUser);
         }
 
+        [HttpPost("register")]
+        [AllowAnonymous]
+        public async Task<ActionResult<LoginResponseDto>> Register(UserRegisterDto user)
+        {
+            var authUser = await _services.UserService.RegisterUserAsync(user);
+            return Ok(authUser);
+        }
+
+        [HttpPost("refresh-token")]
+        [AllowAnonymous]
+        public async Task<IActionResult> RefreshToken()
+        {
+            var authUser = await _services.UserService.RefreshAuthToken();
+            return Ok(authUser);
+        }
+
         [HttpPost("logout")]
         [Authorize]
         public async Task<IActionResult> Logout()
@@ -32,12 +48,12 @@ namespace ChatarPatar.API.Controllers
             return Ok();
         }
 
-        [HttpPost("register")]
-        [AllowAnonymous]
-        public async Task<ActionResult<LoginResponseDto>> Register(UserRegisterDto user)
+        [HttpPost("revoke-all-sessions")]
+        [Authorize]
+        public async Task<ActionResult> RevokeAllSessions()
         {
-            var authUser = await _services.UserService.RegisterUserAsync(user);
-            return Ok(authUser);
+            await _services.UserService.RevokeAllUserSessions();
+            return Ok("Revoked all session successfully.");
         }
     }
 }

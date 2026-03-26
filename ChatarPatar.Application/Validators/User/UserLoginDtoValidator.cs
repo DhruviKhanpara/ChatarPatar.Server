@@ -4,16 +4,16 @@ using FluentValidation;
 
 namespace ChatarPatar.Application.Validators.User;
 
-internal class UserLoginDtoValidator : AbstractValidator<UserLoginDto>
+public class UserLoginDtoValidator : AbstractValidator<UserLoginDto>
 {
     public UserLoginDtoValidator()
     {
         RuleFor(x => x.Identifier)
             .NotEmpty().WithMessage("Username or email is required.")
-            .MaximumLength(Math.Max(FieldLengths.UserFields.Email, FieldLengths.UserFields.Username));
+            .MaximumLength(Math.Max(ValidationConstants.User.Lengths.Email, ValidationConstants.User.Lengths.Username));
 
         RuleFor(x => x.Password)
             .NotEmpty().WithMessage("Password is required.")
-            .MaximumLength(200);
+            .MaximumLength(ValidationConstants.User.Lengths.PasswordMax);
     }
 }

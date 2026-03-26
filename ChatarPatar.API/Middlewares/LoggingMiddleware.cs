@@ -6,12 +6,10 @@ namespace ChatarPatar.API.Middlewares;
 
 public class LoggingMiddleware
 {
-    readonly IConfiguration _configuration;
     readonly RequestDelegate _next;
 
-    public LoggingMiddleware(IConfiguration configuration, RequestDelegate next)
+    public LoggingMiddleware(RequestDelegate next)
     {
-        _configuration = configuration;
         _next = next;
     }
 
@@ -20,7 +18,7 @@ public class LoggingMiddleware
         var userName = httpContext.GetUserName()
             ?? httpContext.GetUserEmail()
             ?? httpContext.GetUserId()
-            ?? System.Security.Principal.WindowsIdentity.GetCurrent().Name;
+            ?? "Anonymous";
 
         using (LogContext.PushProperty(LoggingProperties.ServerName, Environment.MachineName))
         using (LogContext.PushProperty(LoggingProperties.UserName, userName))
@@ -29,7 +27,8 @@ public class LoggingMiddleware
         using (LogContext.PushProperty(LoggingProperties.Path, httpContext.Request.Path + httpContext.Request.QueryString))
         using (LogContext.PushProperty(LoggingProperties.Platform, httpContext.Request.Headers["sec-ch-ua-platform"].ToString()))
         using (LogContext.PushProperty(LoggingProperties.UserAgent, httpContext.Request.Headers["User-Agent"].ToString()))
-
-        await _next(httpContext);
+        {
+            await _next(httpContext);
+        }
     }
 }

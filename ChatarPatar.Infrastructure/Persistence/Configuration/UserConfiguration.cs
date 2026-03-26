@@ -19,27 +19,27 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         // Required fields
         builder.Property(u => u.Email)
                .IsRequired()
-               .HasMaxLength(FieldLengths.UserFields.Email)
+               .HasMaxLength(ValidationConstants.User.Lengths.Email)
                .IsUnicode(true);
 
         builder.Property(u => u.Username)
                .IsRequired()
-               .HasMaxLength(FieldLengths.UserFields.Username)
+               .HasMaxLength(ValidationConstants.User.Lengths.Username)
                .IsUnicode(true);
 
         builder.Property(u => u.Name)
                .IsRequired()
-               .HasMaxLength(FieldLengths.UserFields.Name)
+               .HasMaxLength(ValidationConstants.User.Lengths.Name)
                .IsUnicode(true);
 
         builder.Property(u => u.PasswordHash)
                .IsRequired()
-               .HasMaxLength(FieldLengths.UserFields.PasswordHash)
+               .HasMaxLength(ValidationConstants.User.Lengths.PasswordHash)
                .IsUnicode(true);
 
         // Optional fields
         builder.Property(u => u.Bio)
-               .HasMaxLength(FieldLengths.UserFields.Bio)
+               .HasMaxLength(ValidationConstants.User.Lengths.Bio)
                .IsUnicode(true);
 
         // Boolean defaults

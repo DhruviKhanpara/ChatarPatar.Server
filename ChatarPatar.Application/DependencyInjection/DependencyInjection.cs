@@ -1,6 +1,5 @@
 ﻿using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Application.Validators.User;
-using ChatarPatar.Common.Security;
 using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,7 +23,6 @@ public static class DependencyInjection
         services.AddScoped<IPermissionService, PermissionService>();
 
         services.AddScoped<IServiceManager, ServiceManager>();
-        services.AddScoped<TokenService>();
 
         return services;
     }

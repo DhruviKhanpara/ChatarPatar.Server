@@ -39,7 +39,7 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
                .UseIdentityColumn();
 
         builder.Property(m => m.Content)
-               .HasMaxLength(FieldLengths.MessageFields.Content)
+               .HasMaxLength(ValidationConstants.Message.Lengths.Content)
                .IsUnicode(true);
         
         builder.Property(n => n.MessageType)
@@ -71,7 +71,7 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
                .HasConversion(
                    v => v!.ToString(),
                    v => Enum.Parse<DmMessageStatusEnum>(v))
-               .HasMaxLength(FieldLengths.MessageFields.DmStatus)
+               .HasMaxLength(ValidationConstants.Message.Lengths.DmStatus)
                .IsRequired(false)
                .IsUnicode(true);
 

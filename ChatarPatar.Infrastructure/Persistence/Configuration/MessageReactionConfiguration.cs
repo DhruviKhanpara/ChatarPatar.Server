@@ -17,7 +17,7 @@ public class MessageReactionConfiguration : IEntityTypeConfiguration<MessageReac
                .HasDefaultValueSql("NEWSEQUENTIALID()");
 
         builder.Property(r => r.Emoji)
-               .HasMaxLength(FieldLengths.MessageFields.Emoji)
+               .HasMaxLength(ValidationConstants.Message.Lengths.Emoji)
                .IsRequired()
                .IsUnicode(true);
 

@@ -33,7 +33,7 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
                .HasConversion<byte>();
 
         builder.Property(n => n.Preview)
-            .HasMaxLength(FieldLengths.NotificationFields.Preview)
+            .HasMaxLength(ValidationConstants.Notification.Lengths.Preview)
             .IsUnicode(true);
 
         // ----------------------------

@@ -24,11 +24,11 @@ public class TeamConfiguration : IEntityTypeConfiguration<Team>
 
         builder.Property(t => t.Name)
                .IsRequired()
-               .HasMaxLength(FieldLengths.TeamFields.Name)
+               .HasMaxLength(ValidationConstants.Team.Lengths.Name)
                .IsUnicode(true);
 
         builder.Property(t => t.Description)
-               .HasMaxLength(FieldLengths.TeamFields.Description)
+               .HasMaxLength(ValidationConstants.Team.Lengths.Description)
                .IsUnicode(true);
 
         builder.Property(t => t.IsPrivate)

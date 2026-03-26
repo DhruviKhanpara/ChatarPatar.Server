@@ -45,26 +45,26 @@ public class FilesConfiguration : IEntityTypeConfiguration<FileEntity>
         // Required string fields
         builder.Property(f => f.PublicId)
                .IsRequired()
-               .HasMaxLength(FieldLengths.FileFields.PublicId)
+               .HasMaxLength(ValidationConstants.File.Lengths.PublicId)
                .IsUnicode(true);
 
         builder.Property(f => f.Url)
                .IsRequired()
-               .HasMaxLength(FieldLengths.FileFields.Url)
+               .HasMaxLength(ValidationConstants.File.Lengths.Url)
                .IsUnicode(true);
 
         builder.Property(f => f.ThumbnailUrl)
-               .HasMaxLength(FieldLengths.FileFields.ThumbnailUrl)
+               .HasMaxLength(ValidationConstants.File.Lengths.ThumbnailUrl)
                .IsUnicode(true);
 
         builder.Property(f => f.MimeType)
                .IsRequired()
-               .HasMaxLength(FieldLengths.FileFields.MimeType)
+               .HasMaxLength(ValidationConstants.File.Lengths.MimeType)
                .IsUnicode(true);
 
         builder.Property(f => f.OriginalName)
                .IsRequired()
-               .HasMaxLength(FieldLengths.FileFields.OriginalName)
+               .HasMaxLength(ValidationConstants.File.Lengths.OriginalName)
                .IsUnicode(true);
 
         // Enum stored as lowercase string
@@ -73,7 +73,7 @@ public class FilesConfiguration : IEntityTypeConfiguration<FileEntity>
                    v => v.ToString().ToLower(),
                    v => Enum.Parse<FileTypeEnum>(v, true))
                .IsRequired()
-               .HasMaxLength(FieldLengths.FileFields.FileType)
+               .HasMaxLength(ValidationConstants.File.Lengths.FileType)
                .IsUnicode(true);
 
         builder.Property(m => m.UsageContext)
@@ -81,7 +81,7 @@ public class FilesConfiguration : IEntityTypeConfiguration<FileEntity>
                     v => v.ToString().ToLower(),
                     v => Enum.Parse<FileUsageContextEnum>(v, true))
                .IsRequired()
-               .HasMaxLength(FieldLengths.FileFields.UsageContext)
+               .HasMaxLength(ValidationConstants.File.Lengths.UsageContext)
                .IsUnicode(true);
 
         builder.Property(f => f.SizeInBytes)

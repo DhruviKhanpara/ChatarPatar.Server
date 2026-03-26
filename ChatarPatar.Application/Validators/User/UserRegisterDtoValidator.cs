@@ -4,7 +4,7 @@ using FluentValidation;
 
 namespace ChatarPatar.Application.Validators.User;
 
-internal class UserRegisterDtoValidator : AbstractValidator<UserRegisterDto>
+public class UserRegisterDtoValidator : AbstractValidator<UserRegisterDto>
 {
     public UserRegisterDtoValidator()
     {
@@ -12,23 +12,28 @@ internal class UserRegisterDtoValidator : AbstractValidator<UserRegisterDto>
             .Cascade(CascadeMode.Stop)
             .NotEmpty().WithMessage("Email is required.")
             .EmailAddress().WithMessage("Email is not valid.")
-            .MaximumLength(FieldLengths.UserFields.Email).WithMessage($"Email must not exceed {FieldLengths.UserFields.Email} characters.");
+            .MaximumLength(ValidationConstants.User.Lengths.Email).WithMessage($"Email must not exceed {ValidationConstants.User.Lengths.Email} characters.");
 
         RuleFor(x => x.Username)
+            .Cascade(CascadeMode.Stop)
             .NotEmpty().WithMessage("Username is required.")
-            .MaximumLength(FieldLengths.UserFields.Username).WithMessage($"Username must not exceed {FieldLengths.UserFields.Username} characters.")
-            .Matches("^[a-zA-Z0-9_]+$").WithMessage("Username can only contain letters, numbers, and underscores.");
+            .MinimumLength(ValidationConstants.User.Lengths.UsernameMin).WithMessage($"Username must be at least {ValidationConstants.User.Lengths.UsernameMin} characters.")
+            .MaximumLength(ValidationConstants.User.Lengths.Username).WithMessage($"Username must not exceed {ValidationConstants.User.Lengths.Username} characters.")
+            .Matches(ValidationConstants.User.Patterns.UserName).WithMessage("Username can only contain lowercase letters, numbers, and underscores.");
 
         RuleFor(x => x.Name)
+            .Cascade(CascadeMode.Stop)
             .NotEmpty().WithMessage("Name is required.")
-            .MaximumLength(FieldLengths.UserFields.Name).WithMessage($"Name must not exceed {FieldLengths.UserFields.Name} characters.");
+            .MaximumLength(ValidationConstants.User.Lengths.Name).WithMessage($"Name must not exceed {ValidationConstants.User.Lengths.Name} characters.");
 
         RuleFor(x => x.Password)
+            .Cascade(CascadeMode.Stop)
             .NotEmpty().WithMessage("Password is required.")
-            .MinimumLength(FieldLengths.UserFields.PasswordMin).WithMessage($"Password must be at least {FieldLengths.UserFields.PasswordMin} characters.")
-            .MaximumLength(FieldLengths.UserFields.PasswordMax).WithMessage($"Password must not exceed {FieldLengths.UserFields.PasswordMax} characters.")
-            .Matches("[A-Z]").WithMessage("Password must contain at least one uppercase letter.")
-            .Matches("[a-z]").WithMessage("Password must contain at least one lowercase letter.")
-            .Matches("[0-9]").WithMessage("Password must contain at least one number.");
+            .MinimumLength(ValidationConstants.User.Lengths.PasswordMin).WithMessage($"Password must be at least {ValidationConstants.User.Lengths.PasswordMin} characters.")
+            .MaximumLength(ValidationConstants.User.Lengths.PasswordMax).WithMessage($"Password must not exceed {ValidationConstants.User.Lengths.PasswordMax} characters.")
+            .Matches(ValidationConstants.User.Patterns.HasUppercase).WithMessage("Password must contain at least one uppercase letter.")
+            .Matches(ValidationConstants.User.Patterns.HasLowercase).WithMessage("Password must contain at least one lowercase letter.")
+            .Matches(ValidationConstants.User.Patterns.HasNumber).WithMessage("Password must contain at least one number.")
+            .Matches(ValidationConstants.User.Patterns.HasSpecialChar).WithMessage("Password must contain at least one special character (@$!%*?&).");
     }
 }
