@@ -31,8 +31,6 @@ public class ResponseWrapperMiddleware
 
     public async Task Invoke(HttpContext httpContext)
     {
-        //using MemoryStream placeholderStream = new MemoryStream();
-
         Stream originalStream = httpContext.Response.Body;
 
         await using var memoryStream = new MemoryStream();
@@ -71,7 +69,13 @@ public class ResponseWrapperMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"App exception at {httpContext?.GetEndpoint()?.DisplayName ?? "[Unknown endpoint]"} : {ex.Message} {ex.InnerException?.Message}", httpContext?.GetEndpoint()?.Metadata);
+            _logger.LogError(
+                ex,
+                "App exception at {Endpoint}: {Message} {InnerException}",
+                httpContext?.GetEndpoint()?.DisplayName ?? "[Unknown endpoint]",
+                ex.Message,
+                ex.InnerException?.Message
+            );
 
             statusCode = HttpStatusCode.InternalServerError;
             statusMessage = $"Uncaught exception in Response Wrapper Middleware Pipeline";
@@ -89,15 +93,6 @@ public class ResponseWrapperMiddleware
             httpContext.Response.StatusCode = (int)statusCode;
             httpContext.Response.ContentLength = responseBytes.Length;
             httpContext.Response.ContentType = contentType;
-            //httpContext.Response.Body.SetLength(responseBytes.Length);
-
-            //placeholderStream.Seek(0, SeekOrigin.Begin);
-            //await placeholderStream.WriteAsync(responseBytes, 0, responseBytes.Length);
-
-            //placeholderStream.Seek(0, SeekOrigin.Begin);
-            //await placeholderStream.CopyToAsync(originalStream);
-
-            //httpContext.Response.Body = originalStream;
 
             // Restore original stream first, then write directly to it
             httpContext.Response.Body = originalStream;

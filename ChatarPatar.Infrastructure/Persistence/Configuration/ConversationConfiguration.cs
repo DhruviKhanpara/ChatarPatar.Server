@@ -30,12 +30,12 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
                .HasConversion(
                    v => v.ToString(),
                    v => Enum.Parse<ConversationTypeEnum>(v))
-               .HasMaxLength(FieldLengths.ConversationFields.Type)
+               .HasMaxLength(ValidationConstants.Conversation.Lengths.Type)
                .IsRequired()
                .IsUnicode(true);
 
         builder.Property(c => c.Name)
-               .HasMaxLength(FieldLengths.ConversationFields.Name)
+               .HasMaxLength(ValidationConstants.Conversation.Lengths.Name)
                .IsUnicode(true);
 
         builder.Property(c => c.IsDeleted)

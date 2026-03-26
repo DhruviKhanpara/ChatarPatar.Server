@@ -26,7 +26,7 @@ public class ConversationParticipantConfiguration : IEntityTypeConfiguration<Con
                .HasConversion(
                    v => v.ToString(),
                    v => Enum.Parse<ConversationParticipantRoleEnum>(v))
-               .HasMaxLength(FieldLengths.ConversationFields.Role)
+               .HasMaxLength(ValidationConstants.Conversation.Lengths.Role)
                .HasDefaultValue(ConversationParticipantRoleEnum.GroupMember)
                .IsRequired()
                .IsUnicode(true);

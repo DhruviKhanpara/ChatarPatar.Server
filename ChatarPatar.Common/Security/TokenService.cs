@@ -1,7 +1,10 @@
 ﻿using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.HttpUserDetails;
+using ChatarPatar.Common.Models;
+using ChatarPatar.Common.Security.SecurityContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -10,14 +13,14 @@ using System.Text;
 
 namespace ChatarPatar.Common.Security
 {
-    public class TokenService
+    internal class TokenService : ITokenService
     {
-        private readonly IConfiguration _configuration;
+        private readonly TokenSettings _tokenSettings;
         private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public TokenService(IConfiguration configuration, IHttpContextAccessor httpContextAccessor)
+        public TokenService(IOptions<TokenSettings> tokenSettings, IHttpContextAccessor httpContextAccessor)
         {
-            _configuration = configuration;
+            _tokenSettings = tokenSettings.Value;
             _httpContextAccessor = httpContextAccessor;
         }
 
@@ -33,15 +36,15 @@ namespace ChatarPatar.Common.Security
                 new Claim(ClaimTypes.NameIdentifier, id.ToString())
             };
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration.GetSection("TokenSettings:SecretKey").Value!));
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_tokenSettings.SecretKey));
             var cred = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
 
             var token = new JwtSecurityToken(
-                issuer: _configuration.GetSection("TokenSettings:Issuer").Value!,
+                issuer: _tokenSettings.Issuer,
                 audience: ValidateAndPickAudience(httpContext!.GetOriginBaseURL()),
                 claims: claims,
                 signingCredentials: cred,
-                expires: DateTime.UtcNow.AddMinutes(_configuration.GetValue<double>("TokenSettings:TokenExpirationMinutes"))
+                expires: DateTime.UtcNow.AddMinutes(_tokenSettings.TokenExpirationMinutes)
                 );
 
             var jwt = new JwtSecurityTokenHandler().WriteToken(token);
@@ -78,8 +81,7 @@ namespace ChatarPatar.Common.Security
 
         private string ValidateAndPickAudience(string requestOrigin)
         {
-            var allowed = _configuration.GetSection("TokenSettings:Audience").Get<List<string>>();
-            if (allowed != null && allowed.Contains(requestOrigin))
+            if (_tokenSettings.Audience.Contains(requestOrigin))
                 return requestOrigin;
 
             throw new InvalidDataAppException("Request origin is not whitelisted");

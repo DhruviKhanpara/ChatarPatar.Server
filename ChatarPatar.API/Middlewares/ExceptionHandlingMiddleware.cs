@@ -41,13 +41,6 @@ public class ExceptionHandlingMiddleware
                     ex.Message,
                     ex.InnerException?.Message
                 );
-
-                _logger.LogError(
-                    ex, 
-                    $"App exception at {httpContext?.GetEndpoint()?.DisplayName ?? "[Unknown endpoint]"} : {ex.Message} {ex.InnerException?.Message}", 
-                    httpContext?.GetEndpoint()?.Metadata
-                );
-
             }
 
             string exceptionMessage = !string.IsNullOrEmpty(ex.UserFriendlyMessage) ? ex.UserFriendlyMessage : ex.Message;
@@ -70,7 +63,13 @@ public class ExceptionHandlingMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Unhandled exception at {httpContext?.GetEndpoint()?.DisplayName ?? "[Unknown endpoint]"} : {ex.Message} {ex.InnerException?.Message}", httpContext?.GetEndpoint()?.Metadata);
+            _logger.LogError(
+                ex,
+                "Unhandled exception at {Endpoint}: {Message} {InnerException}",
+                httpContext?.GetEndpoint()?.DisplayName ?? "[Unknown endpoint]",
+                ex.Message,
+                ex.InnerException?.Message
+            );
 
             string exceptionMessage = "Something went wrong. Please try again later.";
 

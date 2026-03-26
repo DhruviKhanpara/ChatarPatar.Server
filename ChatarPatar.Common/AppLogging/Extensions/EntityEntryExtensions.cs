@@ -12,15 +12,19 @@ public static class EntityEntryExtensions
 
     public static long? GetNullableLongFromProperty(this EntityEntry change, string propName)
     {
-        long? returnValue = null;
+        if (change.CurrentValues.TryGetValue<long>(propName, out long currentLong) && currentLong != default)
+            return currentLong;
 
-        bool hasCurrentValue = change.CurrentValues.TryGetValue<long>(propName, out long currentValue);
-        bool hasOriginalValue = change.OriginalValues.TryGetValue<long>(propName, out long originalValue);
+        if (change.OriginalValues.TryGetValue<long>(propName, out long originalLong) && originalLong != default)
+            return originalLong;
 
-        if (hasCurrentValue) returnValue = currentValue;
-        else if (hasOriginalValue) returnValue = originalValue;
+        if (change.CurrentValues.TryGetValue<long?>(propName, out long? currentNullable) && currentNullable.HasValue)
+            return currentNullable;
 
-        return returnValue;
+        if (change.OriginalValues.TryGetValue<long?>(propName, out long? originalNullable) && originalNullable.HasValue)
+            return originalNullable;
+
+        return null;
     }
 
     public static Guid GetGuidFromProperty(this EntityEntry change, string propName, Guid defaultValue = default)
@@ -31,14 +35,18 @@ public static class EntityEntryExtensions
 
     public static Guid? GetNullableGuidFromProperty(this EntityEntry change, string propName)
     {
-        Guid? returnValue = null;
+        if (change.CurrentValues.TryGetValue<Guid>(propName, out Guid currentGuid) && currentGuid != default)
+            return currentGuid;
 
-        bool hasCurrentValue = change.CurrentValues.TryGetValue<Guid?>(propName, out Guid? currentValue);
-        bool hasOriginalValue = change.OriginalValues.TryGetValue<Guid?>(propName, out Guid? originalValue);
+        if (change.OriginalValues.TryGetValue<Guid>(propName, out Guid originalGuid) && originalGuid != default)
+            return originalGuid;
 
-        if (hasCurrentValue) returnValue = currentValue;
-        else if (hasOriginalValue) returnValue = originalValue;
+        if (change.CurrentValues.TryGetValue<Guid?>(propName, out Guid? currentNullable) && currentNullable.HasValue)
+            return currentNullable;
 
-        return returnValue;
+        if (change.OriginalValues.TryGetValue<Guid?>(propName, out Guid? originalNullable) && originalNullable.HasValue)
+            return originalNullable;
+
+        return null;
     }
 }

@@ -26,7 +26,7 @@ public class OrganizationMemberConfiguration : IEntityTypeConfiguration<Organiza
                .HasConversion(
                     v => v.ToString(),
                     v => Enum.Parse<OrganizationRoleEnum>(v))
-               .HasMaxLength(FieldLengths.OrganizationFields.Role)
+               .HasMaxLength(ValidationConstants.Organization.Lengths.Role)
                .HasDefaultValue(OrganizationRoleEnum.OrgMember)
                .IsRequired()
                .IsUnicode(true);

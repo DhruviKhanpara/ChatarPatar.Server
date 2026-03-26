@@ -6,31 +6,29 @@ using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.Enums;
 using ChatarPatar.Common.Helpers;
 using ChatarPatar.Common.HttpUserDetails;
+using ChatarPatar.Common.Models;
 using ChatarPatar.Common.Security;
+using ChatarPatar.Common.Security.SecurityContracts;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.ExternalServiceContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace ChatarPatar.Application.Services;
 
 internal class UserService : IUserService
 {
-    private const string ACCESS_TOKEN_COOKIE = "AccessToken";
-    private const string REFRESH_TOKEN_COOKIE = "RefreshToken";
-    private readonly double _tokenExpirationMinutes;
-    private readonly double _refreshTokenExpirationDay;
-    private readonly int _maxSessions;
-
     private readonly IRepositoryManager _repositories;
     private readonly IExternalServiceManager _externalServiceManager;
     private readonly IValidationService _validationService;
     private readonly IHttpContextAccessor _httpContextAccessor;
-    private readonly TokenService _tokenService;
+    private readonly ITokenService _tokenService;
+    private readonly AuthTokenStrategyFactory _tokenStrategyFactory;
     private readonly IMapper _mapper;
+    private readonly TokenSettings _tokenSettings;
 
-    public UserService(IRepositoryManager repositories, IExternalServiceManager externalServiceManager, IValidationService validationService, IHttpContextAccessor httpContextAccessor, TokenService tokenService, IMapper mapper, IConfiguration config)
+    public UserService(IRepositoryManager repositories, IExternalServiceManager externalServiceManager, IValidationService validationService, IHttpContextAccessor httpContextAccessor, ITokenService tokenService, IMapper mapper, AuthTokenStrategyFactory tokenStrategyFactory, IOptions<TokenSettings> tokenSettings)
     {
         _repositories = repositories;
         _externalServiceManager = externalServiceManager;
@@ -38,9 +36,8 @@ internal class UserService : IUserService
         _httpContextAccessor = httpContextAccessor;
         _tokenService = tokenService;
         _mapper = mapper;
-        _tokenExpirationMinutes = config.GetValue<double>("AppSettings:TokenExpirationMinutes");
-        _refreshTokenExpirationDay = config.GetValue<double>("AppSettings:RefreshTokenExpirationDays");
-        _maxSessions = config.GetValue<int>("AppSettings:MaxSessions");
+        _tokenStrategyFactory = tokenStrategyFactory;
+        _tokenSettings = tokenSettings.Value;
     }
 
     private HttpContext? _httpContext => _httpContextAccessor.HttpContext;
@@ -56,39 +53,67 @@ internal class UserService : IUserService
             .AsNoTracking()
             .FirstOrDefaultAsync();
 
-        if (existUser is null)
+        if (existUser is null || !PasswordHasher.VerifyPassword(hashedPassword: existUser.PasswordHash, providedPassword: user.Password))
             throw new InvalidDataAppException("Credentials");
 
-        if (!PasswordHasher.VerifyPassword(hashedPassword: existUser.PasswordHash, providedPassword: user.Password))
-            throw new InvalidDataAppException("Credentials");
-
-        return await AuthenticateUser(existUser);
+        var strategy = GetTokenStrategy();
+        return await AuthenticateUser(strategy, existUser);
     }
 
-    public async Task RefreshAuthToken()
+    public async Task<LoginResponseDto> RegisterUserAsync(UserRegisterDto user)
     {
-        var refreshToken = _httpContext?.Request.Cookies[REFRESH_TOKEN_COOKIE];
+        _validationService.Validate<UserRegisterDto>(user);
+
+        var username = user.Username.Trim().ToLower();
+        var email = user.Email.Trim().ToLower();
+
+        var existingUser = await _repositories.UserRepository
+            .FindByCondition(x => x.Username == username || x.Email == email)
+            .AsNoTracking()
+            .FirstOrDefaultAsync();
+
+        if (existingUser != null)
+            throw new InvalidDataAppException(existingUser.Username == username ? "Username is already registered" : "Email is already registered");
+
+        user.Username = username;
+        user.Email = email;
+
+        var userEntity = _mapper.Map<User>(user);
+        userEntity.PasswordHash = PasswordHasher.HashPassword(user.Password);
+
+        await _repositories.UserRepository.AddAsync(entity: userEntity);
+        await _repositories.UnitOfWork.SaveChangesAsync();
+
+        var strategy = GetTokenStrategy();
+        return await AuthenticateUser(strategy, userEntity);
+    }
+
+    public async Task<LoginResponseDto> RefreshAuthToken()
+    {
+        var strategy = GetTokenStrategy();
+        var refreshToken = strategy.GetRefreshToken();
 
         if (string.IsNullOrWhiteSpace(refreshToken))
-            throw new InvalidDataAppException("");
+            throw new NotFoundAppException("Refresh token");
 
         var tokenHash = _tokenService.HashToken(refreshToken);
         var storedToken = await _repositories.RefreshTokenRepository.FindByCondition(x => x.Token == tokenHash && !x.IsRevoked && x.ExpiresAt > DateTime.UtcNow).FirstOrDefaultAsync();
 
         if (storedToken == null)
-            throw new NotFoundAppException("Invalid refresh token");
+            throw new InvalidDataAppException("Refresh token");
 
         var user = await _repositories.UserRepository.GetByIdAsync(storedToken.UserId).FirstOrDefaultAsync();
 
         if (user == null)
-            throw new InvalidDataAppException("User");
+            throw new NotFoundAppException("User");
 
-        await AuthenticateUser(user, storedToken);
+        return await AuthenticateUser(strategy, user, storedToken);
     }
 
     public async Task LogoutUser()
     {
-        var refreshToken = _httpContext?.Request.Cookies[REFRESH_TOKEN_COOKIE];
+        var strategy = GetTokenStrategy();
+        var refreshToken = strategy.GetRefreshToken();
 
         if (!string.IsNullOrEmpty(refreshToken))
         {
@@ -101,17 +126,17 @@ internal class UserService : IUserService
                 storedToken.RevokedAt = DateTime.UtcNow;
                 storedToken.UpdatedAt = DateTime.UtcNow;
 
-                //RevokeToken(storedToken);
                 await _repositories.UnitOfWork.SaveChangesAsync();
             }
         }
 
-        _httpContext?.Response.Cookies.Delete(ACCESS_TOKEN_COOKIE, new CookieOptions { Path = "/" });
-        _httpContext?.Response.Cookies.Delete(REFRESH_TOKEN_COOKIE, new CookieOptions { Path = "/" });
+        strategy.ClearTokens();
     }
 
-    public async Task RevokeAllUserSessions(Guid? userId)
+    public async Task RevokeAllUserSessions(Guid? userId = null)
     {
+        var strategy = GetTokenStrategy();
+
         userId = userId ?? Guid.Parse(_httpContext!.GetUserId());
 
         var tokens = await _repositories.RefreshTokenRepository.FindByCondition(x => x.UserId == userId && !x.IsRevoked).ToListAsync();
@@ -121,46 +146,10 @@ internal class UserService : IUserService
             token.IsRevoked = true;
             token.RevokedAt = DateTime.UtcNow;
             token.UpdatedAt = DateTime.UtcNow;
-
-            //RevokeToken(token);
         }
         await _repositories.UnitOfWork.SaveChangesAsync();
 
-        _httpContext?.Response.Cookies.Delete(ACCESS_TOKEN_COOKIE, new CookieOptions { Path = "/" });
-        _httpContext?.Response.Cookies.Delete(REFRESH_TOKEN_COOKIE, new CookieOptions { Path = "/" });
-    }
-
-    public async Task<LoginResponseDto> RegisterUserAsync(UserRegisterDto user)
-    {
-        _validationService.Validate<UserRegisterDto>(user);
-
-        var username = user.Username.Trim();
-        var email = user.Email.Trim().ToLower();
-
-        var existingUser = await _repositories.UserRepository
-            .FindByCondition(x => x.Username == username || x.Email == email)
-            .AsNoTracking()
-            .FirstOrDefaultAsync();
-
-        if (existingUser != null)
-        {
-            if (existingUser.Username == username)
-                throw new InvalidDataAppException("Username is already registered");
-
-            if (existingUser.Email == email)
-                throw new InvalidDataAppException("Email is already registered");
-        }
-
-        user.Username = username;
-        user.Email = email;
-
-        var userEntity = _mapper.Map<User>(user);
-        userEntity.PasswordHash = PasswordHasher.HashPassword(user.Password);
-
-        await _repositories.UserRepository.AddAsync(entity: userEntity);
-        await _repositories.UnitOfWork.SaveChangesAsync();
-
-        return await AuthenticateUser(userEntity);
+        strategy.ClearTokens();
     }
 
     public async Task UpdateAvatarAsync(Guid userId, IFormFile file)
@@ -179,7 +168,7 @@ internal class UserService : IUserService
             var userAvatarFile = await _repositories.FileRepository.GetByIdAsync((Guid)user.AvatarFileId).FirstOrDefaultAsync();
 
             if (userAvatarFile == null)
-                throw new NotFoundAppException("User Avatar exist file data");
+                throw new NotFoundAppException("Exist User Avatar file data");
 
             userAvatarFile.IsDeleted = true;
 
@@ -211,31 +200,23 @@ internal class UserService : IUserService
 
     #region Private section
 
-    private async Task<LoginResponseDto> AuthenticateUser(User user, RefreshToken? entity = null)
+    private async Task<LoginResponseDto> AuthenticateUser(IAuthTokenStrategy strategy, User user, RefreshToken? entity = null)
     {
         string token = _tokenService.CreateToken(email: user.Email, id: user.Id, name: user.Name);
+        var accessTokenResponse = strategy.SetAccessToken(token);
 
-        _httpContext?.Response.Cookies.Append(ACCESS_TOKEN_COOKIE, token, new CookieOptions
-        {
-            HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.Strict,
-            Path = "/",
-            IsEssential = true,
-            Expires = DateTime.UtcNow.AddMinutes(_tokenExpirationMinutes)
-        });
-
-        await IssueRefreshTokenAsync(user, entity);
+        var refreshTokenResponse = await IssueRefreshTokenAsync(strategy, user, entity);
 
         return new LoginResponseDto()
         {
-            AccessToken = token,
-            ExpiredIn = _tokenExpirationMinutes * 60,
+            AccessToken = accessTokenResponse,
+            RefreshToken = refreshTokenResponse,
+            ExpiresIn = _tokenSettings.TokenExpirationMinutes * 60,
             TokenType = "Bearer"
         };
     }
 
-    private async Task IssueRefreshTokenAsync(User user, RefreshToken? entity = null)
+    private async Task<string?> IssueRefreshTokenAsync(IAuthTokenStrategy strategy, User user, RefreshToken? entity = null)
     {
         var refreshToken = _tokenService.GenerateRefreshToken();
         var deviceInfo = _httpContext!.GetDeviceInfo();
@@ -248,13 +229,14 @@ internal class UserService : IUserService
             Browser = deviceInfo.Browser,
             OperatingSystem = deviceInfo.OS,
             IPAddress = _httpContext!.GetClientIp(),
-            ExpiresAt = DateTime.UtcNow.AddDays(_refreshTokenExpirationDay)
+            ExpiresAt = DateTime.UtcNow.AddDays(_tokenSettings.RefreshTokenExpirationDays)
         };
 
         if (entity != null)
         {
             refreshTokenEntity.Id = entity.Id;
             refreshTokenEntity.UpdatedAt = DateTime.UtcNow;
+            refreshTokenEntity.CreatedAt = entity.CreatedAt;
 
             _repositories.RefreshTokenRepository.Update(entity, refreshTokenEntity);
         }
@@ -263,7 +245,7 @@ internal class UserService : IUserService
             var tokensToRevoke = await _repositories.RefreshTokenRepository
             .FindByCondition(x => x.UserId == user.Id && !x.IsRevoked && x.ExpiresAt > DateTime.UtcNow)
             .OrderByDescending(x => x.CreatedAt)
-            .Skip(_maxSessions - 1)
+            .Skip(_tokenSettings.MaxSessions - 1)
             .ToListAsync();
 
             foreach (var token in tokensToRevoke)
@@ -271,8 +253,6 @@ internal class UserService : IUserService
                 token.IsRevoked = true;
                 token.RevokedAt = DateTime.UtcNow;
                 token.UpdatedAt = DateTime.UtcNow;
-                
-                //RevokeToken(token);
             }
 
             await _repositories.RefreshTokenRepository.AddAsync(refreshTokenEntity);
@@ -280,33 +260,12 @@ internal class UserService : IUserService
 
         await _repositories.UnitOfWork.SaveChangesAsync();
 
-        _httpContext?.Response.Cookies.Append(REFRESH_TOKEN_COOKIE, refreshToken, new CookieOptions
-        {
-            HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.Strict,
-            Path = "/",
-            IsEssential = true,
-            Expires = DateTime.UtcNow.AddDays(_refreshTokenExpirationDay)
-        });
+        var refreshTokenResponse = strategy.SetRefreshToken(refreshToken);
+
+        return refreshTokenResponse;
     }
 
-    private void RevokeToken(RefreshToken token)
-    {
-        var tokenEntity = new RefreshToken()
-        {
-            Id = token.Id,
-            UserId = token.UserId,
-            Token = token.Token,
-            ExpiresAt = token.ExpiresAt,
-            CreatedAt = token.CreatedAt,
-            IsRevoked = true,
-            RevokedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow,
-        };
-
-        _repositories.RefreshTokenRepository.Update(token, tokenEntity);
-    }
+    private IAuthTokenStrategy GetTokenStrategy() => _tokenStrategyFactory.Resolve();
 
     #endregion
 }

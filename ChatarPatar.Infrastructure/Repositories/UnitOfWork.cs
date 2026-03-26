@@ -12,13 +12,13 @@ namespace ChatarPatar.Infrastructure.Repositories;
 internal class UnitOfWork : IUnitOfWork
 {
     private readonly AppDbContext _context;
-    private readonly HttpContext? _httpContext;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<UnitOfWork> _logger;
 
     public UnitOfWork(AppDbContext context, IHttpContextAccessor httpContextAccessor, ILogger<UnitOfWork> logger)
     {
         _context = context;
-        _httpContext = httpContextAccessor?.HttpContext;
+        _httpContextAccessor = httpContextAccessor;
         _logger = logger;
     }
 
@@ -42,7 +42,7 @@ internal class UnitOfWork : IUnitOfWork
 
     private void UpdateAuditInEntityBeforeSave()
     {
-        var isLogin = Guid.TryParse(_httpContext?.GetUserId(), out Guid authUserId);
+        var isLogin = Guid.TryParse(_httpContextAccessor.HttpContext?.GetUserId(), out Guid authUserId);
 
         var entities = _context.ChangeTracker
                 .Entries<AuditableEntity>()

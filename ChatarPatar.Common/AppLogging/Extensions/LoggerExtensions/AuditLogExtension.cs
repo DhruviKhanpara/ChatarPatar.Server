@@ -16,7 +16,7 @@ public static class AuditLogExtension
         using (LogContext.PushProperty(LoggingProperties.TableName, value: logRequest.TableName))
         using (LogContext.PushProperty(LoggingProperties.RecordId, value: logRequest.RecordId))
         using (LogContext.PushProperty(LoggingProperties.Record, value: logRequest.ChangeRecord, destructureObjects: true))
-            logger.LogInformation(messageTemplate, logRequest.TableName, logRequest.ChangeRecord.ToString());
+            logger.LogInformation(messageTemplate, logRequest.TableName, logRequest.ChangeState.ToString());
 
         return logger;
     }

@@ -3,6 +3,7 @@ using ChatarPatar.API.ActionFilters;
 using ChatarPatar.API.Configuration;
 using ChatarPatar.API.Middlewares;
 using ChatarPatar.Application.Services.DependencyInjection;
+using ChatarPatar.Common.DependencyInjection;
 using ChatarPatar.Infrastructure.DependencyInjection;
 using Serilog;
 using Serilog.Events;
@@ -13,23 +14,23 @@ public class Program
 {
     public static void Main(string[] args)
     {
-        //Serilog.Debugging.SelfLog.Enable(msg =>
-        //{
-        //    var formatted = $"[{DateTime.UtcNow:u}] {msg}{Environment.NewLine}{new string('-', 80)}{Environment.NewLine}";
-        //    File.AppendAllText("serilog-errors.txt", formatted);
-        //});
+        Serilog.Debugging.SelfLog.Enable(msg =>
+        {
+            var formatted = $"[{DateTime.UtcNow:u}] {msg}{Environment.NewLine}{new string('-', 80)}{Environment.NewLine}";
+            File.AppendAllText("serilog-errors.txt", formatted);
+        });
 
-        //Log.Logger = new LoggerConfiguration()
-        //        .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
-        //        .WriteTo.Console()
-        //        .CreateBootstrapLogger();
+        Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+                .WriteTo.Console()
+                .CreateBootstrapLogger();
 
         var builder = WebApplication.CreateBuilder(args);
 
         // Add services to the container.
 
         //config
-        //builder.BuildConfiguration();
+        builder.BuildConfiguration();
 
         builder.Services.AddAuthenticationConfiguration(builder.Configuration);
         builder.Services.AddSwaggerGenConfiguration(builder.Configuration);
@@ -43,13 +44,14 @@ public class Program
         builder.Services.AddEndpointsApiExplorer();
 
         //serilog
-        //builder.BuildLogging();
+        builder.BuildLogging();
 
         //Automapper setup
         builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
         // Add Dependency configurations
         builder.Services.AddService(builder.Configuration);
+        builder.Services.AddCommonService(builder.Configuration);
         builder.Services.AddInfrastructure(builder.Configuration);
 
         // CORS configuration to allow requests from Angular app
@@ -71,7 +73,7 @@ public class Program
         app.UseAuthentication();
         app.UseAuthorization();
 
-        //app.UseMiddleware<LoggingMiddleware>();
+        app.UseMiddleware<LoggingMiddleware>();
 
         app.UseMiddleware<ResponseWrapperMiddleware>();            
         app.UseMiddleware<ExceptionHandlingMiddleware>();

@@ -24,23 +24,23 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
 
         builder.Property(r => r.Token)
                .IsRequired()
-               .HasMaxLength(FieldLengths.RefreshTokenFields.TokenLength)
+               .HasMaxLength(ValidationConstants.RefreshToken.Lengths.TokenLength)
                .IsUnicode(true);
         
         builder.Property(r => r.Device)
-               .HasMaxLength(FieldLengths.RefreshTokenFields.DeviceLength)
+               .HasMaxLength(ValidationConstants.RefreshToken.Lengths.DeviceLength)
                .IsUnicode(true);
         
         builder.Property(r => r.Browser)
-               .HasMaxLength(FieldLengths.RefreshTokenFields.BrowserLength)
+               .HasMaxLength(ValidationConstants.RefreshToken.Lengths.BrowserLength)
                .IsUnicode(true);
         
         builder.Property(r => r.OperatingSystem)
-               .HasMaxLength(FieldLengths.RefreshTokenFields.OperatingSystemLength)
+               .HasMaxLength(ValidationConstants.RefreshToken.Lengths.OperatingSystemLength)
                .IsUnicode(true);
         
         builder.Property(r => r.IPAddress)
-               .HasMaxLength(FieldLengths.RefreshTokenFields.IPAddressLength)
+               .HasMaxLength(ValidationConstants.RefreshToken.Lengths.IPAddressLength)
                .IsUnicode(true);
 
         builder.Property(r => r.CreatedAt)
