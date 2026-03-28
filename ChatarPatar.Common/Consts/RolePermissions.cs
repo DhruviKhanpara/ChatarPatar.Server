@@ -4,15 +4,14 @@ namespace ChatarPatar.Common.Consts;
 
 public static class RolePermissions
 {
-    public static readonly IReadOnlyDictionary<OrganizationRoleEnum, HashSet<string>> OrganizationRolePermissions = Organization;
-    public static readonly IReadOnlyDictionary<TeamRoleEnum, HashSet<string>> TeamRolePermissions = Team;
-    public static readonly IReadOnlyDictionary<ChannelRoleEnum, HashSet<string>> ChannelRolePermissions = Channel;
-    public static readonly IReadOnlyDictionary<ConversationParticipantRoleEnum, HashSet<string>>  ConversationRolePermissions = Conversation;
-
+    /// <summary>
+    /// Static fields are initialized in the order they are declared, So if `OrganizationRolePermissions` is declared **before** `Organization` (it's in the public section, `Organization` is in the `Private section` below). So when `OrganizationRolePermissions = Organization` runs, `Organization` hasn't been initialized yet — it's still `null`. So `OrganizationRolePermissions` gets assigned `null` and stays `null` forever.
+    /// That's why this private methods are at top
+    /// </summary>
     #region Private section
 
     private static readonly Dictionary<OrganizationRoleEnum, HashSet<string>> Organization =
-    new()
+    new Dictionary<OrganizationRoleEnum, HashSet<string>>()
     {
         [OrganizationRoleEnum.OrgOwner] = new() { "*" },
 
@@ -51,7 +50,7 @@ public static class RolePermissions
     };
 
     private static readonly Dictionary<TeamRoleEnum, HashSet<string>> Team =
-    new()
+    new Dictionary<TeamRoleEnum, HashSet<string>>()
     {
         [TeamRoleEnum.TeamAdmin] = new()
         {
@@ -96,7 +95,7 @@ public static class RolePermissions
     };
 
     private static readonly Dictionary<ChannelRoleEnum, HashSet<string>> Channel =
-    new()
+    new Dictionary<ChannelRoleEnum, HashSet<string>>()
     {
         [ChannelRoleEnum.ChannelModerator] = new()
         {
@@ -128,7 +127,7 @@ public static class RolePermissions
     };
 
     private static readonly Dictionary<ConversationParticipantRoleEnum, HashSet<string>> Conversation =
-    new()
+    new Dictionary<ConversationParticipantRoleEnum, HashSet<string>>()
     {
         [ConversationParticipantRoleEnum.GroupAdmin] = new()
         {
@@ -157,4 +156,9 @@ public static class RolePermissions
     };
 
     #endregion
+
+    public static readonly IReadOnlyDictionary<OrganizationRoleEnum, HashSet<string>> OrganizationRolePermissions = Organization;
+    public static readonly IReadOnlyDictionary<TeamRoleEnum, HashSet<string>> TeamRolePermissions = Team;
+    public static readonly IReadOnlyDictionary<ChannelRoleEnum, HashSet<string>> ChannelRolePermissions = Channel;
+    public static readonly IReadOnlyDictionary<ConversationParticipantRoleEnum, HashSet<string>> ConversationRolePermissions = Conversation;
 }

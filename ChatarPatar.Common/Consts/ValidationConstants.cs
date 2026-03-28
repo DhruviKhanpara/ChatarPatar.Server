@@ -47,6 +47,14 @@ public static class ValidationConstants
             public const int Name = 200;
             public const int Slug = 100;
             public const int Role = 50;
+            public const int Email = 320;
+            public const int Token = 512;
+        }
+
+        public static class Patterns
+        {
+            public const string Name = "^[a-zA-Z0-9 ]+$";
+            public const string Slug = "^[a-z0-9]+(-[a-z0-9]+)*$";
         }
     }
 

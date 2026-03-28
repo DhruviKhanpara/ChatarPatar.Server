@@ -15,6 +15,8 @@ internal class RefreshTokenRepository : IRefreshTokenRepository
     }
 
     public IQueryable<RefreshToken> FindByCondition(Expression<Func<RefreshToken, bool>> expression) => _context.RefreshTokens.Where(expression).AsQueryable();
+    public IQueryable<RefreshToken> FindActiveRefreshToken(string token) => _context.RefreshTokens.Where(x => x.Token == token && !x.IsRevoked && x.ExpiresAt > DateTime.UtcNow);
+    public IQueryable<RefreshToken> GetActiveRefreshTokensByUserId(Guid userId) => _context.RefreshTokens.Where(x => x.UserId == userId && !x.IsRevoked && x.ExpiresAt > DateTime.UtcNow);
     public async Task AddAsync(RefreshToken entity) => await _context.RefreshTokens.AddAsync(entity);
     public void Update(RefreshToken existingEntity, RefreshToken entity) => _context.Entry(existingEntity).CurrentValues.SetValues(entity);
 }

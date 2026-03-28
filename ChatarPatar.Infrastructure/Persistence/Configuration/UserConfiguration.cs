@@ -20,7 +20,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.Email)
                .IsRequired()
                .HasMaxLength(ValidationConstants.User.Lengths.Email)
-               .IsUnicode(true);
+               .IsUnicode(false);
 
         builder.Property(u => u.Username)
                .IsRequired()

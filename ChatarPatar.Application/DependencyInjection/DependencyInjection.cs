@@ -20,6 +20,8 @@ public static class DependencyInjection
         services.AddScoped<IValidationService, ValidationService>();
 
         services.AddScoped<IUserService, UserService>();
+        services.AddScoped<IOrganizationService, OrganizationService>();
+        services.AddScoped<IOrganizationInviteService, OrganizationInviteService>();
         services.AddScoped<IPermissionService, PermissionService>();
 
         services.AddScoped<IServiceManager, ServiceManager>();

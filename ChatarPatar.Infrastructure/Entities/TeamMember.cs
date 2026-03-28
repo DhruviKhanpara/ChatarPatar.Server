@@ -18,7 +18,7 @@ public class TeamMember : AuditableEntity
     public Guid TeamId { get; set; }
     public Guid UserId { get; set; }
 
-    public TeamRoleEnum Role { get; set; }
+    public TeamRoleEnum Role { get; set; } = TeamRoleEnum.TeamMember;
 
     public Guid? InvitedByUserId { get; set; }
     public DateTime JoinedAt { get; set; }

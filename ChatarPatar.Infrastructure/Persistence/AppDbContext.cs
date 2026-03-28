@@ -28,6 +28,7 @@ public partial class AppDbContext : DbContext
     public virtual DbSet<Notification> Notifications { get; set; }
     public virtual DbSet<Organization> Organizations { get; set; }
     public virtual DbSet<OrganizationMember> OrganizationMembers { get; set; }
+    public virtual DbSet<OrganizationInvite> OrganizationInvites { get; set; }
     public virtual DbSet<PinnedMessage> PinnedMessages { get; set; }
     public virtual DbSet<ReadState> ReadStates { get; set; }
     public virtual DbSet<Team> Teams { get; set; }

@@ -6,13 +6,13 @@ namespace ChatarPatar.Common.Enums;
 
 public enum FileTypeEnum
 {
-    Image,
-    Video,
-    Audio,
-    Document,
-    Code,
-    Archive,
-    Other
+    Image = 1,
+    Video = 2,
+    Audio = 3,
+    Document = 4,
+    Code = 5,
+    Archive = 6,
+    Other = 7
 }
 
 public static class FileTypeExtensions

@@ -2,6 +2,6 @@
 
 public enum ConversationTypeEnum
 {
-    Direct,
-    Group
+    Direct = 1,
+    Group = 2
 }
