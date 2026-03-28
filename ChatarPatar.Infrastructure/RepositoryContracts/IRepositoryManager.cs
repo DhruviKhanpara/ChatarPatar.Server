@@ -11,6 +11,7 @@ public interface IRepositoryManager
 
     IOrganizationRepository OrganizationRepository { get; }
     IOrganizationMemberRepository OrganizationMemberRepository { get; }
+    IOrganizationInviteRepository OrganizationInviteRepository { get; }
 
     ITeamRepository TeamRepository { get; }
     ITeamMemberRepository TeamMemberRepository { get; }

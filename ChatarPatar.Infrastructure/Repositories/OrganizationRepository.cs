@@ -7,5 +7,7 @@ namespace ChatarPatar.Infrastructure.Repositories;
 internal class OrganizationRepository : BaseSoftDeleteRepository<Organization>, IOrganizationRepository
 {
     public OrganizationRepository(AppDbContext context) : base(context) { }
+
+    public async Task<bool> SlugExistsAsync(string slug) => await AnyAsync(x => x.Slug == slug);
 }
 

@@ -18,6 +18,7 @@ internal sealed class RepositoryManager : IRepositoryManager
 
     private readonly Lazy<IOrganizationRepository> _organizationRepository;
     private readonly Lazy<IOrganizationMemberRepository> _organizationMemberRepository;
+    private readonly Lazy<IOrganizationInviteRepository> _organizationInviteRepository;
 
     private readonly Lazy<ITeamRepository> _teamRepository;
     private readonly Lazy<ITeamMemberRepository> _teamMemberRepository;
@@ -52,6 +53,7 @@ internal sealed class RepositoryManager : IRepositoryManager
         _userStatusRepository = new Lazy<IUserStatusRepository>(() => new UserStatusRepository(_context));
         _organizationRepository = new Lazy<IOrganizationRepository>(() => new OrganizationRepository(_context));
         _organizationMemberRepository = new Lazy<IOrganizationMemberRepository>(() => new OrganizationMemberRepository(_context));
+        _organizationInviteRepository = new Lazy<IOrganizationInviteRepository>(() => new OrganizationInviteRepository(_context));
         _teamRepository = new Lazy<ITeamRepository>(() => new TeamRepository(_context));
         _teamMemberRepository = new Lazy<ITeamMemberRepository>(() => new TeamMemberRepository(_context));
         _channelRepository = new Lazy<IChannelRepository>(() => new ChannelRepository(_context));
@@ -77,6 +79,7 @@ internal sealed class RepositoryManager : IRepositoryManager
 
     public IOrganizationRepository OrganizationRepository => _organizationRepository.Value;
     public IOrganizationMemberRepository OrganizationMemberRepository => _organizationMemberRepository.Value;
+    public IOrganizationInviteRepository OrganizationInviteRepository => _organizationInviteRepository.Value;
 
     public ITeamRepository TeamRepository => _teamRepository.Value;
     public ITeamMemberRepository TeamMemberRepository => _teamMemberRepository.Value;

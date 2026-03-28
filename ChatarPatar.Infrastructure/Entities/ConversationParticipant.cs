@@ -18,7 +18,7 @@ public class ConversationParticipant : BaseEntity
     public Guid ConversationId { get; set; }
     public Guid UserId { get; set; }
 
-    public ConversationParticipantRoleEnum Role { get; set; }
+    public ConversationParticipantRoleEnum Role { get; set; } = ConversationParticipantRoleEnum.GroupMember;
     public Guid AddedBy { get; set; }
 
 

@@ -11,6 +11,7 @@ public static class DependencyInjection
     public static IServiceCollection AddCommonService(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<TokenSettings>(configuration.GetSection("TokenSettings"));
+        services.Configure<InviteTokenSettings>(configuration.GetSection("InviteTokenSettings"));
 
         services.AddScoped<ITokenService, TokenService>();
 

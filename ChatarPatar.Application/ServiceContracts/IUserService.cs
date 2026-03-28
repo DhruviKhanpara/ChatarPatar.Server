@@ -10,5 +10,7 @@ public interface IUserService
     Task<LoginResponseDto> RefreshAuthToken();
     Task LogoutUser();
     Task RevokeAllUserSessions(Guid? userId = null);
+
+    Task<AuthUserDto> GetCurrentUserAsync();
     Task UpdateAvatarAsync(Guid userId, IFormFile file);
 }

@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
+using System.Runtime;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -16,12 +17,14 @@ namespace ChatarPatar.Common.Security
     internal class TokenService : ITokenService
     {
         private readonly TokenSettings _tokenSettings;
+        private readonly InviteTokenSettings _inviteSettings;
         private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public TokenService(IOptions<TokenSettings> tokenSettings, IHttpContextAccessor httpContextAccessor)
+        public TokenService(IOptions<TokenSettings> tokenSettings, IHttpContextAccessor httpContextAccessor, IOptions<InviteTokenSettings> inviteSettings)
         {
             _tokenSettings = tokenSettings.Value;
             _httpContextAccessor = httpContextAccessor;
+            _inviteSettings = inviteSettings.Value;
         }
 
         #region Create Token
@@ -66,7 +69,24 @@ namespace ChatarPatar.Common.Security
 
         #endregion
 
-        #region Encode refresh token
+        #region Invite Token generation
+
+        public string GenerateInviteToken()
+        {
+            var bytes = new byte[32];
+
+            using var rng = RandomNumberGenerator.Create();
+            rng.GetBytes(bytes);
+
+            return Convert.ToHexString(bytes).ToLowerInvariant();
+        }
+
+        public DateTime GetInviteExpiresAt() =>
+            DateTime.UtcNow.AddDays(_inviteSettings.ExpirationDays);
+
+        #endregion
+
+        #region Encode token
 
         public string HashToken(string token)
         {

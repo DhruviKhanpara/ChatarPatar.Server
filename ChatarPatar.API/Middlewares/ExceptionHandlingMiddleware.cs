@@ -51,6 +51,7 @@ public class ExceptionHandlingMiddleware
                 InvalidDataAppException or
                 ValidationAppException => StatusCodes.Status400BadRequest,
                 NotFoundAppException => StatusCodes.Status404NotFound,
+                DuplicateEntryAppException => StatusCodes.Status409Conflict,
                 _ => StatusCodes.Status500InternalServerError
             };
 

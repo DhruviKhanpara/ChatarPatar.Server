@@ -55,15 +55,13 @@ public static class AuditLogExtension
 
     private static List<AuditLogRequest> RetrieveChangesUsingChangeTracker(DbContext context)
     {
-        var changes = context.ChangeTracker.Entries()
+        var auditLogRequests = context.ChangeTracker.Entries()
             .Where(entity =>
                 entity.State == EntityState.Added
              || entity.State == EntityState.Modified
              || entity.State == EntityState.Deleted)
+            .Select(e => new AuditLogRequest(e))
             .ToList();
-
-        List<AuditLogRequest> auditLogRequests = new List<AuditLogRequest>();
-        changes.ForEach(change => auditLogRequests.Add(new AuditLogRequest(change)));
 
         return auditLogRequests;
     }

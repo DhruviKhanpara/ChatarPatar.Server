@@ -36,31 +36,20 @@ public class PermissionFilter : IAsyncActionFilter
             return;
         }
 
-        if (!context.ActionArguments.TryGetValue("orgId", out var orgIdArg) || orgIdArg is not Guid orgId)
+        var orgId = GetGuid(context, "orgId");
+        if (orgId == null)
         {
-            context.Result = new BadRequestObjectResult("Missing orgId.");
+            context.Result = new BadRequestObjectResult("Missing or invalid orgId.");
             return;
         }
 
-        Guid? teamId = null;
-        Guid? channelId = null;
-        Guid? conversationId = null;
-
-        var data = GetValue(context, "channelId");
-        if (data is Guid chId)
-            channelId = chId;
-
-        data = GetValue(context, "teamId");
-        if (data is Guid tId)
-            teamId = tId;
-
-        data = GetValue(context, "conversationId");
-        if (data is Guid covId)
-            conversationId = covId;
+        var teamId = GetGuid(context, "teamId");
+        var channelId = GetGuid(context, "channelId");
+        var conversationId = GetGuid(context, "conversationId");
 
         var permissionContext = new PermissionContext(
             userId,
-            orgId,
+            (Guid)orgId,
             teamId,
             channelId,
             conversationId
@@ -79,13 +68,18 @@ public class PermissionFilter : IAsyncActionFilter
 
     #region Private section
 
-    private object? GetValue(ActionExecutingContext context, string key)
+    private Guid? GetGuid(ActionExecutingContext context, string key)
     {
         if (context.ActionArguments.TryGetValue(key, out var val))
-            return val;
+        {
+            if (val is Guid g) return g;
+            if (val is string s && Guid.TryParse(s, out var parsed)) return parsed;
+        }
 
         if (context.RouteData.Values.TryGetValue(key, out var routeVal))
-            return routeVal;
+        {
+            if (routeVal is string s && Guid.TryParse(s, out var parsed)) return parsed;
+        }
 
         return null;
     }

@@ -18,7 +18,7 @@ public class ChannelMember : AuditableEntity
     public Guid ChannelId { get; set; }
     public Guid UserId { get; set; }
 
-    public ChannelRoleEnum Role { get; set; }
+    public ChannelRoleEnum Role { get; set; } = ChannelRoleEnum.ChannelMember;
 
     public Guid? AddedByUserId { get; set; }
     public DateTime JoinedAt { get; set; }

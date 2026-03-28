@@ -2,8 +2,8 @@
 
 public enum DmMessageStatusEnum
 {
-    Sending,
-    Sent,
-    Delivered,
-    Seen
+    Sending = 1,
+    Sent = 2,
+    Delivered = 3,
+    Seen = 4
 }

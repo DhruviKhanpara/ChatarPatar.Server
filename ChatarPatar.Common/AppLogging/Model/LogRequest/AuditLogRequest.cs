@@ -8,11 +8,11 @@ public class AuditLogRequest
 {
     public EntityEntry? SourceEntity { get; set; } = null;
     public string TableName { get; set; }
-    public Guid RecordId { get; set; }
+    public Guid? RecordId { get; set; }
     public ChangeRecord ChangeRecord { get; set; }
     public EntityState ChangeState { get; set; }
 
-    public AuditLogRequest(string tableName, Guid recordId, object? before, object? after, EntityState changeState)
+    public AuditLogRequest(string tableName, Guid? recordId, object? before, object? after, EntityState changeState)
     {
         TableName = tableName;
         RecordId = recordId;
@@ -27,7 +27,7 @@ public class AuditLogRequest
     public AuditLogRequest(EntityEntry entity) : this
     (
         entity.Metadata.GetTableName() ?? "Unknown Table",
-        entity.GetGuidFromProperty("Id"),
+        entity.GetNullableGuidFromProperty("Id"),
         entity.OriginalValues.ToObject(),
         entity.CurrentValues.ToObject(),
         entity.State

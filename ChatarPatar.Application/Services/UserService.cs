@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using ChatarPatar.Application.DTOs.User;
 using ChatarPatar.Application.RepositoryContracts;
 using ChatarPatar.Application.ServiceContracts;
@@ -14,6 +15,7 @@ using ChatarPatar.Infrastructure.ExternalServiceContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Logging;
 
 namespace ChatarPatar.Application.Services;
 
@@ -42,16 +44,15 @@ internal class UserService : IUserService
 
     private HttpContext? _httpContext => _httpContextAccessor.HttpContext;
 
+    #region Auth
+
     public async Task<LoginResponseDto> LoginUserAsync(UserLoginDto user)
     {
         _validationService.Validate<UserLoginDto>(user);
 
-        var identifier = user.Identifier?.Trim().ToLower();
+        var identifier = user.Identifier.Trim().ToLower();
 
-        var existUser = await _repositories.UserRepository
-            .FindByCondition(x => (x.Email == identifier || x.Username == identifier))
-            .AsNoTracking()
-            .FirstOrDefaultAsync();
+        var existUser = await _repositories.UserRepository.GetUserByIdentifierAsync(email: identifier, username: identifier);
 
         if (existUser is null || !PasswordHasher.VerifyPassword(hashedPassword: existUser.PasswordHash, providedPassword: user.Password))
             throw new InvalidDataAppException("Credentials");
@@ -67,13 +68,10 @@ internal class UserService : IUserService
         var username = user.Username.Trim().ToLower();
         var email = user.Email.Trim().ToLower();
 
-        var existingUser = await _repositories.UserRepository
-            .FindByCondition(x => x.Username == username || x.Email == email)
-            .AsNoTracking()
-            .FirstOrDefaultAsync();
+        var existingUser = await _repositories.UserRepository.GetUserByIdentifierAsync(email: email, username: username);
 
         if (existingUser != null)
-            throw new InvalidDataAppException(existingUser.Username == username ? "Username is already registered" : "Email is already registered");
+            throw new DuplicateEntryAppException(existingUser.Username == username ? "Username is already registered" : "Email is already registered");
 
         user.Username = username;
         user.Email = email;
@@ -81,11 +79,105 @@ internal class UserService : IUserService
         var userEntity = _mapper.Map<User>(user);
         userEntity.PasswordHash = PasswordHasher.HashPassword(user.Password);
 
-        await _repositories.UserRepository.AddAsync(entity: userEntity);
-        await _repositories.UnitOfWork.SaveChangesAsync();
+        var userStatusEntity = new UserStatus
+        {
+            User = userEntity,
+            Status = PresenceStatusEnum.Online
+        };
 
-        var strategy = GetTokenStrategy();
-        return await AuthenticateUser(strategy, userEntity);
+        if (!string.IsNullOrWhiteSpace(user.InviteToken))
+        {
+            // ── INVITE TOKEN PATH ──────────────────────────────────────────────
+            var hashedToken = _tokenService.HashToken(user.InviteToken.Trim());
+
+            var invite = await _repositories.OrganizationInviteRepository
+                .GetPendingByToken(hashedToken)
+                .FirstOrDefaultAsync();
+
+            if (invite is null)
+                throw new InvalidDataAppException("Invite token is invalid or has expired");
+
+            if (invite.Email != email)
+                throw new InvalidDataAppException("This invite was sent to a different email address");
+
+            var membershipEntity = new OrganizationMember
+            {
+                User = userEntity,
+                OrgId = invite.OrganizationId,
+                Role = invite.Role,
+                InvitedByUserId = invite.CreatedBy,
+                JoinedAt = DateTime.UtcNow,
+                CreatedByUser = userEntity,
+            };
+
+            invite.IsUsed = true;
+            invite.UsedAt = DateTime.UtcNow;
+            invite.UsedByUser = userEntity;
+
+            await _repositories.UserRepository.AddAsync(userEntity);
+            await _repositories.OrganizationMemberRepository.AddAsync(membershipEntity);
+            await _repositories.UserStatusRepository.AddAsync(userStatusEntity);
+
+            // One SaveChangesAsync = one transaction for invite path
+            await _repositories.UnitOfWork.SaveChangesAsync();
+
+            var strategy = GetTokenStrategy();
+            return await AuthenticateUser(strategy, userEntity);
+        }
+        else
+        {
+            // ── NEW ORG PATH ───────────────────────────────────────────────────
+
+            var orgName = user.NewOrg!.Name.Trim();
+            var slug = user.NewOrg!.Slug.Trim();
+
+            var slugExists = await _repositories.OrganizationRepository
+                .AnyAsync(o => o.Slug == slug);
+
+            if (slugExists)
+                throw new DuplicateEntryAppException("Organization slug is already taken");
+
+            await using var transaction = await _repositories.UnitOfWork.BeginTransactionAsync();
+            try
+            {
+                // Step 1 — insert User + UserStatus, get real DB-generated Id back
+                await _repositories.UserRepository.AddAsync(userEntity);
+                await _repositories.UserStatusRepository.AddAsync(userStatusEntity);
+                await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+
+                // Step 2 — build Org + OrgMember with the now-real UserId
+                var orgEntity = new Organization
+                {
+                    Name = orgName,
+                    Slug = slug,
+                    CreatedBy = userEntity.Id,
+                };
+
+                orgEntity.OrganizationMembers.Add(new OrganizationMember
+                {
+                    UserId = userEntity.Id,
+                    Role = OrganizationRoleEnum.OrgOwner,
+                    JoinedAt = DateTime.UtcNow,
+                    CreatedBy = userEntity.Id,
+                });
+
+                await _repositories.OrganizationRepository.AddAsync(orgEntity);
+                await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+
+                await transaction.CommitAsync();
+
+                // Only write audit logs AFTER commit succeeds.
+                _repositories.UnitOfWork.FlushPendingAuditLogs();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+
+            var strategy = GetTokenStrategy();
+            return await AuthenticateUser(strategy, userEntity);
+        }
     }
 
     public async Task<LoginResponseDto> RefreshAuthToken()
@@ -97,7 +189,7 @@ internal class UserService : IUserService
             throw new NotFoundAppException("Refresh token");
 
         var tokenHash = _tokenService.HashToken(refreshToken);
-        var storedToken = await _repositories.RefreshTokenRepository.FindByCondition(x => x.Token == tokenHash && !x.IsRevoked && x.ExpiresAt > DateTime.UtcNow).FirstOrDefaultAsync();
+        var storedToken = await _repositories.RefreshTokenRepository.FindActiveRefreshToken(token: tokenHash).AsNoTracking().FirstOrDefaultAsync();
 
         if (storedToken == null)
             throw new InvalidDataAppException("Refresh token");
@@ -118,7 +210,7 @@ internal class UserService : IUserService
         if (!string.IsNullOrEmpty(refreshToken))
         {
             var tokenHash = _tokenService.HashToken(refreshToken);
-            var storedToken = await _repositories.RefreshTokenRepository.FindByCondition(x => x.Token == tokenHash).FirstOrDefaultAsync();
+            var storedToken = await _repositories.RefreshTokenRepository.FindActiveRefreshToken(token: tokenHash).FirstOrDefaultAsync();
 
             if (storedToken != null)
             {
@@ -139,7 +231,7 @@ internal class UserService : IUserService
 
         userId = userId ?? Guid.Parse(_httpContext!.GetUserId());
 
-        var tokens = await _repositories.RefreshTokenRepository.FindByCondition(x => x.UserId == userId && !x.IsRevoked).ToListAsync();
+        var tokens = await _repositories.RefreshTokenRepository.GetActiveRefreshTokensByUserId(userId: (Guid)userId).ToListAsync();
 
         foreach (var token in tokens)
         {
@@ -150,6 +242,25 @@ internal class UserService : IUserService
         await _repositories.UnitOfWork.SaveChangesAsync();
 
         strategy.ClearTokens();
+    }
+
+    #endregion
+
+    #region Basic User Operations
+
+    public async Task<AuthUserDto> GetCurrentUserAsync()
+    {
+        var userId = Guid.Parse(_httpContext!.GetUserId());
+
+        var user = await _repositories.UserRepository.GetByIdAsync(userId)
+            .ProjectTo<AuthUserDto>(_mapper.ConfigurationProvider)
+            .AsNoTracking()
+            .FirstOrDefaultAsync();
+
+        if (user == null)
+            throw new NotFoundAppException("Login User data");
+
+        return user;
     }
 
     public async Task UpdateAvatarAsync(Guid userId, IFormFile file)
@@ -197,6 +308,8 @@ internal class UserService : IUserService
 
         await _repositories.UnitOfWork.SaveChangesAsync();
     }
+
+    #endregion
 
     #region Private section
 

@@ -18,7 +18,7 @@ public class OrganizationMember : AuditableEntity
     public Guid OrgId { get; set; }
     public Guid UserId { get; set; }
 
-    public OrganizationRoleEnum Role { get; set; }
+    public OrganizationRoleEnum Role { get; set; } = OrganizationRoleEnum.OrgMember;
 
     public Guid? InvitedByUserId { get; set; }
 
