@@ -1,6 +1,5 @@
 ﻿using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using Microsoft.AspNetCore.Http;
-using System.Net.Http;
 using UAParser;
 
 namespace ChatarPatar.Common.HttpUserDetails;
