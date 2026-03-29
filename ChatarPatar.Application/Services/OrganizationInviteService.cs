@@ -40,7 +40,7 @@ internal class OrganizationInviteService : IOrganizationInviteService
         var user = await _repositories.UserRepository.GetUserByEmailAsync(email: email);
 
         if (user is not null)
-            throw new InvalidDataAppException("User already exist");
+            throw new InvalidDataAppException("This email is already registered, please add them directly from the app");
 
         // --- No pending invite for the same email already exists ---
         var hasPendingInvite = await _repositories.OrganizationInviteRepository

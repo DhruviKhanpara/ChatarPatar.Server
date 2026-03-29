@@ -194,7 +194,7 @@ internal class UserService : IUserService
         if (storedToken == null)
             throw new InvalidDataAppException("Refresh token");
 
-        var user = await _repositories.UserRepository.GetByIdAsync(storedToken.UserId).FirstOrDefaultAsync();
+        var user = await _repositories.UserRepository.GetById(storedToken.UserId).FirstOrDefaultAsync();
 
         if (user == null)
             throw new NotFoundAppException("User");
@@ -252,7 +252,7 @@ internal class UserService : IUserService
     {
         var userId = Guid.Parse(_httpContext!.GetUserId());
 
-        var user = await _repositories.UserRepository.GetByIdAsync(userId)
+        var user = await _repositories.UserRepository.GetById(userId)
             .ProjectTo<AuthUserDto>(_mapper.ConfigurationProvider)
             .AsNoTracking()
             .FirstOrDefaultAsync();
@@ -267,7 +267,7 @@ internal class UserService : IUserService
     {
         var fileType = file.ValidateFile(FileUsageContextEnum.Avatar);
 
-        var user = await _repositories.UserRepository.GetByIdAsync(userId).FirstOrDefaultAsync();
+        var user = await _repositories.UserRepository.GetById(userId).FirstOrDefaultAsync();
 
         if (user == null)
             throw new NotFoundAppException("User");
