@@ -22,7 +22,7 @@ GO
 
 CREATE TABLE Users (
     Id                UNIQUEIDENTIFIER    NOT NULL DEFAULT NEWSEQUENTIALID(),
-    Email             NVARCHAR(320)       NOT NULL,
+    Email             VARCHAR(320)       NOT NULL,
     Username          NVARCHAR(100)       NOT NULL,
     Name              NVARCHAR(150)       NOT NULL,
     PasswordHash      NVARCHAR(512)       NOT NULL,
@@ -328,7 +328,6 @@ CREATE UNIQUE INDEX UX_ChannelMembers_Active ON ChannelMembers(ChannelId, UserId
 
 CREATE TABLE Conversations (
     Id                 UNIQUEIDENTIFIER    NOT NULL DEFAULT NEWSEQUENTIALID(),
-    OrgId              UNIQUEIDENTIFIER    NOT NULL,   -- DMs are still org-scoped
     Type               NVARCHAR(20)        NOT NULL,   -- 'Direct' (1-to-1) | 'Group' (multi-person DM)
     Name               NVARCHAR(150)       NULL,       -- only for Group DMs
     LogoFileId         UNIQUEIDENTIFIER    NULL,
@@ -342,7 +341,6 @@ CREATE TABLE Conversations (
     DeletedAt         DATETIME2           NULL,
 
     CONSTRAINT PK_Conversations				PRIMARY KEY (Id),
-    CONSTRAINT FK_Conversations_Org			FOREIGN KEY (OrgId)         REFERENCES Organizations(Id) ON DELETE NO ACTION,
     CONSTRAINT FK_Conversations_Logo        FOREIGN KEY (LogoFileId)    REFERENCES Files(Id) ON DELETE NO ACTION,
 	CONSTRAINT FK_Conversations_CreatedBy	FOREIGN KEY (CreatedBy)		REFERENCES Users(Id) ON DELETE NO ACTION,
     CONSTRAINT FK_Conversations_UpdatedBy	FOREIGN KEY (UpdatedBy)		REFERENCES Users(Id) ON DELETE NO ACTION,
@@ -828,7 +826,85 @@ WHERE IsRevoked = 0;
 CREATE INDEX IX_RefreshToken_ActiveToken ON RefreshTokens (UserId, IsRevoked, ExpiresAt);
 
 -- ══════════════════════════════════════════════════════════════
---  SECTION 17 — NOW BACK-FILL Files FK columns
+--  SECTION 17 — ORGANIZATION INVITE
+-- ══════════════════════════════════════════════════════════════
+
+
+CREATE TABLE [dbo].[OrganizationInvites]
+(
+	Id              UNIQUEIDENTIFIER  NOT NULL  DEFAULT NEWSEQUENTIALID(),
+    OrganizationId  UNIQUEIDENTIFIER  NOT NULL,
+    CreatedBy       UNIQUEIDENTIFIER  NOT NULL,
+
+    Email           VARCHAR(320)      NOT NULL,
+    Role            NVARCHAR(50)      NOT NULL  DEFAULT 'OrgMember',
+    Token           VARCHAR(512)      NOT NULL,
+
+    IsUsed          BIT               NOT NULL  DEFAULT 0,
+    UsedAt          DATETIME2                   DEFAULT NULL,
+    UsedBy          UNIQUEIDENTIFIER            DEFAULT NULL,
+
+    ExpiresAt       DATETIME2         NOT NULL,
+    CreatedAt       DATETIME2         NOT NULL  DEFAULT SYSUTCDATETIME(),
+    UpdatedAt       DATETIME2         NOT NULL  DEFAULT SYSUTCDATETIME(),
+
+    CONSTRAINT PK_OrganizationInvites
+        PRIMARY KEY (Id),
+
+    CONSTRAINT UQ_OrganizationInvites_Token
+        UNIQUE (Token),
+
+    CONSTRAINT FK_OrgInvites_Org
+        FOREIGN KEY (OrganizationId) REFERENCES Organizations(Id) ON DELETE CASCADE,
+
+    CONSTRAINT FK_OrgInvites_CreatedBy
+        FOREIGN KEY (CreatedBy)      REFERENCES Users(Id),
+
+    CONSTRAINT FK_OrgInvites_UsedBy
+        FOREIGN KEY (UsedBy)         REFERENCES Users(Id) ON DELETE SET NULL,
+
+    CONSTRAINT CK_OrgInvites_Role
+         CHECK ([Role]='OrgGuest' OR [Role]='OrgMember' OR [Role]='OrgAdmin' OR [Role]='OrgOwner'),
+
+    CONSTRAINT CK_OrgInvites_UsedConsistency
+        CHECK (
+            (IsUsed = 0 AND UsedAt IS NULL  AND UsedBy IS NULL) OR
+            (IsUsed = 1 AND UsedAt IS NOT NULL AND UsedBy IS NOT NULL)
+        )
+)
+
+
+GO
+CREATE UNIQUE INDEX UX_OrgInvites_Token
+    ON OrganizationInvites (Token);
+
+
+GO
+CREATE INDEX IX_OrgInvites_OrgId
+    ON OrganizationInvites (OrganizationId)
+    WHERE IsUsed = 0;
+
+
+GO
+CREATE INDEX IX_OrgInvites_Email
+    ON OrganizationInvites (Email)
+    WHERE IsUsed = 0;
+
+
+GO
+-- TTL cleanup job (SQL Server has no native TTL unlike MongoDB)
+-- Schedule a nightly SQL Agent job:
+-- DELETE FROM OrganizationInvites
+-- WHERE ExpiresAt < SYSUTCDATETIME() AND IsUsed = 0;
+CREATE INDEX IX_OrgInvites_ExpiresAt
+    ON OrganizationInvites (ExpiresAt)
+    WHERE IsUsed = 0;
+
+
+GO
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 18 — NOW BACK-FILL Files FK columns
 --  Files.OrgId / TeamId / ChannelId / MessageId FKs
 -- ══════════════════════════════════════════════════════════════
 
@@ -838,3 +914,72 @@ ALTER TABLE Files
         CONSTRAINT FK_Files_Channel       FOREIGN KEY (ChannelId)        REFERENCES Channels(Id) ON DELETE NO ACTION,
         CONSTRAINT FK_Files_Conversation  FOREIGN KEY (ConversationId)   REFERENCES Conversations(Id) ON DELETE NO ACTION,
         CONSTRAINT FK_Files_UserId        FOREIGN KEY (UserId)           REFERENCES Users(Id) ON DELETE NO ACTION
+
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 19 — Notification Templates
+-- ══════════════════════════════════════════════════════════════
+
+
+CREATE TABLE [dbo].[NotificationTemplates] (
+    Id          UNIQUEIDENTIFIER    DEFAULT (newsequentialid())     NOT NULL,
+
+    Name         NVARCHAR(100)       NOT NULL,
+    TemplateType NVARCHAR(20)     NOT NULL,
+    SubjectText  NVARCHAR(500)       NOT NULL,
+    BodyText     NVARCHAR(MAX)       NOT NULL,
+
+    IsActive     BIT                 DEFAULT ((1)),
+
+    RowVersion   ROWVERSION          NOT NULL
+ 
+    CONSTRAINT [PK_NotificationTemplates] PRIMARY KEY CLUSTERED ([Id]),
+ 
+    CONSTRAINT [CK_NotificationTemplates_TemplateType] CHECK (
+        [TemplateType] IN ('Email', 'Sms')
+    )
+);
+
+GO
+
+-- Unique per (Name, TemplateType)
+CREATE UNIQUE NONCLUSTERED INDEX [UQ_NotificationTemplates_Name_Type]
+    ON [dbo].[NotificationTemplates] ([Name], [TemplateType]);
+ 
+ GO
+
+-- Fast lookup by transport type
+CREATE NONCLUSTERED INDEX [IX_NotificationTemplates_TemplateType]
+    ON [dbo].[NotificationTemplates] ([TemplateType]);
+ 
+GO
+
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 20 — Outbox Messages
+-- ══════════════════════════════════════════════════════════════
+
+
+CREATE TABLE [dbo].[OutboxMessages](
+	[Id]               UNIQUEIDENTIFIER DEFAULT (newsequentialid()) NOT NULL,
+	[Type]			   NVARCHAR (200)								NOT NULL,
+	[Payload]          NVARCHAR (MAX)								NOT NULL,
+	[RetryCount]	   INT				DEFAULT ((0))				NOT NULL,
+    [CreatedBy]        UNIQUEIDENTIFIER								NULL,
+    [CreatedAt]        DATETIME2 (7)    DEFAULT (sysutcdatetime())	NOT NULL,
+	[IsProcessed]	   BIT				DEFAULT ((0))				NOT NULL,
+	[ProcessedAt]	   DATETIME2 (7)								NULL,
+	[NextAttemptAt]	   DATETIME2 (7)								NULL,
+	[IsDeleted]        BIT              DEFAULT ((0))				NOT NULL,
+	[RowVersion]	   ROWVERSION									NOT NULL,
+
+	CONSTRAINT [PK_OutboxMessages] PRIMARY KEY CLUSTERED ([Id] ASC),
+	CONSTRAINT [FK_OutboxMessages_CreatedBy] FOREIGN KEY ([CreatedBy]) REFERENCES [dbo].[Users] ([Id]),
+	)
+GO
+
+CREATE NONCLUSTERED INDEX [IX_OutboxMessages_Processing]
+ON [dbo].[OutboxMessages] (IsProcessed, NextAttemptAt)
+WHERE IsDeleted = 0;
+
+GO

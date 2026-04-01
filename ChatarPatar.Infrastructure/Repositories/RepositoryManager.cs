@@ -1,5 +1,4 @@
-﻿using ChatarPatar.Application.RepositoryContracts;
-using ChatarPatar.Infrastructure.Persistence;
+﻿using ChatarPatar.Infrastructure.Persistence;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -44,6 +43,10 @@ internal sealed class RepositoryManager : IRepositoryManager
 
     private readonly Lazy<IRefreshTokenRepository> _refreshTokenRepository;
 
+    private readonly Lazy<IOutboxMessageRepository> _outboxMessageRepository;
+
+    private readonly Lazy<INotificationTemplateRepository> _notificationTemplateRepository;
+
     public RepositoryManager(AppDbContext context, IHttpContextAccessor httpContextAccessor, ILoggerFactory loggerFactory)
     {
         _context = context;
@@ -70,6 +73,8 @@ internal sealed class RepositoryManager : IRepositoryManager
         _notificationRepository = new Lazy<INotificationRepository>(() => new NotificationRepository(_context));
         _fileRepository = new Lazy<IFileRepository>(() => new FileRepository(_context));
         _refreshTokenRepository = new Lazy<IRefreshTokenRepository>(() => new RefreshTokenRepository(_context));
+        _outboxMessageRepository = new Lazy<IOutboxMessageRepository>(() => new OutboxMessageRepository(_context));
+        _notificationTemplateRepository = new Lazy<INotificationTemplateRepository>(() => new NotificationTemplateRepository(_context));
     }
 
     public IUnitOfWork UnitOfWork => _unitOfWork.Value;
@@ -104,4 +109,8 @@ internal sealed class RepositoryManager : IRepositoryManager
     public IFileRepository FileRepository => _fileRepository.Value;
 
     public IRefreshTokenRepository RefreshTokenRepository => _refreshTokenRepository.Value;
+
+    public IOutboxMessageRepository OutboxMessageRepository => _outboxMessageRepository.Value;
+
+    public INotificationTemplateRepository NotificationTemplateRepository => _notificationTemplateRepository.Value;
 }

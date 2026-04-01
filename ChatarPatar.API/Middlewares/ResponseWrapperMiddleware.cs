@@ -137,6 +137,8 @@ public class ResponseWrapperMiddleware
                 return (message?.ToString() ?? "Not Found", null);
             case HttpStatusCode.BadRequest:
                 return (message?.ToString() ?? "Bad Request. Verify the request structure/data and try again", httpContext.Items["ErrorData"]);
+            case HttpStatusCode.Forbidden:
+                return (message?.ToString() ?? "Haven't permission", null);
             default:
                 return (message?.ToString() ?? "Something went wrong", null);
         }

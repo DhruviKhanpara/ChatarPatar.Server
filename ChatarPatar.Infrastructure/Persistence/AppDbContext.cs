@@ -33,6 +33,9 @@ public partial class AppDbContext : DbContext
     public virtual DbSet<UserStatus> UsersStatus { get; set; }
     public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
 
+    public virtual DbSet<OutboxMessage> OutboxMessages { get; set; }
+    public virtual DbSet<NotificationTemplate> NotificationTemplates { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);

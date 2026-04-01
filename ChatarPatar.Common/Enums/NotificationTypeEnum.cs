@@ -1,5 +1,14 @@
 ﻿namespace ChatarPatar.Common.Enums;
 
+/// <summary>
+/// IMPORTANT:
+/// These enum values are persisted in the database using `HasConversion<byte>()`.
+/// 
+/// Do NOT change the order unless you also update the corresponding
+/// database records and constraints.
+///
+/// Changing names without DB sync will break data consistency.
+/// </summary>
 public enum NotificationTypeEnum
 {
     Mention = 1,

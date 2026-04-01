@@ -16,6 +16,7 @@ public static class Logger
         {
             logBuilderRequest.LogToBuild.Add(LoggingTypes.SystemLog, new LogBuilderItem(connectionString, logEventLevel, true));
             logBuilderRequest.LogToBuild.Add(LoggingTypes.AuditLog, new LogBuilderItem(connectionString, "Information", true));
+            logBuilderRequest.LogToBuild.Add(LoggingTypes.CommunicationLog, new LogBuilderItem(connectionString, "Information", true));
         }
          
         builder.ApplyAppLogs(logBuilderRequest);

@@ -38,6 +38,13 @@ public sealed class CloudinaryPath
             .Add("users");
     }
 
+    public static CloudinaryPath Conversation(Guid conversationId)
+    {
+        return new CloudinaryPath()
+            .Add("app")
+            .Add($"conversations/conv_{conversationId}");
+    }
+
     #endregion
 
     #region Entity Builders
@@ -50,11 +57,6 @@ public sealed class CloudinaryPath
     public CloudinaryPath Channel(Guid channelId)
     {
         return Add($"channels/channel_{channelId}");
-    }
-
-    public CloudinaryPath Conversation(Guid conversationId)
-    {
-        return Add($"conversations/conv_{conversationId}");
     }
 
     #endregion

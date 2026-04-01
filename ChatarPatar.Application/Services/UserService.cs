@@ -1,7 +1,6 @@
 ﻿using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using ChatarPatar.Application.DTOs.User;
-using ChatarPatar.Application.RepositoryContracts;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.Enums;
@@ -12,10 +11,10 @@ using ChatarPatar.Common.Security;
 using ChatarPatar.Common.Security.SecurityContracts;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.ExternalServiceContracts;
+using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Logging;
 
 namespace ChatarPatar.Application.Services;
 
@@ -85,6 +84,8 @@ internal class UserService : IUserService
             Status = PresenceStatusEnum.Online
         };
 
+        await _repositories.UserRepository.AddAsync(userEntity);
+
         if (!string.IsNullOrWhiteSpace(user.InviteToken))
         {
             // ── INVITE TOKEN PATH ──────────────────────────────────────────────
@@ -114,70 +115,15 @@ internal class UserService : IUserService
             invite.UsedAt = DateTime.UtcNow;
             invite.UsedByUser = userEntity;
 
-            await _repositories.UserRepository.AddAsync(userEntity);
             await _repositories.OrganizationMemberRepository.AddAsync(membershipEntity);
-            await _repositories.UserStatusRepository.AddAsync(userStatusEntity);
-
-            // One SaveChangesAsync = one transaction for invite path
-            await _repositories.UnitOfWork.SaveChangesAsync();
-
-            var strategy = GetTokenStrategy();
-            return await AuthenticateUser(strategy, userEntity);
         }
-        else
-        {
-            // ── NEW ORG PATH ───────────────────────────────────────────────────
 
-            var orgName = user.NewOrg!.Name.Trim();
-            var slug = user.NewOrg!.Slug.Trim();
+        await _repositories.UserStatusRepository.AddAsync(userStatusEntity);
 
-            var slugExists = await _repositories.OrganizationRepository
-                .AnyAsync(o => o.Slug == slug);
+        await _repositories.UnitOfWork.SaveChangesAsync();
 
-            if (slugExists)
-                throw new DuplicateEntryAppException("Organization slug is already taken");
-
-            await using var transaction = await _repositories.UnitOfWork.BeginTransactionAsync();
-            try
-            {
-                // Step 1 — insert User + UserStatus, get real DB-generated Id back
-                await _repositories.UserRepository.AddAsync(userEntity);
-                await _repositories.UserStatusRepository.AddAsync(userStatusEntity);
-                await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
-
-                // Step 2 — build Org + OrgMember with the now-real UserId
-                var orgEntity = new Organization
-                {
-                    Name = orgName,
-                    Slug = slug,
-                    CreatedBy = userEntity.Id,
-                };
-
-                orgEntity.OrganizationMembers.Add(new OrganizationMember
-                {
-                    UserId = userEntity.Id,
-                    Role = OrganizationRoleEnum.OrgOwner,
-                    JoinedAt = DateTime.UtcNow,
-                    CreatedBy = userEntity.Id,
-                });
-
-                await _repositories.OrganizationRepository.AddAsync(orgEntity);
-                await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
-
-                await transaction.CommitAsync();
-
-                // Only write audit logs AFTER commit succeeds.
-                _repositories.UnitOfWork.FlushPendingAuditLogs();
-            }
-            catch
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
-
-            var strategy = GetTokenStrategy();
-            return await AuthenticateUser(strategy, userEntity);
-        }
+        var strategy = GetTokenStrategy();
+        return await AuthenticateUser(strategy, userEntity);
     }
 
     public async Task<LoginResponseDto> RefreshAuthToken()
@@ -263,9 +209,45 @@ internal class UserService : IUserService
         return user;
     }
 
-    public async Task UpdateAvatarAsync(Guid userId, IFormFile file)
+    public async Task<T> GetUserProfileAsync<T>(Guid? userId = null) where T : class
     {
-        var fileType = file.ValidateFile(FileUsageContextEnum.Avatar);
+        userId = userId ?? Guid.Parse(_httpContext!.GetUserId());
+
+        var user = await _repositories.UserRepository.GetById((Guid)userId)
+            .ProjectTo<T>(_mapper.ConfigurationProvider)
+            .AsNoTracking()
+            .FirstOrDefaultAsync();
+
+        if (user == null)
+            throw new NotFoundAppException("User");
+
+        return user;
+    }
+
+    public async Task UpdateUserAsync(UserUpdateDto model)
+    {
+        await _validationService.ValidateAsync<UserUpdateDto>(model);
+
+        var userId = Guid.Parse(_httpContext!.GetUserId());
+
+        var user = await _repositories.UserRepository.GetById(userId).FirstOrDefaultAsync();
+
+        if (user == null)
+            throw new NotFoundAppException("User");
+
+        user.Name = model.Name;
+        user.Bio = model.Bio;
+
+        await _repositories.UnitOfWork.SaveChangesAsync();
+    }
+
+    public async Task UpdateAvatarAsync(UpdateAvatarDto dto)
+    {
+        await _validationService.ValidateAsync<UpdateAvatarDto>(dto);
+
+        var userId = Guid.Parse(_httpContext!.GetUserId());
+
+        var fileType = dto.AvatarFile.ValidateFile(FileUsageContextEnum.Avatar);
 
         var user = await _repositories.UserRepository.GetById(userId).FirstOrDefaultAsync();
 
@@ -288,7 +270,7 @@ internal class UserService : IUserService
         else
             publicId = CloudinaryPublicId.UserAvatar(user.Id);
 
-        var uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(file, CloudinaryPath.Users().Avatars(), publicId);
+        var uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(dto.AvatarFile, CloudinaryPath.Users().Avatars(), publicId);
 
         user.AvatarFile = new FileEntity()
         {
@@ -300,9 +282,9 @@ internal class UserService : IUserService
             Url = uploadResult.Url,
             ThumbnailUrl = uploadResult.ThumbnailUrl,
 
-            SizeInBytes = file.Length,
-            OriginalName = file.FileName,
-            MimeType = file.ContentType,
+            SizeInBytes = dto.AvatarFile.Length,
+            OriginalName = dto.AvatarFile.FileName,
+            MimeType = dto.AvatarFile.ContentType,
             FileType = fileType,
         };
 

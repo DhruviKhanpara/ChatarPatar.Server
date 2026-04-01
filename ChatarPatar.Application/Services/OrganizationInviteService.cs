@@ -1,11 +1,12 @@
 ﻿using AutoMapper;
 using ChatarPatar.Application.DTOs.OrganizationInvite;
-using ChatarPatar.Application.RepositoryContracts;
 using ChatarPatar.Application.ServiceContracts;
+using ChatarPatar.Application.ServiceContracts.Notification;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.HttpUserDetails;
 using ChatarPatar.Common.Security.SecurityContracts;
 using ChatarPatar.Infrastructure.Entities;
+using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,14 +19,16 @@ internal class OrganizationInviteService : IOrganizationInviteService
     private readonly IValidationService _validationService;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ITokenService _tokenService;
+    private readonly IEmailNotificationService _emailNotificationService;
 
-    public OrganizationInviteService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, ITokenService tokenService)
+    public OrganizationInviteService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, ITokenService tokenService, IEmailNotificationService emailNotificationService)
     {
         _repositories = repositories;
         _mapper = mapper;
         _validationService = validationService;
         _httpContextAccessor = httpContextAccessor;
         _tokenService = tokenService;
+        _emailNotificationService = emailNotificationService;
     }
     private HttpContext? _httpContext => _httpContextAccessor.HttpContext;
 
@@ -36,7 +39,6 @@ internal class OrganizationInviteService : IOrganizationInviteService
         var callerId = Guid.Parse(_httpContext!.GetUserId());
         var email = dto.Email.Trim().ToLower();
 
-        // --- Org must exist and caller must be a member with invite rights ---
         var user = await _repositories.UserRepository.GetUserByEmailAsync(email: email);
 
         if (user is not null)
@@ -49,6 +51,14 @@ internal class OrganizationInviteService : IOrganizationInviteService
 
         if (hasPendingInvite)
             throw new DuplicateEntryAppException("An active invite has already been sent to this email");
+
+        // --- Fetch org for display name in email ---
+        var org = await _repositories.OrganizationRepository
+            .FindByCondition(o => o.Id == orgId)
+            .FirstOrDefaultAsync();
+
+        if (org is null)
+            throw new NotFoundAppException("Organization not found");
 
         // --- Generate token — store hash in DB, return raw token to caller ---
         var rawToken = _tokenService.GenerateInviteToken();
@@ -69,6 +79,13 @@ internal class OrganizationInviteService : IOrganizationInviteService
 
         await _repositories.OrganizationInviteRepository.AddAsync(invite);
         await _repositories.UnitOfWork.SaveChangesAsync();
+
+        // --- Dispatch invite email via outbox ---
+        await _emailNotificationService.SendOrgInviteAsync(
+            toEmail: email,
+            orgName: org.Name,
+            inviteLink: rawToken
+        );
 
         return new OrganizationInviteResponseDto
         {

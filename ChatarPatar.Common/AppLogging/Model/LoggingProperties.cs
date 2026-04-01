@@ -11,6 +11,10 @@ public static class LoggingProperties
     public const string Path = "Path";
     public const string UserAgent = "UserAgent";
 
+    public const string DeliveryMethod = "DeliveryMethod";
+    public const string DeliveryStatus = "DeliveryStatus";
+    public const string DeliveryDetails = "DeliveryDetails";
+
     public const string Record = "Record";
     public const string RecordId = "RecordId";
     public const string TableName = "TableName";

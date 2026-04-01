@@ -119,4 +119,22 @@ public static class ValidationConstants
             public const int IPAddressLength = 64;
         }
     }
+
+    public static class OutboxMessage
+    {
+        public static class Lengths
+        {
+            public const int Type = 200;
+        }
+    }
+
+    public static class NotificationTemplate
+    {
+        public static class Lengths
+        {
+            public const int Name = 100;
+            public const int TemplateType = 20;
+            public const int SubjectText = 500;
+        }
+    }
 }

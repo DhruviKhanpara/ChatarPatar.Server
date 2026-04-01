@@ -1,5 +1,4 @@
 ﻿using ChatarPatar.Application.DTOs.User;
-using ChatarPatar.Application.Validators.Organization;
 using ChatarPatar.Common.Consts;
 using FluentValidation;
 
@@ -51,24 +50,6 @@ public class UserRegisterDtoValidator : AbstractValidator<UserRegisterDto>
                 .WithMessage("Password must contain at least one number.")
             .Matches(ValidationConstants.User.Patterns.HasSpecialChar)
                 .WithMessage("Password must contain at least one special character (@$!%*?&).");
-
-        // Exactly one of OrgName / InviteToken must be provided
-        RuleFor(x => x)
-            .Must(x => x.NewOrg != null || !string.IsNullOrWhiteSpace(x.InviteToken))
-            .WithName("Registration")
-            .WithMessage("Either an organization name or an invite token must be provided.");
-
-        RuleFor(x => x)
-            .Must(x => x.NewOrg == null || string.IsNullOrWhiteSpace(x.InviteToken))
-            .WithName("Registration")
-            .WithMessage("Provide either an organization name or an invite token, not both.");
-
-        // NewOrg path — delegate fully to CreateOrganizationDtoValidator.
-        When(x => x.NewOrg != null, () =>
-        {
-            RuleFor(x => x.NewOrg!)
-                .SetValidator(new CreateOrganizationDtoValidator());
-        });
 
         // InviteToken rules — only checked when InviteToken is supplied
         When(x => !string.IsNullOrWhiteSpace(x.InviteToken), () =>

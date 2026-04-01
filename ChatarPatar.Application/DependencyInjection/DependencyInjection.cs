@@ -1,4 +1,8 @@
 ﻿using ChatarPatar.Application.ServiceContracts;
+using ChatarPatar.Application.ServiceContracts.Notification;
+using ChatarPatar.Application.Services.Notification;
+using ChatarPatar.Application.Services.Notification.BackgroundServices;
+using ChatarPatar.Application.Services.Notification.Dispatcher;
 using ChatarPatar.Application.Validators.User;
 using FluentValidation;
 using Microsoft.Extensions.Configuration;
@@ -16,13 +20,25 @@ public static class DependencyInjection
         // Add memory cache support
         services.AddMemoryCache();
 
+        // --- Notification queue (singleton — lives for app lifetime) ---
+        services.AddSingleton<IOutboxBackgroundQueue, OutboxBackgroundQueue>();
+
+        // --- Background service (hosted, picks up queue signals) ---
+        services.AddHostedService<OutboxBackgroundService>();
+
+        // --- Validators ---
         services.AddValidatorsFromAssemblyContaining<UserLoginDtoValidator>();
         services.AddScoped<IValidationService, ValidationService>();
 
+        // --- Application services ---
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IOrganizationService, OrganizationService>();
         services.AddScoped<IOrganizationInviteService, OrganizationInviteService>();
         services.AddScoped<IPermissionService, PermissionService>();
+
+        // --- Notification ---
+        services.AddScoped<INotificationDispatcher, OutboxEmailDispatcher>();
+        services.AddScoped<IEmailNotificationService, EmailNotificationService>();
 
         services.AddScoped<IServiceManager, ServiceManager>();
 
