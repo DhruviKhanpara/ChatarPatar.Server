@@ -50,7 +50,7 @@ public class AuthController : ControllerBase
 
     [HttpPost("revoke-all-sessions")]
     [Authorize]
-    public async Task<ActionResult> RevokeAllSessions()
+    public async Task<IActionResult> RevokeAllSessions()
     {
         await _services.UserService.RevokeAllUserSessions();
         return Ok("Revoked all session successfully.");

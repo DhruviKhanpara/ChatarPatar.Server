@@ -1,6 +1,4 @@
-﻿using ChatarPatar.Infrastructure.RepositoryContracts;
-
-namespace ChatarPatar.Application.RepositoryContracts;
+﻿namespace ChatarPatar.Infrastructure.RepositoryContracts;
 
 public interface IRepositoryManager
 {
@@ -36,4 +34,8 @@ public interface IRepositoryManager
     IFileRepository FileRepository { get; }
 
     IRefreshTokenRepository RefreshTokenRepository { get; }
+
+    IOutboxMessageRepository OutboxMessageRepository { get; }
+
+    INotificationTemplateRepository NotificationTemplateRepository { get; }
 }

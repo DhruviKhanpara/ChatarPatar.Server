@@ -1,6 +1,6 @@
 ﻿using AutoMapper;
-using ChatarPatar.Application.RepositoryContracts;
 using ChatarPatar.Application.ServiceContracts;
+using ChatarPatar.Infrastructure.RepositoryContracts;
 
 namespace ChatarPatar.Application.Services;
 

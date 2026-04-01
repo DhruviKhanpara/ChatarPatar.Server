@@ -1,5 +1,4 @@
 ﻿using ChatarPatar.Application.DTOs.User;
-using Microsoft.AspNetCore.Http;
 
 namespace ChatarPatar.Application.ServiceContracts;
 
@@ -12,5 +11,7 @@ public interface IUserService
     Task RevokeAllUserSessions(Guid? userId = null);
 
     Task<AuthUserDto> GetCurrentUserAsync();
-    Task UpdateAvatarAsync(Guid userId, IFormFile file);
+    Task<T> GetUserProfileAsync<T>(Guid? userId = null) where T : class;
+    Task UpdateUserAsync(UserUpdateDto model);
+    Task UpdateAvatarAsync(UpdateAvatarDto dto);
 }

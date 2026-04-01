@@ -37,7 +37,10 @@ public class PermissionFilter : IAsyncActionFilter
         }
 
         var orgId = GetGuid(context, "orgId");
-        if (orgId == null)
+        var conversationId = GetGuid(context, "conversationId");
+
+        // orgId is only required if this is NOT a pure conversation action
+        if (orgId == null && conversationId == null)
         {
             context.Result = new BadRequestObjectResult("Missing or invalid orgId.");
             return;
@@ -45,11 +48,10 @@ public class PermissionFilter : IAsyncActionFilter
 
         var teamId = GetGuid(context, "teamId");
         var channelId = GetGuid(context, "channelId");
-        var conversationId = GetGuid(context, "conversationId");
 
         var permissionContext = new PermissionContext(
             userId,
-            (Guid)orgId,
+            orgId,
             teamId,
             channelId,
             conversationId

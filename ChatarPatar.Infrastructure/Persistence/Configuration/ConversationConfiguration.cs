@@ -48,12 +48,6 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
         // Relationships
         // ----------------------------
 
-        builder.HasOne(c => c.Organization)
-               .WithMany()
-               .HasForeignKey(c => c.OrgId)
-               .HasConstraintName("FK_Conversations_Org")
-               .OnDelete(DeleteBehavior.Restrict);
-
         builder.HasOne(c => c.LogoFile)
                .WithMany()
                .HasForeignKey(c => c.LogoFileId)

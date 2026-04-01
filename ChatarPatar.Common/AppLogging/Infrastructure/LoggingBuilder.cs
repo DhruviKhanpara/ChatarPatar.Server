@@ -19,6 +19,7 @@ public static class LoggingBuilder
                 .WriteTo.Console()
                 .WriteTo.Logger(log => log.ApplySystemLog(logBuilderRequest.LogToBuild.FirstOrDefault(x => x.Key == LoggingTypes.SystemLog).Value))
                 .WriteTo.Logger(log => log.ApplyAuditLog(logBuilderRequest.LogToBuild.FirstOrDefault(x => x.Key == LoggingTypes.AuditLog).Value))
+                .WriteTo.Logger(log => log.ApplyCommunicationLog(logBuilderRequest.LogToBuild.FirstOrDefault(x => x.Key == LoggingTypes.CommunicationLog).Value))
                 .CreateLogger();
         }
 
