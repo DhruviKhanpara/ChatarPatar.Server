@@ -254,8 +254,6 @@ internal class UserService : IUserService
         if (user == null)
             throw new NotFoundAppException("User");
 
-        var publicId = string.Empty;
-
         if (user.AvatarFileId != null)
         {
             var userAvatarFile = await _repositories.FileRepository.GetByIdAsync((Guid)user.AvatarFileId).FirstOrDefaultAsync();
@@ -264,11 +262,9 @@ internal class UserService : IUserService
                 throw new NotFoundAppException("Exist User Avatar file data");
 
             userAvatarFile.IsDeleted = true;
-
-            publicId = userAvatarFile.PublicId;
         }
-        else
-            publicId = CloudinaryPublicId.UserAvatar(user.Id);
+        
+        var publicId = CloudinaryPublicId.UserAvatar(user.Id);
 
         var uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(dto.AvatarFile, CloudinaryPath.Users().Avatars(), publicId);
 

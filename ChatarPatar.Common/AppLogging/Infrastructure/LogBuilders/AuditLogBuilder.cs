@@ -16,8 +16,8 @@ internal static class AuditLogBuilder
             var sinkOptions = new MSSqlServerSinkOptions
             {
                 TableName = LoggingTypes.AuditLog,
-                AutoCreateSqlDatabase = true,
-                AutoCreateSqlTable = true,
+                AutoCreateSqlDatabase = false,
+                AutoCreateSqlTable = false,
                 SchemaName = "logging"
             };
 

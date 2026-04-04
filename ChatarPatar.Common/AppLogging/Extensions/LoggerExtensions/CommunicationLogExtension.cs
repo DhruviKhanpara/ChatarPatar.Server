@@ -13,8 +13,8 @@ public static class CommunicationLogExtension
         const string messageTemplate = "Communication sent to {TargetSystem:1}";
 
         using (LogContext.PushProperty(LoggingProperties.LoggingType, value: LoggingTypes.CommunicationLog))
-        using (LogContext.PushProperty(LoggingProperties.DeliveryMethod, value: logRequest.DeliveryMethod))
-        using (LogContext.PushProperty(LoggingProperties.DeliveryStatus, value: logRequest.DeliveryStatus))
+        using (LogContext.PushProperty(LoggingProperties.DeliveryMethod, value: logRequest.DeliveryMethod.ToString()))
+        using (LogContext.PushProperty(LoggingProperties.DeliveryStatus, value: logRequest.DeliveryStatus.ToString()))
         using (LogContext.PushProperty(LoggingProperties.DeliveryDetails, value: logRequest.DeliveryDetails, destructureObjects: true))
         using (LogContext.PushProperty(StandardColumn.Exception.ToString(), value: logRequest.ErrorMessage))
             logger.LogInformation(messageTemplate, logRequest.TargetSystem);

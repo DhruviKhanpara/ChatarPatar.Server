@@ -23,6 +23,11 @@ internal class OutboxEmailDispatcher : INotificationDispatcher
 
     public async Task DispatchAsync(NotificationPayload payload)
     {
+        payload.InitiatedBy = _httpContext?.GetUserName()
+            ?? _httpContext?.GetUserEmail()
+            ?? _httpContext?.GetUserId()
+            ?? "System";
+
         var message = new OutboxMessage
         {
             Type = payload.GetType().Name,
@@ -41,11 +46,15 @@ internal class OutboxEmailDispatcher : INotificationDispatcher
 
     public async Task DispatchManyAsync(List<NotificationPayload> payload)
     {
-        List<OutboxMessage> messages = new List<OutboxMessage>();
+        var initiatedBy = _httpContext?.GetUserName()
+            ?? _httpContext?.GetUserEmail()
+            ?? _httpContext?.GetUserId()
+            ?? "System";
 
-        foreach (var item in payload)
+        List<OutboxMessage> messages = payload.Select(item =>
         {
-            messages.Add(new OutboxMessage
+            item.InitiatedBy = initiatedBy;
+            return new OutboxMessage
             {
                 Type = item.GetType().Name,
                 Payload = JsonConvert.SerializeObject(item),
@@ -53,8 +62,8 @@ internal class OutboxEmailDispatcher : INotificationDispatcher
                 CreatedAt = DateTime.UtcNow,
                 CreatedBy = Guid.TryParse(_httpContext!.GetUserId(), out Guid userId) ? userId : null,
                 IsDeleted = false
-            });
-        }
+            };
+        }).ToList();
 
         await _repositoryManager.OutboxMessageRepository.AddRangeAsync(messages);
         await _repositoryManager.UnitOfWork.SaveChangesAsync();

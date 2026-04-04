@@ -16,8 +16,8 @@ public static class CommunicationLogBuilder
             var sinkOptions = new MSSqlServerSinkOptions
             {
                 TableName = LoggingTypes.CommunicationLog,
-                AutoCreateSqlDatabase = true,
-                AutoCreateSqlTable = true,
+                AutoCreateSqlDatabase = false,
+                AutoCreateSqlTable = false,
                 SchemaName = "logging"
             };
 

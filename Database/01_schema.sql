@@ -983,3 +983,83 @@ ON [dbo].[OutboxMessages] (IsProcessed, NextAttemptAt)
 WHERE IsDeleted = 0;
 
 GO
+
+
+
+
+
+
+
+-- ══════════════════════════════════════════════════════════════
+--  Logging schema
+--  System, Audit, Communication... logs are store in the following tables
+-- ══════════════════════════════════════════════════════════════
+
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 1 — System Log
+-- ══════════════════════════════════════════════════════════════
+
+
+CREATE TABLE [logging].[SystemLog] (
+    [Id]              INT            IDENTITY (1, 1) NOT NULL,
+    [Message]         NVARCHAR (MAX) NULL,
+    [MessageTemplate] NVARCHAR (MAX) NULL,
+    [Level]           NVARCHAR (MAX) NULL,
+    [TimeStamp]       DATETIME       NULL,
+    [Exception]       NVARCHAR (MAX) NULL,
+    [UserName]        NVARCHAR (MAX) NULL,
+    [ServerName]      NVARCHAR (MAX) NULL,
+    [MethodType]      NVARCHAR (MAX) NULL,
+    [Origin]          NVARCHAR (MAX) NULL,
+    [Platform]        NVARCHAR (MAX) NULL,
+    [Path]            NVARCHAR (MAX) NULL,
+    [UserAgent]       NVARCHAR (MAX) NULL,
+    CONSTRAINT [PK_SystemLog] PRIMARY KEY CLUSTERED ([Id] ASC)
+);
+
+
+GO
+
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 2 — Audit Log
+-- ══════════════════════════════════════════════════════════════
+
+
+CREATE TABLE [logging].[AuditLog] (
+    [Id]              INT              IDENTITY (1, 1) NOT NULL,
+    [Message]         NVARCHAR (MAX)   NULL,
+    [MessageTemplate] NVARCHAR (MAX)   NULL,
+    [Level]           NVARCHAR (MAX)   NULL,
+    [TimeStamp]       DATETIME         NULL,
+    [LogEvent]        NVARCHAR (MAX)   NULL,
+    [UserName]        NVARCHAR (MAX)   NULL,
+    [TableName]       NVARCHAR (MAX)   NULL,
+    [RecordId]        UNIQUEIDENTIFIER NULL,
+    CONSTRAINT [PK_AuditLog] PRIMARY KEY CLUSTERED ([Id] ASC)
+);
+
+
+GO
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 3 — Communication Log
+-- ══════════════════════════════════════════════════════════════
+
+
+CREATE TABLE [logging].[CommunicationLog] (
+    [Id]              INT            IDENTITY (1, 1) NOT NULL,
+    [Message]         NVARCHAR (MAX) NULL,
+    [MessageTemplate] NVARCHAR (MAX) NULL,
+    [Level]           NVARCHAR (MAX) NULL,
+    [TimeStamp]       DATETIME       NULL,
+    [LogEvent]        NVARCHAR (MAX) NULL,
+    [UserName]        NVARCHAR (MAX) NULL,
+    [DeliveryMethod]  NVARCHAR (MAX) NULL,
+    [DeliveryStatus]  NVARCHAR (MAX) NULL,
+    CONSTRAINT [PK_CommunicationLog] PRIMARY KEY CLUSTERED ([Id] ASC)
+);
+
+
+GO

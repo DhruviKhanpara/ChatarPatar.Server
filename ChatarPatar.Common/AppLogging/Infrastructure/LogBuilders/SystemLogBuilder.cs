@@ -15,8 +15,8 @@ internal static class SystemLogBuilder
             var sinkOptions = new MSSqlServerSinkOptions 
             { 
                 TableName = LoggingTypes.SystemLog, 
-                AutoCreateSqlDatabase = true,
-                AutoCreateSqlTable = true,
+                AutoCreateSqlDatabase = false,
+                AutoCreateSqlTable = false,
                 SchemaName = "logging"
             };
 
