@@ -2,7 +2,10 @@
 
 namespace ChatarPatar.Common.Models;
 
-public abstract class NotificationPayload { }
+public abstract class NotificationPayload
+{
+    public string? InitiatedBy { get; set; }
+}
 
 public class EmailPayload : NotificationPayload
 {

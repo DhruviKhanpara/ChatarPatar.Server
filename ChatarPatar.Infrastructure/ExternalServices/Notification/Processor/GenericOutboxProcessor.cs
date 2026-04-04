@@ -1,9 +1,12 @@
-﻿using ChatarPatar.Common.Helpers;
+﻿using ChatarPatar.Common.AppLogging.Model;
+using ChatarPatar.Common.Helpers;
 using ChatarPatar.Common.Models;
 using ChatarPatar.Infrastructure.ExternalServiceContracts.Notification;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
+using Serilog.Context;
 
 namespace ChatarPatar.Infrastructure.ExternalServices.Notification.Processor;
 
@@ -35,34 +38,52 @@ internal class GenericOutboxProcessor : IOutboxProcessor
                 continue;
             }
 
-            try
+            var initiatedBy = ExtractInitiatedBy(message.Payload);
+
+            using (LogContext.PushProperty(LoggingProperties.UserName, initiatedBy))
             {
-                await handler.HandleAsync(message);
-                message.IsProcessed = true;
-                message.ProcessedAt = DateTime.UtcNow;
-            }
-            catch (Exception ex)
-            {
-                if (message.RetryCount >= _retrySettings.RetryCount)
+                try
                 {
+                    await handler.HandleAsync(message);
                     message.IsProcessed = true;
                     message.ProcessedAt = DateTime.UtcNow;
-                    _logger.LogWarning($"[OUTBOX] Message {message.Type} failed after max retries. Marking as processed.");
                 }
-                else
+                catch (Exception ex)
                 {
-                    message.RetryCount++;
-                    message.NextAttemptAt = DateTime.UtcNow.Add(
-                        RetryHelper.GetExponentialBackoff(message.RetryCount, _retrySettings.RetryDelayMinutes)
-                    );
-                }
+                    if (message.RetryCount >= _retrySettings.RetryCount)
+                    {
+                        message.IsProcessed = true;
+                        message.ProcessedAt = DateTime.UtcNow;
+                        _logger.LogWarning($"[OUTBOX] Message {message.Type} failed after max retries. Marking as processed.");
+                    }
+                    else
+                    {
+                        message.RetryCount++;
+                        message.NextAttemptAt = DateTime.UtcNow.Add(
+                            RetryHelper.GetExponentialBackoff(message.RetryCount, _retrySettings.RetryDelayMinutes)
+                        );
+                    }
 
-                _logger.LogError($"[OUTBOX] Error processing message. Type={message.Type}, Error={ex.Message}");
+                    _logger.LogError($"[OUTBOX] Error processing message. Type={message.Type}, Error={ex.Message}");
+                }
             }
 
             _repositoryManager.OutboxMessageRepository.Update(message);
         }
 
         await _repositoryManager.UnitOfWork.SaveChangesAsync();
+    }
+
+    private static string ExtractInitiatedBy(string payload)
+    {
+        try
+        {
+            var basePayload = JsonConvert.DeserializeAnonymousType(payload, new { InitiatedBy = (string?)null });
+            return basePayload?.InitiatedBy ?? "System";
+        }
+        catch
+        {
+            return "System";
+        }
     }
 }

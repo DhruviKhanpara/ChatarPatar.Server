@@ -84,7 +84,7 @@ internal class OrganizationInviteService : IOrganizationInviteService
         await _emailNotificationService.SendOrgInviteAsync(
             toEmail: email,
             orgName: org.Name,
-            inviteLink: rawToken
+            inviteToken: rawToken
         );
 
         return new OrganizationInviteResponseDto
