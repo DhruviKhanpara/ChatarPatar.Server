@@ -2,5 +2,8 @@
 
 public interface IEmailNotificationService
 {
-    Task SendOrgInviteAsync(string toEmail, string orgName, string inviteToken);
+    /// <summary>
+    /// Sends an org invite email using the OrgInvite notification template.
+    /// </summary>
+    Task SendOrgInviteAsync(string toEmail, string orgName, string inviterName, string roleName, string inviteToken, int expiryDays);
 }
