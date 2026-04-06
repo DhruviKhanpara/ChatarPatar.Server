@@ -26,12 +26,18 @@ internal class EmailNotificationService : IEmailNotificationService
         _templateManager = templateManager;
     }
 
-    public async Task SendOrgInviteAsync(string toEmail, string orgName, string inviteToken)
+    public async Task SendOrgInviteAsync(string toEmail, string orgName, string inviterName, string roleName, string inviteToken, int expiryDays)
     {
         var replacements = new Dictionary<string, string>
         {
-            { "{{OrgName}}", orgName },
-            { "{{InviteToken}}", inviteToken }
+            { "{{orgName}}",        orgName },
+            { "{{inviterName}}",    inviterName },
+            { "{{roleName}}",       roleName },
+            { "{{inviteLink}}",     $"https://localhost:3000/Auth/register?Token={inviteToken}" },
+            { "{{recipientEmail}}", toEmail },
+            { "{{expiryDays}}",     expiryDays.ToString() },
+            { "{{year}}",           DateTime.UtcNow.Year.ToString() },
+            { "{{orgInitial}}",     orgName.Length > 0 ? orgName[0].ToString().ToUpper() : "?" },
         };
 
         var template = await RetrieveTemplate(templateName: NotificationTemplateNames.OrganizationInvite);

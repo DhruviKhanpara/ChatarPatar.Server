@@ -4,11 +4,13 @@ using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Application.ServiceContracts.Notification;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.HttpUserDetails;
+using ChatarPatar.Common.Models;
 using ChatarPatar.Common.Security.SecurityContracts;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace ChatarPatar.Application.Services;
 
@@ -36,7 +38,8 @@ internal class OrganizationInviteService : IOrganizationInviteService
     {
         _validationService.Validate<SendInviteDto>(dto);
 
-        var callerId = Guid.Parse(_httpContext!.GetUserId());
+        var authUserId = Guid.Parse(_httpContext!.GetUserId());
+        var autUser = _httpContext!.GetUserName();
         var email = dto.Email.Trim().ToLower();
 
         var user = await _repositories.UserRepository.GetUserByEmailAsync(email: email);
@@ -68,7 +71,7 @@ internal class OrganizationInviteService : IOrganizationInviteService
         var invite = new OrganizationInvite
         {
             OrganizationId = orgId,
-            CreatedBy = callerId,
+            CreatedBy = authUserId,
             Email = email,
             Role = dto.Role,
             Token = hashedToken,
@@ -84,7 +87,10 @@ internal class OrganizationInviteService : IOrganizationInviteService
         await _emailNotificationService.SendOrgInviteAsync(
             toEmail: email,
             orgName: org.Name,
-            inviteToken: rawToken
+            inviterName: autUser,
+            roleName: dto.Role.ToString(),
+            inviteToken: rawToken,
+            expiryDays: (expiresAt.Date - DateTime.Now.Date).Days
         );
 
         return new OrganizationInviteResponseDto
