@@ -30,12 +30,12 @@ public class OrganizationInviteConfiguration : IEntityTypeConfiguration<Organiza
         builder.Property(o => o.Email)
                .IsRequired()
                .HasMaxLength(ValidationConstants.Organization.Lengths.Email)
-               .IsUnicode(false);
+               .IsUnicode(true);
 
         builder.Property(o => o.Token)
                .IsRequired()
                .HasMaxLength(ValidationConstants.Organization.Lengths.Token)
-               .IsUnicode(false);
+               .IsUnicode(true);
 
         builder.Property(m => m.Role)
                .HasConversion(
@@ -62,7 +62,7 @@ public class OrganizationInviteConfiguration : IEntityTypeConfiguration<Organiza
 
         builder.HasIndex(x => x.Token)
                .IsUnique()
-               .HasDatabaseName("UQ_OrganizationInvites_Token");
+               .HasDatabaseName("UQ_OrgInvites_Token");
 
         // ----------------------------
         // Indexes
