@@ -6,7 +6,7 @@ public static class ValidationConstants
     {
         public static class Lengths
         {
-            public const int Email = 320;
+            public const int Email = 254;
             public const int Username = 100;
             public const int UsernameMin = 5;
             public const int Name = 150;
@@ -47,7 +47,7 @@ public static class ValidationConstants
             public const int Name = 200;
             public const int Slug = 100;
             public const int Role = 50;
-            public const int Email = 320;
+            public const int Email = 254;
             public const int Token = 512;
         }
 
