@@ -10,6 +10,9 @@ public interface IUserService
     Task LogoutUser();
     Task RevokeAllUserSessions(Guid? userId = null);
 
+    Task ForgotPasswordAsync(ForgotPasswordDto dto);
+    Task ResetPasswordAsync(ResetPasswordDto dto);
+
     Task<AuthUserDto> GetCurrentUserAsync();
     Task<T> GetUserProfileAsync<T>(Guid? userId = null) where T : class;
     Task UpdateUserAsync(UserUpdateDto model);

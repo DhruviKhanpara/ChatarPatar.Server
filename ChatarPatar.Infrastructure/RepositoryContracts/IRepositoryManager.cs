@@ -38,4 +38,6 @@ public interface IRepositoryManager
     IOutboxMessageRepository OutboxMessageRepository { get; }
 
     INotificationTemplateRepository NotificationTemplateRepository { get; }
+    
+    IOtpVerificationRepository OtpVerificationRepository { get; }
 }

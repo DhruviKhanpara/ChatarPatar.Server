@@ -7,33 +7,36 @@ using ChatarPatar.Common.Enums;
 using ChatarPatar.Common.Models;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.RepositoryContracts;
+using Microsoft.Extensions.Configuration;
 
 namespace ChatarPatar.Application.Services.Notification;
 
 internal class EmailNotificationService : IEmailNotificationService
 {
+    private readonly string _appName;
+    private const string _baseUrl = "https://localhost:3000";
+
     private readonly IRepositoryManager _repositories;
     private readonly INotificationDispatcher _dispatcher;
     private readonly IEmailTemplateManagerService _templateManager;
 
-    public EmailNotificationService(
-        IRepositoryManager repositories,
-        INotificationDispatcher dispatcher,
-        IEmailTemplateManagerService templateManager)
+    public EmailNotificationService(IRepositoryManager repositories, INotificationDispatcher dispatcher, IEmailTemplateManagerService templateManager, IConfiguration config)
     {
         _repositories = repositories;
         _dispatcher = dispatcher;
         _templateManager = templateManager;
+        _appName = config.GetValue<string>("AppSettings:ApplicationName") ?? "Unknown";
     }
 
     public async Task SendOrgInviteAsync(string toEmail, string orgName, string inviterName, string roleName, string inviteToken, int expiryDays)
     {
         var replacements = new Dictionary<string, string>
         {
+            { "{{appName}}",        _appName },
             { "{{orgName}}",        orgName },
             { "{{inviterName}}",    inviterName },
             { "{{roleName}}",       roleName },
-            { "{{inviteLink}}",     $"https://localhost:3000/Auth/register?Token={inviteToken}" },
+            { "{{inviteLink}}",     $"{_baseUrl}/Auth/register?Token={inviteToken}" },
             { "{{recipientEmail}}", toEmail },
             { "{{expiryDays}}",     expiryDays.ToString() },
             { "{{year}}",           DateTime.UtcNow.Year.ToString() },
@@ -44,6 +47,29 @@ internal class EmailNotificationService : IEmailNotificationService
 
         if (template.SubjectText == null)
             throw new NotFoundAppException($"Subject not found in Email template.");
+
+        var subject = GenerateEmailTemplate(template.SubjectText, replacements);
+        var body = GenerateEmailTemplate(template.BodyText, replacements);
+
+        await SendAsync(emailBody: body, subject: subject, toAddresses: new List<string> { toEmail }, null, null);
+    }
+
+    public async Task SendForgotPasswordOtpAsync(string toEmail, string userName, string otp, double expiryMinutes)
+    {
+        var replacements = new Dictionary<string, string>
+        {
+            { "{{appName}}",       _appName },
+            { "{{userName}}",      userName },
+            { "{{otp}}",           otp },
+            { "{{expiryMinutes}}", expiryMinutes.ToString() },
+            { "{{resetLink}}",     $"{_baseUrl}/Auth/ResetPassword" },
+            { "{{year}}",          DateTime.UtcNow.Year.ToString() },
+        };
+
+        var template = await RetrieveTemplate(templateName: NotificationTemplateNames.ForgotPassword);
+
+        if (template.SubjectText == null)
+            throw new NotFoundAppException("Subject not found in Email template.");
 
         var subject = GenerateEmailTemplate(template.SubjectText, replacements);
         var body = GenerateEmailTemplate(template.BodyText, replacements);

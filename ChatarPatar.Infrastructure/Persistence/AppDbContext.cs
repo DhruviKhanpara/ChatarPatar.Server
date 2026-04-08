@@ -35,6 +35,7 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<OutboxMessage> OutboxMessages { get; set; }
     public virtual DbSet<NotificationTemplate> NotificationTemplates { get; set; }
+    public virtual DbSet<OtpVerification> OtpVerifications { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

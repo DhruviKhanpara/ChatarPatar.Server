@@ -137,4 +137,19 @@ public static class ValidationConstants
             public const int SubjectText = 500;
         }
     }
+
+    public static class OtpVerification
+    {
+        public static class Lengths
+        {
+            public const int OtpHash = 512;
+            public const int Purpose = 50;
+            public const int IPAddress = 64;
+        }
+
+        public static class Patterns
+        {
+            public const string Otp = "^[0-9]{6}$";
+        }
+    }
 }
