@@ -1170,6 +1170,64 @@ BEGIN
 END
 GO
 
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 21 — Otp verifications
+-- ══════════════════════════════════════════════════════════════
+
+IF NOT EXISTS (
+    SELECT 1 
+    FROM sys.tables 
+    WHERE name = 'OtpVerifications' AND schema_id = SCHEMA_ID('dbo')
+)
+BEGIN
+    CREATE TABLE OtpVerifications
+    (
+        Id        UNIQUEIDENTIFIER    DEFAULT (NEWSEQUENTIALID())     NOT NULL,
+        UserId    UNIQUEIDENTIFIER                                    NOT NULL,
+        OtpHash   NVARCHAR(512)                                       NOT NULL,
+        Purpose   NVARCHAR(50)                                        NOT NULL,
+        ExpiresAt DATETIME2                                           NOT NULL,
+        IsUsed    BIT                 DEFAULT (0)                     NOT NULL,
+        UsedAt    DATETIME2                                           NULL,
+        IPAddress NVARCHAR(64)                                        NULL,
+        CreatedAt DATETIME2           DEFAULT (SYSUTCDATETIME())      NOT NULL,
+ 
+
+        CONSTRAINT [PK_OtpVerifications] PRIMARY KEY CLUSTERED ([Id] ASC),
+
+        CONSTRAINT [FK_OtpVerifications_User]
+            FOREIGN KEY ([UserId])
+            REFERENCES [dbo].[Users] ([Id])
+            ON DELETE CASCADE,
+
+        CONSTRAINT [CK_OtpVerifications_Purpose]
+            CHECK ([Purpose] = 'PasswordReset' OR [Purpose] = 'EmailVerification'),
+
+        CONSTRAINT [CK_OtpVerifications_UsedConsistency]
+            CHECK (
+                ([IsUsed] = 0 AND [UsedAt] IS NULL)
+                OR
+                ([IsUsed] = 1 AND [UsedAt] IS NOT NULL)
+            )
+    );
+ 
+    -- find active OTP for a user + purpose
+    CREATE INDEX [IX_OtpVerifications_UserId_Purpose]
+        ON [dbo].[OtpVerifications] ([UserId], [Purpose])
+        WHERE [IsUsed] = 0;
+
+    -- Cooldown check index: find the latest OTP per user + purpose (includes used/expired rows)
+    -- Used by ForgotPasswordAsync to enforce OtpResendCooldownSeconds
+    CREATE INDEX [IX_OtpVerifications_UserId_Purpose_CreatedAt]
+        ON [dbo].[OtpVerifications] ([UserId], [Purpose], [CreatedAt] DESC);
+
+    -- Cleanup job index: find all expired unused rows efficiently
+    CREATE INDEX [IX_OtpVerifications_ExpiresAt]
+        ON [dbo].[OtpVerifications] ([ExpiresAt])
+        WHERE [IsUsed] = 0;
+END
+GO
+
 
 
 

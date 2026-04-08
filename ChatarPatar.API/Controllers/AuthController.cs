@@ -55,4 +55,26 @@ public class AuthController : ControllerBase
         await _services.UserService.RevokeAllUserSessions();
         return Ok("Revoked all session successfully.");
     }
+
+    /// <summary>
+    /// Step 1 — Request a password-reset OTP.
+    /// </summary>
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordDto dto)
+    {
+        await _services.UserService.ForgotPasswordAsync(dto);
+        return Ok("You will receive an OTP shortly on the email.");
+    }
+
+    /// <summary>
+    /// Step 2 — Verify the OTP and set a new password.
+    /// </summary>
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResetPassword(ResetPasswordDto dto)
+    {
+        await _services.UserService.ResetPasswordAsync(dto);
+        return Ok("Password reset successfully. Please login with your new password.");
+    }
 }

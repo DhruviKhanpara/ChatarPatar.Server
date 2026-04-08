@@ -2,6 +2,7 @@
 using AutoMapper.QueryableExtensions;
 using ChatarPatar.Application.DTOs.User;
 using ChatarPatar.Application.ServiceContracts;
+using ChatarPatar.Application.ServiceContracts.Notification;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.Enums;
 using ChatarPatar.Common.Helpers;
@@ -28,8 +29,9 @@ internal class UserService : IUserService
     private readonly AuthTokenStrategyFactory _tokenStrategyFactory;
     private readonly IMapper _mapper;
     private readonly TokenSettings _tokenSettings;
+    private readonly IEmailNotificationService _emailNotificationService;
 
-    public UserService(IRepositoryManager repositories, IExternalServiceManager externalServiceManager, IValidationService validationService, IHttpContextAccessor httpContextAccessor, ITokenService tokenService, IMapper mapper, AuthTokenStrategyFactory tokenStrategyFactory, IOptions<TokenSettings> tokenSettings)
+    public UserService(IRepositoryManager repositories, IExternalServiceManager externalServiceManager, IValidationService validationService, IHttpContextAccessor httpContextAccessor, ITokenService tokenService, IMapper mapper, AuthTokenStrategyFactory tokenStrategyFactory, IOptions<TokenSettings> tokenSettings, IEmailNotificationService emailNotificationService)
     {
         _repositories = repositories;
         _externalServiceManager = externalServiceManager;
@@ -39,6 +41,7 @@ internal class UserService : IUserService
         _mapper = mapper;
         _tokenStrategyFactory = tokenStrategyFactory;
         _tokenSettings = tokenSettings.Value;
+        _emailNotificationService = emailNotificationService;
     }
 
     private HttpContext? _httpContext => _httpContextAccessor.HttpContext;
@@ -114,6 +117,7 @@ internal class UserService : IUserService
             invite.IsUsed = true;
             invite.UsedAt = DateTime.UtcNow;
             invite.UsedByUser = userEntity;
+            invite.UpdatedAt = DateTime.UtcNow;
 
             await _repositories.OrganizationMemberRepository.AddAsync(membershipEntity);
         }
@@ -192,6 +196,114 @@ internal class UserService : IUserService
 
     #endregion
 
+    #region Forgot / Reset Password
+
+    public async Task ForgotPasswordAsync(ForgotPasswordDto dto)
+    {
+        _validationService.Validate<ForgotPasswordDto>(dto);
+
+        var email = dto.Email.Trim().ToLower();
+
+        var user = await _repositories.UserRepository.GetUserByEmailAsync(email: email);
+
+        if (user is null)
+            return;
+
+        var latestOtp = await _repositories.OtpVerificationRepository
+            .GetLatestOtp(user.Id, OtpPurposeEnum.PasswordReset)
+            .AsNoTracking()
+            .FirstOrDefaultAsync();
+
+        if (latestOtp is not null)
+        {
+            var cooldownEndsAt = latestOtp.CreatedAt.AddSeconds(_tokenSettings.OtpResendCooldownSeconds);
+            var secondsRemaining = (int)(cooldownEndsAt - DateTime.UtcNow).TotalSeconds;
+
+            if (secondsRemaining > 0)
+                return;
+        }
+
+        var existingOtps = await _repositories.OtpVerificationRepository
+            .GetAllActiveOtps(user.Id, OtpPurposeEnum.PasswordReset)
+            .ToListAsync();
+
+        foreach (var old in existingOtps)
+        {
+            old.IsUsed = true;
+            old.UsedAt = DateTime.UtcNow;
+            old.UpdatedAt = DateTime.UtcNow;
+        }
+
+        var plainOtp = _tokenService.GenerateOtp();
+        var otpHash = _tokenService.HashToken(plainOtp);
+
+        var otpEntity = new OtpVerification
+        {
+            UserId = user.Id,
+            OtpHash = otpHash,
+            Purpose = OtpPurposeEnum.PasswordReset,
+            ExpiresAt = DateTime.UtcNow.AddMinutes(_tokenSettings.OtpExpirationMinutes),
+            IPAddress = _httpContext?.GetClientIp(),
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+        };
+
+        await _repositories.OtpVerificationRepository.AddAsync(otpEntity);
+        await _repositories.UnitOfWork.SaveChangesAsync();
+
+        await _emailNotificationService.SendForgotPasswordOtpAsync(
+            toEmail: user.Email,
+            userName: user.Name,
+            otp: plainOtp,
+            expiryMinutes: _tokenSettings.OtpExpirationMinutes);
+    }
+
+    public async Task ResetPasswordAsync(ResetPasswordDto dto)
+    {
+        _validationService.Validate<ResetPasswordDto>(dto);
+
+        var email = dto.Email.Trim().ToLower();
+
+        var user = await _repositories.UserRepository.FindByCondition(x => x.Email == email).FirstOrDefaultAsync();
+
+        if (user is null)
+            throw new InvalidDataAppException("Invalid or expired OTP.");
+
+        var otpHash = _tokenService.HashToken(dto.Otp.Trim());
+
+        var otpEntity = await _repositories.OtpVerificationRepository
+            .GetActiveOtp(user.Id, OtpPurposeEnum.PasswordReset)
+            .FirstOrDefaultAsync();
+
+        if (otpEntity is null || otpEntity.OtpHash != otpHash)
+            throw new InvalidDataAppException("Invalid or expired OTP.");
+
+        otpEntity.IsUsed = true;
+        otpEntity.UsedAt = DateTime.UtcNow;
+        otpEntity.UpdatedAt = DateTime.UtcNow;
+
+        if (PasswordHasher.VerifyPassword(hashedPassword: user.PasswordHash, providedPassword: dto.NewPassword))
+        {
+            await _repositories.UnitOfWork.SaveChangesAsync();
+            throw new InvalidDataAppException("New password must be different from your current password.");
+        }
+
+        user.PasswordHash = PasswordHasher.HashPassword(dto.NewPassword);
+
+        var tokens = await _repositories.RefreshTokenRepository.GetActiveRefreshTokensByUserId(userId: user.Id).ToListAsync();
+
+        foreach (var token in tokens)
+        {
+            token.IsRevoked = true;
+            token.RevokedAt = DateTime.UtcNow;
+            token.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _repositories.UnitOfWork.SaveChangesAsync();
+    }
+
+    #endregion
+
     #region Basic User Operations
 
     public async Task<AuthUserDto> GetCurrentUserAsync()
@@ -263,7 +375,7 @@ internal class UserService : IUserService
 
             userAvatarFile.IsDeleted = true;
         }
-        
+
         var publicId = CloudinaryPublicId.UserAvatar(user.Id);
 
         var uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(dto.AvatarFile, CloudinaryPath.Users().Avatars(), publicId);

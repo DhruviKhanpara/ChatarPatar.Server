@@ -84,6 +84,16 @@ namespace ChatarPatar.Common.Security
 
         #endregion
 
+        #region OTP generation
+
+        public string GenerateOtp()
+        {
+            int otp = RandomNumberGenerator.GetInt32(0, 1_000_000);
+            return otp.ToString("D6");
+        }
+
+        #endregion
+
         #region Encode token
 
         public string HashToken(string token)

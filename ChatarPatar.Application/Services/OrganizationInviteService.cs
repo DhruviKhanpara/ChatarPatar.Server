@@ -4,13 +4,11 @@ using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Application.ServiceContracts.Notification;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.HttpUserDetails;
-using ChatarPatar.Common.Models;
 using ChatarPatar.Common.Security.SecurityContracts;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace ChatarPatar.Application.Services;
 
@@ -90,7 +88,7 @@ internal class OrganizationInviteService : IOrganizationInviteService
             inviterName: autUser,
             roleName: dto.Role.ToString(),
             inviteToken: rawToken,
-            expiryDays: (expiresAt.Date - DateTime.Now.Date).Days
+            expiryDays: (expiresAt.Date - DateTime.UtcNow.Date).Days
         );
 
         return new OrganizationInviteResponseDto

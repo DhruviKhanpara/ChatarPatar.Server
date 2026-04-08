@@ -24,8 +24,8 @@ internal class BaseRepository<T> : IBaseRepository<T> where T : class
 
     public async Task AddAsync(T entity) => await _dbSet.AddAsync(entity);
 
-    //public void Update(T existingEntity, T entity) => _context.Entry(existingEntity).CurrentValues.SetValues(entity);
-    public void Update(T existingEntity, T entity) => _dbSet.Update(entity);
+    public void Update(T existingEntity, T entity) => _context.Entry(existingEntity).CurrentValues.SetValues(entity);
+    //public void Update(T existingEntity, T entity) => _dbSet.Update(entity);
 
     public void Remove(T entity) => _dbSet.Remove(entity);
 

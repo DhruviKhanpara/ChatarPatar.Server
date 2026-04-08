@@ -9,8 +9,8 @@
 ///
 /// Changing names without DB sync will break data consistency.
 /// </summary>
-public enum ChannelTypeEnum
+public enum OtpPurposeEnum
 {
-    Text = 1,
-    Announcement = 2
+    PasswordReset = 1,
+    EmailVerification = 2,
 }

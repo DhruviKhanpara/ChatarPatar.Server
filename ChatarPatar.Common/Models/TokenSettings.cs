@@ -7,5 +7,7 @@ public class TokenSettings
     public List<string> Audience { get; set; } = [];
     public double TokenExpirationMinutes { get; set; }
     public double RefreshTokenExpirationDays { get; set; }
+    public double OtpExpirationMinutes { get; set; }
+    public double OtpResendCooldownSeconds { get; set; }
     public int MaxSessions { get; set; }
 }

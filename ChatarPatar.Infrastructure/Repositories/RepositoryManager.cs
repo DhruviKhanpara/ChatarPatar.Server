@@ -46,6 +46,8 @@ internal sealed class RepositoryManager : IRepositoryManager
     private readonly Lazy<IOutboxMessageRepository> _outboxMessageRepository;
 
     private readonly Lazy<INotificationTemplateRepository> _notificationTemplateRepository;
+    
+    private readonly Lazy<IOtpVerificationRepository> _otpVerificationRepository;
 
     public RepositoryManager(AppDbContext context, IHttpContextAccessor httpContextAccessor, ILoggerFactory loggerFactory)
     {
@@ -75,6 +77,7 @@ internal sealed class RepositoryManager : IRepositoryManager
         _refreshTokenRepository = new Lazy<IRefreshTokenRepository>(() => new RefreshTokenRepository(_context));
         _outboxMessageRepository = new Lazy<IOutboxMessageRepository>(() => new OutboxMessageRepository(_context));
         _notificationTemplateRepository = new Lazy<INotificationTemplateRepository>(() => new NotificationTemplateRepository(_context));
+        _otpVerificationRepository = new Lazy<IOtpVerificationRepository>(() => new OtpVerificationRepository(_context));
     }
 
     public IUnitOfWork UnitOfWork => _unitOfWork.Value;
@@ -113,4 +116,6 @@ internal sealed class RepositoryManager : IRepositoryManager
     public IOutboxMessageRepository OutboxMessageRepository => _outboxMessageRepository.Value;
 
     public INotificationTemplateRepository NotificationTemplateRepository => _notificationTemplateRepository.Value;
+    
+    public IOtpVerificationRepository OtpVerificationRepository => _otpVerificationRepository.Value;
 }
