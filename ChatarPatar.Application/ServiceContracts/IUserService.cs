@@ -8,7 +8,7 @@ public interface IUserService
     Task<LoginResponseDto> RegisterUserAsync(UserRegisterDto user);
     Task<LoginResponseDto> RefreshAuthToken();
     Task LogoutUser();
-    Task RevokeAllUserSessions(Guid? userId = null);
+    Task LogoutAllUserSessions(Guid? userId = null);
 
     Task ForgotPasswordAsync(ForgotPasswordDto dto);
     Task ResetPasswordAsync(ResetPasswordDto dto);

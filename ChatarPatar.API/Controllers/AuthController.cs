@@ -48,11 +48,11 @@ public class AuthController : ControllerBase
         return Ok();
     }
 
-    [HttpPost("revoke-all-sessions")]
+    [HttpPost("logout-all-sessions")]
     [Authorize]
-    public async Task<IActionResult> RevokeAllSessions()
+    public async Task<IActionResult> LogoutAllSessions()
     {
-        await _services.UserService.RevokeAllUserSessions();
+        await _services.UserService.LogoutAllUserSessions();
         return Ok("Revoked all session successfully.");
     }
 

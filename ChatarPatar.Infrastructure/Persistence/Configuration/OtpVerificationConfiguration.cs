@@ -49,9 +49,6 @@ public class OtpVerificationConfiguration : IEntityTypeConfiguration<OtpVerifica
 
         builder.Property(x => x.CreatedAt)
                .HasDefaultValueSql("SYSUTCDATETIME()");
-        
-        builder.Property(x => x.UpdatedAt)
-               .HasDefaultValueSql("SYSUTCDATETIME()");
 
         // ----------------------------
         // Indexes

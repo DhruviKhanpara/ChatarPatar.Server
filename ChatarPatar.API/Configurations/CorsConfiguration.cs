@@ -9,7 +9,7 @@
                 options.AddPolicy(name: "AllowSpecificOrigin",
                     policy =>
                     {
-                        var origins = configuration.GetSection("AppSettings:AllowedOrigins").Get<string[]>();
+                        var origins = configuration.GetSection("AppSettings:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
 
                         policy.WithOrigins(origins!)
                         .AllowAnyHeader()

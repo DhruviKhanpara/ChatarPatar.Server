@@ -9,4 +9,5 @@ public static class NotificationTemplateNames
 {
     public const string OrganizationInvite = "Organization Invite";
     public const string ForgotPassword = "Forgot Password";
+    public const string PasswordChangedAlert = "Password Changed Alert";
 }

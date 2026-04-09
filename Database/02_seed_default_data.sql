@@ -15,7 +15,8 @@ BEGIN TRAN;
 --   {{expiryDays}}     — number of days until the token expires
 --   {{recipientEmail}} — email address of the invitee
 --   {{year}}           — current UTC year (e.g. 2025)
---   {{appName}}       — app name
+--   {{appName}}        — app name
+--   {{privacyPolicy}}  — privacy policy link
 -- =============================================================================
 
 DECLARE @OrgInviteBody NVARCHAR(MAX) = N'<!DOCTYPE html>
@@ -142,7 +143,7 @@ DECLARE @OrgInviteBody NVARCHAR(MAX) = N'<!DOCTYPE html>
                             <a href="mailto:{{recipientEmail}}">{{recipientEmail}}</a> to {{orgName}}.<br />
                             If this was a mistake, you can safely ignore this email.
                             <br><br>
-                            © {{year}} {{appName}} <a href="#">Privacy Policy</a>
+                            © {{year}} {{appName}} <a href="{{privacyPolicy}}">Privacy Policy</a>
                           </div>
                         </td>
                       </tr>
@@ -169,6 +170,7 @@ DECLARE @OrgInviteBody NVARCHAR(MAX) = N'<!DOCTYPE html>
 --   {{resetLink}}     — password reset URL
 --   {{year}}          — current year (footer)
 --   {{appName}}       — app name
+--   {{privacyPolicy}} — privacy policy link
 -- ============================================================
 
 DECLARE @PasswordResetBody NVARCHAR(MAX) = N'<!DOCTYPE html>
@@ -295,7 +297,7 @@ DECLARE @PasswordResetBody NVARCHAR(MAX) = N'<!DOCTYPE html>
 
                           <!-- Bottom Footer -->
                           <div class="text-muted" style="margin-top:24px; font-size:11px; text-align:center; color:#888;">
-                            © {{year}} {{appName}} <a href="#">Privacy Policy</a>
+                            © {{year}} {{appName}} <a href="{{privacyPolicy}}">Privacy Policy</a>
                           </div>
                         </td>
                       </tr>
@@ -322,6 +324,7 @@ DECLARE @PasswordResetBody NVARCHAR(MAX) = N'<!DOCTYPE html>
 --   {{verificationLink}} — email verify URL
 --   {{year}}             — current year (footer)
 --   {{appName}}          — app name
+--   {{privacyPolicy}}    — privacy policy link
 -- ============================================================
 
 DECLARE @VerifyEmailBody NVARCHAR(MAX) = N'<!DOCTYPE html>
@@ -450,7 +453,7 @@ DECLARE @VerifyEmailBody NVARCHAR(MAX) = N'<!DOCTYPE html>
 
                           <!-- Bottom Footer -->
                           <div class="text-muted" style="margin-top:24px; font-size:11px; text-align:center; color:#888;">
-                            © {{year}} {{appName}} <a href="#">Privacy Policy</a>
+                            © {{year}} {{appName}} <a href="{{privacyPolicy}}">Privacy Policy</a>
                           </div>
 
                         </td>
@@ -469,6 +472,176 @@ DECLARE @VerifyEmailBody NVARCHAR(MAX) = N'<!DOCTYPE html>
 </html>
 ';
 
+-- ============================================================
+-- Seed: Password Changed (Security Alert) Email Template
+--
+-- Placeholders supported:
+--   {{userName}}      — recipient's display name
+--   {{dateTime}}      — date & time when password was changed
+--   {{device}}        — device/browser info (e.g., Chrome on Windows)
+--   {{location}}      — approximate location (city, country or IP-based)
+--   {{securityLink}}  — link to secure/recover account
+--   {{year}}          — current year (footer)
+--   {{appName}}       — application name
+--   {{privacyPolicy}} — privacy policy link
+-- ============================================================
+
+DECLARE @PasswordChangedAlertBody NVARCHAR(MAX) = N'<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f5f5f5;
+    }
+
+    @media only screen and (max-width: 600px) {
+      .container { width: 100% !important; }
+      .card-padding { padding: 20px !important; }
+      .headline { font-size: 20px !important; }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body { background-color: #09090b !important; }
+      .email-bg { background-color: #0f0f10 !important; border-color: #1c1c1f !important; }
+      .card { background-color: #1c1c1f !important; border-color: #2e2e32 !important; }
+      .text-main { color: #ffffff !important; }
+      .text-muted { color: #9f9fa8 !important; }
+      .success-box {
+        background-color: #27272a !important;
+        border-color: #3a3a3e !important;
+        color: #86efac !important;
+      }
+      .info-box {
+        background-color: #18181b !important;
+        border-color: #2e2e32 !important;
+        color: #d4d4d8 !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center">
+        <table class="container" width="680" cellpadding="0" cellspacing="0" style="max-width:680px; width:100%;">
+          <tr>
+            <td style="padding:40px 16px;">
+
+              <!-- Outer Card -->
+              <table width="100%" cellpadding="0" cellspacing="0" class="email-bg" style="background:#ffffff; border:1px solid #e5e5e5; border-radius:14px;">
+
+                <!-- Logo -->
+                <tr>
+                  <td align="center" style="padding:28px 0;">
+                    <table role="presentation">
+                      <tr>
+                        <td width="28" height="28" style="background:linear-gradient(135deg,#7c6af7,#a78bfa); border-radius:6px;">
+                        </td>
+                        <td width="8"></td>
+                        <td class="text-main" style="font-size:18px; font-weight:bold; font-family:Arial; color:#111;">
+                          {{appName}}
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Content -->
+                <tr>
+                  <td class="card-padding" style="padding:32px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" class="card" style="background:#ffffff; border:1px solid #e5e5e5; border-radius:16px;">
+                      <tr>
+                        <td style="padding:28px;">
+
+                          <!-- Label -->
+                          <div class="text-muted" style="font-size:11px; letter-spacing:1.5px; font-weight:bold; color:#6b7280;">
+                            SECURITY ALERT
+                          </div>
+
+                          <!-- Heading -->
+                          <div class="headline text-main" style="font-size:24px; font-weight:bold; margin-top:8px; color:#111;">
+                            Your password was changed
+                          </div>
+
+                          <!-- Description -->
+                          <div class="text-muted" style="font-size:14px; line-height:1.6; margin-top:12px; color:#555;">
+                            Hi <strong>{{userName}}</strong>,<br><br>
+                            This is a confirmation that your account password was successfully updated.
+                          </div>
+
+                          <!-- Success Box -->
+                          <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:24px;">
+                            <tr>
+                              <td align="center">
+                                <div class="success-box" style="display:inline-block; padding:14px 24px; border:2px dashed #22c55e; border-radius:12px; font-size:16px; font-weight:bold; color:#16a34a; background:#f0fdf4;">
+                                  ✔ Password Updated Successfully
+                                </div>
+                              </td>
+                            </tr>
+                          </table>
+
+                          <!-- Activity Details -->
+                          <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:24px;">
+                            <tr>
+                              <td align="center">
+                                <div class="info-box" style="display:inline-block; padding:16px 20px; border:1px solid #e5e5e5; border-radius:12px; background:#fafafa; font-size:13px; color:#444; line-height:1.6; text-align:left;">
+                                  <strong>Change Details</strong><br>
+                                  Changed on {{dateTime}}<br>
+                                  Device: {{device}}<br>
+                                  Location: {{location}}
+                                </div>
+                              </td>
+                            </tr>
+                          </table>
+
+                          <!-- Security Warning -->
+                          <div class="text-muted" style="margin-top:20px; font-size:14px; color:#555;">
+                            If you made this change, no further action is needed.<br><br>
+                            <strong>If you did NOT change your password</strong>, please secure your account immediately.
+                          </div>
+
+                          <!-- CTA BUTTON -->
+                          <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:24px;">
+                            <tr>
+                              <td align="center">
+                                <a href="{{securityLink}}" style="background:linear-gradient(135deg,#ef4444,#f87171); color:#ffffff; text-decoration:none; padding:12px 24px; border-radius:10px; font-weight:bold; display:inline-block;">
+                                  Secure My Account
+                                </a>
+                              </td>
+                            </tr>
+                          </table>
+
+                          <!-- Footer -->
+                          <div align="center" class="text-muted" style="margin-top:20px; font-size:12px; color:#666;">
+                            For security reasons, we recommend reviewing your account activity.
+                          </div>
+
+                          <div class="text-muted" style="margin-top:24px; font-size:11px; text-align:center; color:#888;">
+                            © {{year}} {{appName}} <a href="{{privacyPolicy}}">Privacy Policy</a>
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>'
 
 -- =============================================================================
 -- Seed: Email templates
@@ -501,6 +674,15 @@ USING (
         N'Email',
         N'Your {{appName}} email verification OTP',
         @PasswordResetBody,
+        1
+    
+    UNION ALL
+
+    SELECT 
+        N'Password Changed Alert',
+        N'Email',
+        N'Security Alert: Your password was changed',
+        @PasswordChangedAlertBody,
         1
 ) AS SOURCE
 ON TARGET.Name = SOURCE.Name 

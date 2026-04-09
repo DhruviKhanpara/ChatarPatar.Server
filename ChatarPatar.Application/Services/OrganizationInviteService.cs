@@ -34,7 +34,7 @@ internal class OrganizationInviteService : IOrganizationInviteService
 
     public async Task<OrganizationInviteResponseDto> SendInviteAsync(Guid orgId, SendInviteDto dto)
     {
-        _validationService.Validate<SendInviteDto>(dto);
+        await _validationService.ValidateAsync<SendInviteDto>(dto);
 
         var authUserId = Guid.Parse(_httpContext!.GetUserId());
         var autUser = _httpContext!.GetUserName();

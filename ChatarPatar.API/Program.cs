@@ -7,6 +7,7 @@ using ChatarPatar.Common.DependencyInjection;
 using ChatarPatar.Infrastructure.DependencyInjection;
 using Serilog;
 using Serilog.Events;
+using System.Text.Json.Serialization;
 
 namespace ChatarPatar.API;
 
@@ -36,9 +37,10 @@ public class Program
         builder.Services.AddSwaggerGenConfiguration(builder.Configuration);
 
         builder.Services.AddControllers(options =>
-        {
-            options.Filters.Add<PermissionFilter>();
-        });
+            {
+                options.Filters.Add<PermissionFilter>();
+            })
+            .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
         builder.Services.AddEndpointsApiExplorer();

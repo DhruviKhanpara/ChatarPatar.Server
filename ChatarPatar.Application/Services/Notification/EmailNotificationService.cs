@@ -36,11 +36,12 @@ internal class EmailNotificationService : IEmailNotificationService
             { "{{orgName}}",        orgName },
             { "{{inviterName}}",    inviterName },
             { "{{roleName}}",       roleName },
-            { "{{inviteLink}}",     $"{_baseUrl}/Auth/register?Token={inviteToken}" },
+            { "{{inviteLink}}",     $"{_baseUrl}/auth/register?Token={inviteToken}" },
             { "{{recipientEmail}}", toEmail },
             { "{{expiryDays}}",     expiryDays.ToString() },
             { "{{year}}",           DateTime.UtcNow.Year.ToString() },
             { "{{orgInitial}}",     orgName.Length > 0 ? orgName[0].ToString().ToUpper() : "?" },
+            { "{{privacyPolicy}}",  $"{_baseUrl}/privacy" }
         };
 
         var template = await RetrieveTemplate(templateName: NotificationTemplateNames.OrganizationInvite);
@@ -62,11 +63,37 @@ internal class EmailNotificationService : IEmailNotificationService
             { "{{userName}}",      userName },
             { "{{otp}}",           otp },
             { "{{expiryMinutes}}", expiryMinutes.ToString() },
-            { "{{resetLink}}",     $"{_baseUrl}/Auth/ResetPassword" },
+            { "{{resetLink}}",     $"{_baseUrl}/auth/reset-password" },
             { "{{year}}",          DateTime.UtcNow.Year.ToString() },
+            { "{{privacyPolicy}}", $"{_baseUrl}/privacy" }
         };
 
         var template = await RetrieveTemplate(templateName: NotificationTemplateNames.ForgotPassword);
+
+        if (template.SubjectText == null)
+            throw new NotFoundAppException("Subject not found in Email template.");
+
+        var subject = GenerateEmailTemplate(template.SubjectText, replacements);
+        var body = GenerateEmailTemplate(template.BodyText, replacements);
+
+        await SendAsync(emailBody: body, subject: subject, toAddresses: new List<string> { toEmail }, null, null);
+    }
+
+    public async Task SendPasswordChangedAlertAsync(string toEmail, string userName, string device, string location)
+    {
+        var replacements = new Dictionary<string, string>
+        {
+            { "{{appName}}",       _appName },
+            { "{{userName}}",      userName },
+            { "{{dateTime}}",      DateTime.UtcNow.ToString("f") },
+            { "{{device}}",        device },
+            { "{{location}}",      location },
+            { "{{securityLink}}",  $"{_baseUrl}/auth/security-settings" },
+            { "{{year}}",          DateTime.UtcNow.Year.ToString() },
+            { "{{privacyPolicy}}", $"{_baseUrl}/privacy" }
+        };
+
+        var template = await RetrieveTemplate(templateName: NotificationTemplateNames.PasswordChangedAlert);
 
         if (template.SubjectText == null)
             throw new NotFoundAppException("Subject not found in Email template.");
