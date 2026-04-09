@@ -39,6 +39,8 @@ internal class GenericOutboxProcessor : IOutboxProcessor
             }
 
             var initiatedBy = ExtractInitiatedBy(message.Payload);
+            if (string.IsNullOrWhiteSpace(initiatedBy))
+                initiatedBy = null;
 
             using (LogContext.PushProperty(LoggingProperties.UserName, initiatedBy))
             {

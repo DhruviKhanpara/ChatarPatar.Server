@@ -24,5 +24,4 @@ public class OtpVerification : BaseEntity
     public string? IPAddress { get; set; }
 
     public DateTime CreatedAt { get; set; }
-    public DateTime UpdatedAt { get; set; }
 }

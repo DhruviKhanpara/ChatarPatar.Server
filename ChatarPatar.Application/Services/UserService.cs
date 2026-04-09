@@ -50,7 +50,7 @@ internal class UserService : IUserService
 
     public async Task<LoginResponseDto> LoginUserAsync(UserLoginDto user)
     {
-        _validationService.Validate<UserLoginDto>(user);
+        await _validationService.ValidateAsync<UserLoginDto>(user);
 
         var identifier = user.Identifier.Trim().ToLower();
 
@@ -65,7 +65,7 @@ internal class UserService : IUserService
 
     public async Task<LoginResponseDto> RegisterUserAsync(UserRegisterDto user)
     {
-        _validationService.Validate<UserRegisterDto>(user);
+        await _validationService.ValidateAsync<UserRegisterDto>(user);
 
         var username = user.Username.Trim().ToLower();
         var email = user.Email.Trim().ToLower();
@@ -175,20 +175,13 @@ internal class UserService : IUserService
         strategy.ClearTokens();
     }
 
-    public async Task RevokeAllUserSessions(Guid? userId = null)
+    public async Task LogoutAllUserSessions(Guid? userId = null)
     {
         var strategy = GetTokenStrategy();
 
         userId = userId ?? Guid.Parse(_httpContext!.GetUserId());
 
-        var tokens = await _repositories.RefreshTokenRepository.GetActiveRefreshTokensByUserId(userId: (Guid)userId).ToListAsync();
-
-        foreach (var token in tokens)
-        {
-            token.IsRevoked = true;
-            token.RevokedAt = DateTime.UtcNow;
-            token.UpdatedAt = DateTime.UtcNow;
-        }
+        await RevokeAllActiveSessionsAsync((Guid)userId);
         await _repositories.UnitOfWork.SaveChangesAsync();
 
         strategy.ClearTokens();
@@ -200,55 +193,16 @@ internal class UserService : IUserService
 
     public async Task ForgotPasswordAsync(ForgotPasswordDto dto)
     {
-        _validationService.Validate<ForgotPasswordDto>(dto);
+        await _validationService.ValidateAsync<ForgotPasswordDto>(dto);
 
         var email = dto.Email.Trim().ToLower();
 
         var user = await _repositories.UserRepository.GetUserByEmailAsync(email: email);
+        if (user is null) return;
 
-        if (user is null)
-            return;
+        var plainOtp = await GenerateAndSaveOtpAsync(userId: user.Id, OtpPurposeEnum.PasswordReset);
+        if (string.IsNullOrEmpty(plainOtp)) return;
 
-        var latestOtp = await _repositories.OtpVerificationRepository
-            .GetLatestOtp(user.Id, OtpPurposeEnum.PasswordReset)
-            .AsNoTracking()
-            .FirstOrDefaultAsync();
-
-        if (latestOtp is not null)
-        {
-            var cooldownEndsAt = latestOtp.CreatedAt.AddSeconds(_tokenSettings.OtpResendCooldownSeconds);
-            var secondsRemaining = (int)(cooldownEndsAt - DateTime.UtcNow).TotalSeconds;
-
-            if (secondsRemaining > 0)
-                return;
-        }
-
-        var existingOtps = await _repositories.OtpVerificationRepository
-            .GetAllActiveOtps(user.Id, OtpPurposeEnum.PasswordReset)
-            .ToListAsync();
-
-        foreach (var old in existingOtps)
-        {
-            old.IsUsed = true;
-            old.UsedAt = DateTime.UtcNow;
-            old.UpdatedAt = DateTime.UtcNow;
-        }
-
-        var plainOtp = _tokenService.GenerateOtp();
-        var otpHash = _tokenService.HashToken(plainOtp);
-
-        var otpEntity = new OtpVerification
-        {
-            UserId = user.Id,
-            OtpHash = otpHash,
-            Purpose = OtpPurposeEnum.PasswordReset,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(_tokenSettings.OtpExpirationMinutes),
-            IPAddress = _httpContext?.GetClientIp(),
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow,
-        };
-
-        await _repositories.OtpVerificationRepository.AddAsync(otpEntity);
         await _repositories.UnitOfWork.SaveChangesAsync();
 
         await _emailNotificationService.SendForgotPasswordOtpAsync(
@@ -260,7 +214,7 @@ internal class UserService : IUserService
 
     public async Task ResetPasswordAsync(ResetPasswordDto dto)
     {
-        _validationService.Validate<ResetPasswordDto>(dto);
+        await _validationService.ValidateAsync<ResetPasswordDto>(dto);
 
         var email = dto.Email.Trim().ToLower();
 
@@ -280,7 +234,6 @@ internal class UserService : IUserService
 
         otpEntity.IsUsed = true;
         otpEntity.UsedAt = DateTime.UtcNow;
-        otpEntity.UpdatedAt = DateTime.UtcNow;
 
         if (PasswordHasher.VerifyPassword(hashedPassword: user.PasswordHash, providedPassword: dto.NewPassword))
         {
@@ -290,16 +243,18 @@ internal class UserService : IUserService
 
         user.PasswordHash = PasswordHasher.HashPassword(dto.NewPassword);
 
-        var tokens = await _repositories.RefreshTokenRepository.GetActiveRefreshTokensByUserId(userId: user.Id).ToListAsync();
-
-        foreach (var token in tokens)
-        {
-            token.IsRevoked = true;
-            token.RevokedAt = DateTime.UtcNow;
-            token.UpdatedAt = DateTime.UtcNow;
-        }
+        await RevokeAllActiveSessionsAsync(user.Id);
 
         await _repositories.UnitOfWork.SaveChangesAsync();
+
+        var deviceInfo = _httpContext!.GetDeviceInfo();
+
+        await _emailNotificationService.SendPasswordChangedAlertAsync(
+            toEmail: user.Email,
+            userName: user.Name,
+            device: $"{deviceInfo.Device} {deviceInfo.Browser} {deviceInfo.OS}",
+            location: _httpContext!.GetClientIp() //TODO: find the actual location from the IP
+        );
     }
 
     #endregion
@@ -466,6 +421,62 @@ internal class UserService : IUserService
         var refreshTokenResponse = strategy.SetRefreshToken(refreshToken);
 
         return refreshTokenResponse;
+    }
+
+    private async Task RevokeAllActiveSessionsAsync(Guid userId)
+    {
+        var tokens = await _repositories.RefreshTokenRepository
+            .GetActiveRefreshTokensByUserId(userId)
+            .ToListAsync();
+
+        foreach (var token in tokens)
+        {
+            token.IsRevoked = true;
+            token.RevokedAt = DateTime.UtcNow;
+            token.UpdatedAt = DateTime.UtcNow;
+        }
+    }
+
+    private async Task<string?> GenerateAndSaveOtpAsync(Guid userId, OtpPurposeEnum purpose)
+    {
+        // 1. Check Cooldown
+        var latestOtp = await _repositories.OtpVerificationRepository
+            .GetLatestOtp(userId, purpose)
+            .AsNoTracking()
+            .FirstOrDefaultAsync();
+
+        if (latestOtp is not null)
+        {
+            var cooldownEndsAt = latestOtp.CreatedAt.AddSeconds(_tokenSettings.OtpResendCooldownSeconds);
+            if (DateTime.UtcNow < cooldownEndsAt)
+                return null;
+        }
+
+        // 2. Invalidate existing active OTPs
+        var existingOtps = await _repositories.OtpVerificationRepository
+            .GetAllActiveOtps(userId, purpose)
+            .ToListAsync();
+
+        foreach (var old in existingOtps)
+        {
+            old.IsUsed = true;
+            old.UsedAt = DateTime.UtcNow;
+        }
+
+        // 3. Generate New OTP
+        var plainOtp = _tokenService.GenerateOtp();
+        var otpEntity = new OtpVerification
+        {
+            UserId = userId,
+            OtpHash = _tokenService.HashToken(plainOtp),
+            Purpose = purpose,
+            ExpiresAt = DateTime.UtcNow.AddMinutes(_tokenSettings.OtpExpirationMinutes),
+            IPAddress = _httpContext?.GetClientIp(),
+            CreatedAt = DateTime.UtcNow,
+        };
+
+        await _repositories.OtpVerificationRepository.AddAsync(otpEntity);
+        return plainOtp;
     }
 
     private IAuthTokenStrategy GetTokenStrategy() => _tokenStrategyFactory.Resolve();

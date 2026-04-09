@@ -3,5 +3,5 @@
 public class UserUpdateDto
 {
     public string Name { get; set; } = null!;
-    public string Bio { get; set; } = null!;
+    public string? Bio { get; set; }
 }
