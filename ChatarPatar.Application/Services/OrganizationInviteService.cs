@@ -32,7 +32,7 @@ internal class OrganizationInviteService : IOrganizationInviteService
     }
     private HttpContext? _httpContext => _httpContextAccessor.HttpContext;
 
-    public async Task<OrganizationInviteResponseDto> SendInviteAsync(Guid orgId, SendInviteDto dto)
+    public async Task SendInviteAsync(Guid orgId, SendInviteDto dto)
     {
         await _validationService.ValidateAsync<SendInviteDto>(dto);
 
@@ -90,11 +90,5 @@ internal class OrganizationInviteService : IOrganizationInviteService
             inviteToken: rawToken,
             expiryDays: (expiresAt.Date - DateTime.UtcNow.Date).Days
         );
-
-        return new OrganizationInviteResponseDto
-        {
-            RawToken = rawToken,
-            ExpiresAt = expiresAt,
-        };
     }
 }

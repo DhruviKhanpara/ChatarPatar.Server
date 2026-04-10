@@ -36,6 +36,11 @@ public class Program
         builder.Services.AddAuthenticationConfiguration(builder.Configuration);
         builder.Services.AddSwaggerGenConfiguration(builder.Configuration);
 
+        builder.Services.AddRouting(options =>
+        {
+            options.LowercaseUrls = true;
+        });
+
         builder.Services.AddControllers(options =>
             {
                 options.Filters.Add<PermissionFilter>();

@@ -1,5 +1,7 @@
 ﻿using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using ChatarPatar.Application.DTOs.Common;
+using ChatarPatar.Application.DTOs.Organization;
 using ChatarPatar.Application.DTOs.User;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Application.ServiceContracts.Notification;
@@ -302,19 +304,18 @@ internal class UserService : IUserService
         if (user == null)
             throw new NotFoundAppException("User");
 
-        user.Name = model.Name;
-        user.Bio = model.Bio;
+        _mapper.Map<UserUpdateDto, User>(model, user);
 
         await _repositories.UnitOfWork.SaveChangesAsync();
     }
 
-    public async Task UpdateAvatarAsync(UpdateAvatarDto dto)
+    public async Task UpdateAvatarAsync(ImageUploadDto dto)
     {
-        await _validationService.ValidateAsync<UpdateAvatarDto>(dto);
+        await _validationService.ValidateAsync<ImageUploadDto>(dto);
 
         var userId = Guid.Parse(_httpContext!.GetUserId());
 
-        var fileType = dto.AvatarFile.ValidateFile(FileUsageContextEnum.Avatar);
+        var fileType = dto.File.ValidateFile(FileUsageContextEnum.Avatar);
 
         var user = await _repositories.UserRepository.GetById(userId).FirstOrDefaultAsync();
 
@@ -333,7 +334,7 @@ internal class UserService : IUserService
 
         var publicId = CloudinaryPublicId.UserAvatar(user.Id);
 
-        var uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(dto.AvatarFile, CloudinaryPath.Users().Avatars(), publicId);
+        var uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(dto.File, CloudinaryPath.Users().Avatars(), publicId);
 
         user.AvatarFile = new FileEntity()
         {
@@ -345,9 +346,9 @@ internal class UserService : IUserService
             Url = uploadResult.Url,
             ThumbnailUrl = uploadResult.ThumbnailUrl,
 
-            SizeInBytes = dto.AvatarFile.Length,
-            OriginalName = dto.AvatarFile.FileName,
-            MimeType = dto.AvatarFile.ContentType,
+            SizeInBytes = dto.File.Length,
+            OriginalName = dto.File.FileName,
+            MimeType = dto.File.ContentType,
             FileType = fileType,
         };
 

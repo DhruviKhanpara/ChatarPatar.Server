@@ -8,5 +8,7 @@ internal class OrganizationMemberRepository : BaseSoftDeleteRepository<Organizat
 {
     public OrganizationMemberRepository(AppDbContext context) : base(context) { }
 
+    public IQueryable<OrganizationMember> GetById(Guid id) => FindByCondition(x => x.Id == id).AsQueryable();
+
     public IQueryable<OrganizationMember> GetOrgMemberAsync(Guid userId, Guid orgId) => FindByCondition(x => x.UserId == userId && x.OrgId == orgId).AsQueryable();
 }

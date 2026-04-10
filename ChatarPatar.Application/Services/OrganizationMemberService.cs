@@ -45,10 +45,25 @@ internal class OrganizationMemberService : IOrganizationMemberService
         var memberEntity = _mapper.Map<OrganizationMember>(dto);
 
         memberEntity.OrgId = orgId;
+        memberEntity.UserId = dto.UserId;
         memberEntity.InvitedByUserId = authUserId;
         memberEntity.JoinedAt = DateTime.UtcNow;
 
         await _repositories.OrganizationMemberRepository.AddAsync(memberEntity);
+        await _repositories.UnitOfWork.SaveChangesAsync();
+    }
+
+    public async Task UpdateOrganizationMemberRole(Guid orgId, Guid membershipId, UpdateOrganizationMemberRoleDto dto)
+    {
+        await _validationService.ValidateAsync<UpdateOrganizationMemberRoleDto>(dto);
+
+        var membership = await _repositories.OrganizationMemberRepository.GetById(id: membershipId).FirstOrDefaultAsync();
+
+        if (membership is null || membership.OrgId != orgId)
+            throw new NotFoundAppException("Organization membership");
+
+        membership.Role = dto.Role;
+
         await _repositories.UnitOfWork.SaveChangesAsync();
     }
 }

@@ -20,5 +20,9 @@ public class UserMapperProfile : Profile
         CreateMap<User, UserProfileSummaryDto>()
             .ForMember(dest => dest.AvatarUrl, src => src.MapFrom(act => act.AvatarFile != null ? act.AvatarFile.Url : null))
             .ForMember(dest => dest.AvatarThumbnailUrl, src => src.MapFrom(act => act.AvatarFile != null ? act.AvatarFile.ThumbnailUrl : null));
+
+        CreateMap<UserUpdateDto, User>(MemberList.Source)
+            .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name))
+            .ForMember(dest => dest.Bio, opt => opt.MapFrom(src => src.Bio));
     }
 }

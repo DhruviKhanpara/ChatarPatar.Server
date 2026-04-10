@@ -4,5 +4,5 @@ namespace ChatarPatar.Application.ServiceContracts;
 
 public interface IOrganizationInviteService
 {
-    Task<OrganizationInviteResponseDto> SendInviteAsync(Guid orgId, SendInviteDto dto);
+    Task SendInviteAsync(Guid orgId, SendInviteDto dto);
 }
