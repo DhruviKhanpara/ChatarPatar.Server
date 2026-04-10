@@ -1,4 +1,5 @@
-﻿using ChatarPatar.Application.DTOs.User;
+﻿using ChatarPatar.Application.DTOs.Common;
+using ChatarPatar.Application.DTOs.User;
 using ChatarPatar.Application.ServiceContracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -61,7 +62,7 @@ public class UserController : ControllerBase
     /// update avatar for the currently logged-in user.
     /// </summary>
     [HttpPatch("me/avatar")]
-    public async Task<IActionResult> UpdateMyAvatar([FromForm] UpdateAvatarDto dto)
+    public async Task<IActionResult> UpdateMyAvatar([FromForm] ImageUploadDto dto)
     {
         await _services.UserService.UpdateAvatarAsync(dto: dto);
         return Ok("Update avatar successfully.");

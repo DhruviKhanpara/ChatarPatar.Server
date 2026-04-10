@@ -10,14 +10,18 @@ public class OrganizationMapperProfile : Profile
     public OrganizationMapperProfile()
     {
         // Organization
-        CreateMap<CreateOrganizationDto, Organization>()
-            .ForMember(dest => dest.OrganizationMembers, opt => opt.Ignore());
+        CreateMap<CreateOrganizationDto, Organization>(MemberList.Source)
+            .ForMember(dest => dest.RowVersion, opt => opt.Ignore());
+
+        CreateMap<UpdateOrganizationDto, Organization>(MemberList.Source)
+            .ForMember(dest => dest.Slug, opt => opt.Ignore())
+            .ForMember(dest => dest.RowVersion, opt => opt.Ignore());
 
         // Organization members
-        CreateMap<AddOrganizationMemberDto, OrganizationMember>()
+        CreateMap<AddOrganizationMemberDto, OrganizationMember>(MemberList.Source)
             .ForMember(dest => dest.OrgId, opt => opt.Ignore())
+            .ForMember(dest => dest.InvitedByUserId, opt => opt.Ignore())
             .ForMember(dest => dest.JoinedAt, opt => opt.Ignore())
-            .ForMember(dest => dest.Organization, opt => opt.Ignore())
-            .ForMember(dest => dest.User, opt => opt.Ignore());
+            .ForMember(dest => dest.UserId, opt => opt.Ignore());
     }
 }

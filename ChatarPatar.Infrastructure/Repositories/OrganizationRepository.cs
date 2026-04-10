@@ -8,6 +8,8 @@ internal class OrganizationRepository : BaseSoftDeleteRepository<Organization>, 
 {
     public OrganizationRepository(AppDbContext context) : base(context) { }
 
+    public IQueryable<Organization> GetById(Guid id) => FindByCondition(x => x.Id == id).AsQueryable();
+
     public async Task<bool> SlugExistsAsync(string slug) => await AnyAsync(x => x.Slug == slug);
 }
 

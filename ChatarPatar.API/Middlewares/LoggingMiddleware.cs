@@ -20,6 +20,9 @@ public class LoggingMiddleware
             ?? httpContext.GetUserId()
             ?? "Anonymous";
 
+        if (string.IsNullOrWhiteSpace(userName))
+            userName = null;
+
         using (LogContext.PushProperty(LoggingProperties.ServerName, Environment.MachineName))
         using (LogContext.PushProperty(LoggingProperties.UserName, userName))
         using (LogContext.PushProperty(LoggingProperties.MethodType, httpContext.Request.Method))

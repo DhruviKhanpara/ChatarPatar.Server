@@ -1,16 +1,16 @@
-﻿using ChatarPatar.Application.DTOs.User;
+﻿using ChatarPatar.Application.DTOs.Common;
 using ChatarPatar.Common.Consts;
 using ChatarPatar.Common.Enums;
 using FluentValidation;
 using Microsoft.AspNetCore.Http;
 
-namespace ChatarPatar.Application.Validators.User;
+namespace ChatarPatar.Application.Validators.Common;
 
-public class UpdateAvatarDtoValidator : AbstractValidator<UpdateAvatarDto>
+public class ImageUploadDtoValidator : AbstractValidator<ImageUploadDto>
 {
-    public UpdateAvatarDtoValidator()
+    public ImageUploadDtoValidator()
     {
-        RuleFor(x => x.AvatarFile)
+        RuleFor(x => x.File)
             .Cascade(CascadeMode.Stop)
             .NotNull()
                 .WithMessage("Profile photo is required")
@@ -26,7 +26,7 @@ public class UpdateAvatarDtoValidator : AbstractValidator<UpdateAvatarDto>
     {
         if (!AllowedMimeTypes.MimeTypes.TryGetValue(FileTypeEnum.Image, out var allowed))
             return false;
-        
+
         return allowed.Contains(file.ContentType);
     }
 }
