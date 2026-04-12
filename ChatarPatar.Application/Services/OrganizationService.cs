@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using ChatarPatar.Application.DTOs.Common;
 using ChatarPatar.Application.DTOs.Organization;
 using ChatarPatar.Application.ServiceContracts;
@@ -31,6 +32,41 @@ internal class OrganizationService : IOrganizationService
         _externalServiceManager = externalServiceManager;
     }
     private HttpContext? _httpContext => _httpContextAccessor.HttpContext;
+
+    public async Task<OrganizationDto> GetOrganizationAsync(Guid orgId)
+    {
+        var authUserId = Guid.Parse(_httpContext!.GetUserId());
+
+        // Verify the caller is an active member of this org
+        var isMember = await _repositories.OrganizationMemberRepository
+            .GetOrgMemberAsync(userId: authUserId, orgId: orgId)
+            .AnyAsync();
+
+        if (!isMember)
+            throw new NotFoundAppException("Organization");
+
+        var org = await _repositories.OrganizationRepository
+            .GetByIdWithLogo(orgId)
+            .AsNoTracking()
+            .ProjectTo<OrganizationDto>(_mapper.ConfigurationProvider)
+            .FirstOrDefaultAsync();
+
+        if (org == null)
+            throw new NotFoundAppException("Organization");
+
+        return org;
+    }
+
+    public async Task<List<OrganizationWithRoleDto>> GetMyOrganizationsAsync()
+    {
+        var authUserId = Guid.Parse(_httpContext!.GetUserId());
+
+        return await _repositories.OrganizationMemberRepository
+            .GetMembershipsByUserId(authUserId)
+            .AsNoTracking()
+            .ProjectTo<OrganizationWithRoleDto>(_mapper.ConfigurationProvider)
+            .ToListAsync();
+    }
 
     public async Task CreateOrganizationAsync(CreateOrganizationDto dto)
     {

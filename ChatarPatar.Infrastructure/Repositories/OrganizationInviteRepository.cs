@@ -1,4 +1,5 @@
-﻿using ChatarPatar.Infrastructure.Entities;
+﻿using ChatarPatar.Common.Enums;
+using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.Persistence;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.EntityFrameworkCore;
@@ -9,14 +10,45 @@ internal class OrganizationInviteRepository : BaseRepository<OrganizationInvite>
 {
     public OrganizationInviteRepository(AppDbContext context) : base(context) { }
 
-    public async Task<OrganizationInvite?> GetValidInviteAsync(string token, string email) => await FindByCondition(x => x.Token == token && x.Email == email && x.IsUsed == false && x.ExpiresAt > DateTime.UtcNow).AsNoTracking().FirstOrDefaultAsync();
+    public async Task<OrganizationInvite?> GetValidInviteAsync(string token, string email) => 
+        await FindByCondition(x => x.Token == token 
+            && x.Email == email 
+            && !x.IsUsed
+            && x.ExpiresAt > DateTime.UtcNow)
+        .AsNoTracking()
+        .FirstOrDefaultAsync();
 
     public IQueryable<OrganizationInvite> GetPendingByToken(string token) =>
-        FindByCondition(i => i.Token == token && !i.IsUsed && i.ExpiresAt > DateTime.UtcNow);
+        FindByCondition(i => i.Token == token 
+            && !i.IsUsed 
+            && i.ExpiresAt > DateTime.UtcNow);
 
     public IQueryable<OrganizationInvite> GetPendingByEmail(string email) =>
-        FindByCondition(i => i.Email == email && !i.IsUsed && i.ExpiresAt > DateTime.UtcNow);
+        FindByCondition(i => i.Email == email 
+            && !i.IsUsed 
+            && i.ExpiresAt > DateTime.UtcNow);
 
     public IQueryable<OrganizationInvite> GetActiveInviteAsync(Guid orgId, string email) =>
-        FindByCondition(x => x.OrganizationId == orgId && x.Email == email && x.IsUsed == false && x.ExpiresAt > DateTime.UtcNow);
+        FindByCondition(x => x.OrganizationId == orgId 
+            && x.Email == email 
+            && !x.IsUsed
+            && x.ExpiresAt > DateTime.UtcNow);
+
+    public IQueryable<OrganizationInvite> GetPendingInvitesQuery(Guid orgId, string? search = null, OrganizationRoleEnum? role = null)
+    {
+        var query = FindByCondition(x => x.OrganizationId == orgId && !x.IsUsed && x.ExpiresAt > DateTime.UtcNow)
+            .Include(x => x.CreatedByUser)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(x => x.Email.ToLower().Contains(term));
+        }
+
+        if (role.HasValue)
+            query = query.Where(x => x.Role == role.Value);
+
+        return query.OrderByDescending(x => x.CreatedAt);
+    }
 }

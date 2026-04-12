@@ -268,8 +268,8 @@ internal class UserService : IUserService
         var userId = Guid.Parse(_httpContext!.GetUserId());
 
         var user = await _repositories.UserRepository.GetById(userId)
-            .ProjectTo<AuthUserDto>(_mapper.ConfigurationProvider)
             .AsNoTracking()
+            .ProjectTo<AuthUserDto>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
 
         if (user == null)

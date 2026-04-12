@@ -1,9 +1,12 @@
 ﻿using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using ChatarPatar.Application.DTOs.OrganizationInvite;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Application.ServiceContracts.Notification;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
+using ChatarPatar.Common.Helpers;
 using ChatarPatar.Common.HttpUserDetails;
+using ChatarPatar.Common.Models;
 using ChatarPatar.Common.Security.SecurityContracts;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.RepositoryContracts;
@@ -32,12 +35,28 @@ internal class OrganizationInviteService : IOrganizationInviteService
     }
     private HttpContext? _httpContext => _httpContextAccessor.HttpContext;
 
+    public async Task<PagedResult<OrganizationInviteListItemDto>> GetPendingInvitesAsync(Guid orgId, InviteQueryParams queryParams)
+    {
+        var baseQuery = _repositories.OrganizationInviteRepository
+            .GetPendingInvitesQuery(orgId, queryParams.Search, queryParams.Role);
+
+        var totalCount = await baseQuery.CountAsync();
+
+        var items = await baseQuery
+            .PaginateOffset(queryParams.PageSize, queryParams.PageNumber)
+            .AsNoTracking()
+            .ProjectTo<OrganizationInviteListItemDto>(_mapper.ConfigurationProvider)
+            .ToListAsync();
+
+        return new PagedResult<OrganizationInviteListItemDto>(items, totalCount, queryParams.PageNumber, queryParams.PageSize);
+    }
+
     public async Task SendInviteAsync(Guid orgId, SendInviteDto dto)
     {
         await _validationService.ValidateAsync<SendInviteDto>(dto);
 
         var authUserId = Guid.Parse(_httpContext!.GetUserId());
-        var autUser = _httpContext!.GetUserName();
+        var authUser = _httpContext!.GetUserName();
         var email = dto.Email.Trim().ToLower();
 
         var user = await _repositories.UserRepository.GetUserByEmailAsync(email: email);
@@ -85,7 +104,7 @@ internal class OrganizationInviteService : IOrganizationInviteService
         await _emailNotificationService.SendOrgInviteAsync(
             toEmail: email,
             orgName: org.Name,
-            inviterName: autUser,
+            inviterName: authUser,
             roleName: dto.Role.ToString(),
             inviteToken: rawToken,
             expiryDays: (expiresAt.Date - DateTime.UtcNow.Date).Days
