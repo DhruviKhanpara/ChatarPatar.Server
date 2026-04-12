@@ -8,5 +8,6 @@ internal class FileRepository : BaseSoftDeleteRepository<FileEntity>, IFileRepos
 {
     public FileRepository(AppDbContext context) : base(context) { }
 
-    public IQueryable<FileEntity> GetByIdAsync(Guid id) => FindByCondition(x => x.Id == id).AsQueryable();
+    public IQueryable<FileEntity> GetByIdAsync(Guid id) => 
+        FindByCondition(x => x.Id == id);
 }

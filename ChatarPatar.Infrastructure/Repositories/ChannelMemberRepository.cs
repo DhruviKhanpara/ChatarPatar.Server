@@ -8,5 +8,6 @@ internal class ChannelMemberRepository : BaseSoftDeleteRepository<ChannelMember>
 {
     public ChannelMemberRepository(AppDbContext context) : base(context) { }
 
-    public IQueryable<ChannelMember> GetChannelMemberAsync(Guid userId, Guid channelId) => FindByCondition(x => x.UserId == userId && x.ChannelId == channelId).AsQueryable();
+    public IQueryable<ChannelMember> GetChannelMemberAsync(Guid userId, Guid channelId) => 
+        FindByCondition(x => x.UserId == userId && x.ChannelId == channelId);
 }

@@ -8,5 +8,6 @@ internal class TeamMemberRepository : BaseSoftDeleteRepository<TeamMember>, ITea
 {
     public TeamMemberRepository(AppDbContext context) : base(context) { }
 
-    public IQueryable<TeamMember> GetTeamMemberAsync(Guid userId, Guid teamId) => FindByCondition(x => x.UserId == userId && x.TeamId == teamId).AsQueryable();
+    public IQueryable<TeamMember> GetTeamMemberAsync(Guid userId, Guid teamId) => 
+        FindByCondition(x => x.UserId == userId && x.TeamId == teamId);
 }

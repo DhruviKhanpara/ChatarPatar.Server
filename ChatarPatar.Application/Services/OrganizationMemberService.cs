@@ -1,8 +1,12 @@
 ﻿using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using ChatarPatar.Application.DTOs.OrganizationMember;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
+using ChatarPatar.Common.Enums;
+using ChatarPatar.Common.Helpers;
 using ChatarPatar.Common.HttpUserDetails;
+using ChatarPatar.Common.Models;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
@@ -25,6 +29,54 @@ internal class OrganizationMemberService : IOrganizationMemberService
         _httpContextAccessor = httpContextAccessor;
     }
     private HttpContext? _httpContext => _httpContextAccessor.HttpContext;
+
+    public async Task<PagedResult<OrganizationMemberDto>> GetMembersAsync(Guid orgId, MemberQueryParams queryParams)
+    {
+        var authUserId = Guid.Parse(_httpContext!.GetUserId());
+
+        var isMember = await _repositories.OrganizationMemberRepository
+            .GetOrgMemberAsync(userId: authUserId, orgId: orgId)
+            .AnyAsync();
+
+        if (!isMember)
+            throw new NotFoundAppException("Organization");
+
+        var baseQuery = _repositories.OrganizationMemberRepository
+            .GetMembersQuery(orgId, queryParams.Search, queryParams.Role);
+
+        var totalCount = await baseQuery.CountAsync();
+
+        var items = await baseQuery
+            .PaginateOffset(queryParams.PageSize, queryParams.PageNumber)
+            .AsNoTracking()
+            .ProjectTo<OrganizationMemberDto>(_mapper.ConfigurationProvider)
+            .ToListAsync();
+
+        return new PagedResult<OrganizationMemberDto>(items, totalCount, queryParams.PageNumber, queryParams.PageSize);
+    }
+
+    public async Task<OrganizationMemberDto> GetMemberAsync(Guid orgId, Guid membershipId)
+    {
+        var authUserId = Guid.Parse(_httpContext!.GetUserId());
+
+        // Caller must be an active member of the org
+        var isMember = await _repositories.OrganizationMemberRepository
+            .GetOrgMemberAsync(userId: authUserId, orgId: orgId)
+            .AnyAsync();
+
+        if (!isMember)
+            throw new NotFoundAppException("Organization");
+
+        var membership = await _repositories.OrganizationMemberRepository
+            .GetMemberById(membershipId)
+            .AsNoTracking()
+            .FirstOrDefaultAsync();
+
+        if (membership is null || membership.OrgId != orgId)
+            throw new NotFoundAppException("Organization membership");
+
+        return _mapper.Map<OrganizationMemberDto>(membership);
+    }
 
     public async Task AddOrganizationMemberAsync(Guid orgId, AddOrganizationMemberDto dto)
     {
@@ -63,6 +115,31 @@ internal class OrganizationMemberService : IOrganizationMemberService
             throw new NotFoundAppException("Organization membership");
 
         membership.Role = dto.Role;
+
+        await _repositories.UnitOfWork.SaveChangesAsync();
+    }
+
+    public async Task RemoveMemberAsync(Guid orgId, Guid membershipId)
+    {
+        var authUserId = Guid.Parse(_httpContext!.GetUserId());
+
+        var membership = await _repositories.OrganizationMemberRepository
+            .GetById(membershipId)
+            .FirstOrDefaultAsync();
+
+        if (membership is null || membership.OrgId != orgId)
+            throw new NotFoundAppException("Organization membership");
+
+        // Owners cannot be removed — they must transfer ownership first
+        if (membership.Role == OrganizationRoleEnum.OrgOwner)
+            throw new InvalidDataAppException("The organization owner cannot be removed. Transfer ownership first.");
+
+        if (membership.UserId == authUserId)
+            throw new InvalidDataAppException("You cannot remove yourself. Use the leave organization action instead.");
+
+        membership.IsDeleted = true;
+        //membership.DeletedAt = DateTime.UtcNow;
+        //membership.DeletedBy = authUserId;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
     }

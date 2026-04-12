@@ -8,5 +8,6 @@ internal class ConversationParticipantRepository : BaseRepository<ConversationPa
 {
     public ConversationParticipantRepository(AppDbContext context) : base(context) { }
 
-    public IQueryable<ConversationParticipant> GetConvMemberAsync(Guid userId, Guid convId) => FindByCondition(x => x.UserId == userId && x.ConversationId == convId && !x.HasLeft).AsQueryable();
+    public IQueryable<ConversationParticipant> GetConvMemberAsync(Guid userId, Guid convId) => 
+        FindByCondition(x => x.UserId == userId && x.ConversationId == convId && !x.HasLeft);
 }

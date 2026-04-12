@@ -5,6 +5,7 @@ using ChatarPatar.Application.DTOs.OrganizationInvite;
 using ChatarPatar.Application.DTOs.OrganizationMember;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Common.Enums;
+using ChatarPatar.Common.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,6 +13,7 @@ namespace ChatarPatar.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Authorize]
 public class OrganizationController : ControllerBase
 {
     private readonly IServiceManager _services;
@@ -24,10 +26,29 @@ public class OrganizationController : ControllerBase
     #region Organization
 
     /// <summary>
-    /// Create new organization, login user is owner
+    /// Returns all organizations the current user is a member of, along with their role and join date in each.
     /// </summary>
-    [HttpPost("create")]
-    [Authorize]
+    [HttpGet("my")]
+    public async Task<ActionResult<List<OrganizationWithRoleDto>>> GetMyOrganizations()
+    {
+        var result = await _services.OrganizationService.GetMyOrganizationsAsync();
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Returns the details of a specific organization. Caller must be a member.
+    /// </summary>
+    [HttpGet("{orgId:guid}")]
+    public async Task<ActionResult<OrganizationDto>> GetOrganization([FromRoute] Guid orgId)
+    {
+        var result = await _services.OrganizationService.GetOrganizationAsync(orgId);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Creates a new organization. The logged-in user becomes the OrgOwner.
+    /// </summary>
+    [HttpPost]
     public async Task<IActionResult> CreateOrganization(CreateOrganizationDto dto)
     {
         await _services.OrganizationService.CreateOrganizationAsync(dto);
@@ -35,27 +56,25 @@ public class OrganizationController : ControllerBase
     }
 
     /// <summary>
-    /// Upload org logo, from login user account
+    /// Uploads / replaces the organization logo.
     /// </summary>
     [HttpPatch("{orgId:guid}/icon")]
-    [Authorize]
     [RequirePermission(PermissionCheckLogicEnum.All, "org:settings:edit")]
     public async Task<IActionResult> UpdateOrganizationLogo([FromRoute] Guid orgId, [FromForm] ImageUploadDto dto)
     {
         await _services.OrganizationService.UpdateLogoAsync(orgId, dto);
-        return Ok("Update Organization Logo successfully");
+        return Ok("Organization logo updated successfully");
     }
 
     /// <summary>
-    /// Update Organization
+    /// Updates the organization name or other settings.
     /// </summary>
     [HttpPatch("{orgId:guid}")]
-    [Authorize]
     [RequirePermission(PermissionCheckLogicEnum.All, "org:settings:edit")]
     public async Task<IActionResult> UpdateOrganization([FromRoute] Guid orgId, [FromBody] UpdateOrganizationDto dto)
     {
         await _services.OrganizationService.UpdateOrganizationAsync(orgId, dto);
-        return Ok("Update Organization successfully");
+        return Ok("Organization updated successfully");
     }
 
     #endregion
@@ -63,10 +82,21 @@ public class OrganizationController : ControllerBase
     #region Organization Invite
 
     /// <summary>
-    /// Sends an invite to the given email to join the specified organization.
+    /// Returns a paginated list of pending (not used, not expired) invites for the organization.
+    /// Optional query params: search (email), role, pageNumber, pageSize.
+    /// </summary>
+    [HttpGet("{orgId:guid}/invites")]
+    [RequirePermission(PermissionCheckLogicEnum.All, "org:members:invite")]
+    public async Task<ActionResult<PagedResult<OrganizationInviteListItemDto>>> GetPendingInvites([FromRoute] Guid orgId, [FromQuery] InviteQueryParams queryParams)
+    {
+        var result = await _services.OrganizationInviteService.GetPendingInvitesAsync(orgId, queryParams);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Sends an email invite to the given address to join the specified organization.
     /// </summary>
     [HttpPost("{orgId:guid}/invites")]
-    [Authorize]
     [RequirePermission(PermissionCheckLogicEnum.All, "org:members:invite")]
     public async Task<IActionResult> SendInvite([FromRoute] Guid orgId, [FromBody] SendInviteDto dto)
     {
@@ -79,27 +109,57 @@ public class OrganizationController : ControllerBase
     #region Organization Membership
 
     /// <summary>
-    /// Create new organization member
+    /// Returns all active members of the organization. Caller must be a member.
+    /// Optional query params: search (name/username), role, pageNumber, pageSize.
     /// </summary>
-    [HttpPost("{orgId:guid}/members/create")]
-    [Authorize]
+    [HttpGet("{orgId:guid}/members")]
+    public async Task<ActionResult<PagedResult<OrganizationMemberDto>>> GetMembers( [FromRoute] Guid orgId, [FromQuery] MemberQueryParams queryParams)
+    {
+        var result = await _services.OrganizationMemberService.GetMembersAsync(orgId, queryParams);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Returns a single membership record. Caller must be a member of the org.
+    /// </summary>
+    [HttpGet("{orgId:guid}/members/{membershipId:guid}")]
+    public async Task<ActionResult<OrganizationMemberDto>> GetMember([FromRoute] Guid orgId, [FromRoute] Guid membershipId)
+    {
+        var result = await _services.OrganizationMemberService.GetMemberAsync(orgId, membershipId);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Adds an existing registered user directly to the organization.
+    /// </summary>
+    [HttpPost("{orgId:guid}/members")]
     [RequirePermission(PermissionCheckLogicEnum.All, "org:members:invite")]
     public async Task<IActionResult> AddOrganizationMember([FromRoute] Guid orgId, [FromBody] AddOrganizationMemberDto dto)
     {
         await _services.OrganizationMemberService.AddOrganizationMemberAsync(orgId, dto);
-        return Ok("Member added in Organization successfully");
+        return Ok("Member added to organization successfully");
     }
 
     /// <summary>
-    /// Update Organization member role
+    /// Updates the role of an existing organization member.
     /// </summary>
     [HttpPatch("{orgId:guid}/members/{membershipId:guid}/role")]
-    [Authorize]
     [RequirePermission(PermissionCheckLogicEnum.All, "org:members:role:change")]
     public async Task<IActionResult> UpdateOrganizationMemberRole([FromRoute] Guid orgId, [FromRoute] Guid membershipId, [FromBody] UpdateOrganizationMemberRoleDto dto)
     {
         await _services.OrganizationMemberService.UpdateOrganizationMemberRole(orgId, membershipId, dto);
-        return Ok("Member role update in Organization successfully");
+        return Ok("Member role updated successfully");
+    }
+
+    /// <summary>
+    /// Removes a member from the organization (soft delete). Owners cannot be removed.
+    /// </summary>
+    [HttpDelete("{orgId:guid}/members/{membershipId:guid}")]
+    [RequirePermission(PermissionCheckLogicEnum.All, "org:members:remove")]
+    public async Task<IActionResult> RemoveMember([FromRoute] Guid orgId, [FromRoute] Guid membershipId)
+    {
+        await _services.OrganizationMemberService.RemoveMemberAsync(orgId, membershipId);
+        return Ok("Member removed from organization successfully");
     }
 
     #endregion
