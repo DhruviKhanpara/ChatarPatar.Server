@@ -3,7 +3,7 @@
 namespace ChatarPatar.API.Attributes;
 
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = false)]
-public class RequirePermissionAttribute : Attribute
+public sealed class RequirePermissionAttribute : Attribute
 {
     public string[] Permissions { get; }
     public PermissionCheckLogicEnum Logic { get; }

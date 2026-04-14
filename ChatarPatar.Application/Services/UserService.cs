@@ -1,7 +1,6 @@
 ﻿using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using ChatarPatar.Application.DTOs.Common;
-using ChatarPatar.Application.DTOs.Organization;
 using ChatarPatar.Application.DTOs.User;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Application.ServiceContracts.Notification;
@@ -46,7 +45,7 @@ internal class UserService : IUserService
         _emailNotificationService = emailNotificationService;
     }
 
-    private HttpContext? _httpContext => _httpContextAccessor.HttpContext;
+    private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
 
     #region Auth
 
@@ -100,11 +99,35 @@ internal class UserService : IUserService
                 .GetPendingByToken(hashedToken)
                 .FirstOrDefaultAsync();
 
+            // ── BRUTE-FORCE / ENUMERATION PROTECTION ──────────────────────────
             if (invite is null)
+            {
+                var inviteByEmail = await _repositories.OrganizationInviteRepository
+                    .GetPendingByEmail(email)
+                    .FirstOrDefaultAsync();
+
+                if (inviteByEmail is not null)
+                {
+                    inviteByEmail.FailedAttempts++;
+                    inviteByEmail.UpdatedAt = DateTime.UtcNow;
+
+                    if (inviteByEmail.FailedAttempts >= _tokenSettings.InviteMaxFailedAttempts)
+                    {
+                        // Void the invite — the sender will need to issue a new one
+                        inviteByEmail.IsUsed = true;
+                        inviteByEmail.UsedAt = DateTime.UtcNow;
+                        await _repositories.UnitOfWork.SaveChangesAsync();
+                        throw new InvalidDataAppException("Invite token is invalid or has expired");
+                    }
+
+                    await _repositories.UnitOfWork.SaveChangesAsync();
+                }
+
                 throw new InvalidDataAppException("Invite token is invalid or has expired");
+            }
 
             if (invite.Email != email)
-                throw new InvalidDataAppException("This invite was sent to a different email address");
+                throw new InvalidDataAppException("Invite token is invalid or has expired");
 
             var membershipEntity = new OrganizationMember
             {
@@ -126,7 +149,25 @@ internal class UserService : IUserService
 
         await _repositories.UserStatusRepository.AddAsync(userStatusEntity);
 
+        // NOTE: The user, membership, and invite.IsUsed=true are all written in a single
+        // SaveChangesAsync call. If it fails, EF rolls back the entire unit of work —
+        // the invite is NOT consumed and the user can retry with the same token.
         await _repositories.UnitOfWork.SaveChangesAsync();
+
+        // ── SEND VERIFICATION OTP ──────────────────────────────────────────────
+        // Runs after the user row is persisted so the OTP record can reference UserId.
+        // Email dispatch is fire-and-forget — a delivery failure must not block the
+        // registration response. The user can always resend via /resend-verification.
+        var plainOtp = await GenerateAndSaveOtpAsync(userEntity.Id, OtpPurposeEnum.EmailVerification);
+        if (plainOtp is not null)
+        {
+            await _repositories.UnitOfWork.SaveChangesAsync();
+            _ = _emailNotificationService.SendEmailVerificationOtpAsync(
+                toEmail: userEntity.Email,
+                userName: userEntity.Name,
+                otp: plainOtp,
+                expiryMinutes: _tokenSettings.OtpExpirationMinutes);
+        }
 
         var strategy = GetTokenStrategy();
         return await AuthenticateUser(strategy, userEntity);
@@ -181,12 +222,94 @@ internal class UserService : IUserService
     {
         var strategy = GetTokenStrategy();
 
-        userId = userId ?? Guid.Parse(_httpContext!.GetUserId());
+        userId = userId ?? Guid.Parse(_httpContext.GetUserId());
 
         await RevokeAllActiveSessionsAsync((Guid)userId);
         await _repositories.UnitOfWork.SaveChangesAsync();
 
         strategy.ClearTokens();
+    }
+
+    #endregion
+
+    #region Email Verification
+
+    public async Task VerifyEmailAsync(VerifyEmailDto dto)
+    {
+        await _validationService.ValidateAsync<VerifyEmailDto>(dto);
+
+        var userId = Guid.Parse(_httpContext.GetUserId());
+
+        var user = await _repositories.UserRepository
+            .GetById(userId)
+            .FirstOrDefaultAsync();
+
+        if (user is null)
+            throw new NotFoundAppException("User");
+
+        if (user.IsEmailVerified)
+            throw new InvalidDataAppException("Email is already verified.");
+
+        var otpEntity = await _repositories.OtpVerificationRepository
+            .GetActiveOtp(userId, OtpPurposeEnum.EmailVerification)
+            .FirstOrDefaultAsync();
+
+        if (otpEntity is null)
+            throw new InvalidDataAppException("Invalid or expired OTP.");
+
+        var otpHash = _tokenService.HashToken(dto.Otp.Trim());
+
+        // ── BRUTE-FORCE PROTECTION ─────────────────────────────────────────────
+        if (otpEntity.OtpHash != otpHash)
+        {
+            otpEntity.FailedAttempts++;
+
+            if (otpEntity.FailedAttempts >= _tokenSettings.OtpMaxFailedAttempts)
+            {
+                otpEntity.IsUsed = true;
+                otpEntity.UsedAt = DateTime.UtcNow;
+                await _repositories.UnitOfWork.SaveChangesAsync();
+                throw new InvalidDataAppException("Too many incorrect attempts. Please request a new OTP.");
+            }
+
+            await _repositories.UnitOfWork.SaveChangesAsync();
+            throw new InvalidDataAppException("Invalid or expired OTP.");
+        }
+
+        // ── CORRECT OTP ────────────────────────────────────────────────────────
+        otpEntity.IsUsed = true;
+        otpEntity.UsedAt = DateTime.UtcNow;
+        user.IsEmailVerified = true;
+
+        await _repositories.UnitOfWork.SaveChangesAsync();
+    }
+
+    public async Task ResendVerificationOtpAsync()
+    {
+        var userId = Guid.Parse(_httpContext.GetUserId());
+
+        var user = await _repositories.UserRepository
+            .GetById(userId)
+            .AsNoTracking()
+            .FirstOrDefaultAsync();
+
+        if (user is null)
+            throw new NotFoundAppException("User");
+
+        if (user.IsEmailVerified)
+            return;
+
+        var plainOtp = await GenerateAndSaveOtpAsync(userId, OtpPurposeEnum.EmailVerification);
+        if (plainOtp is null)
+            return;
+
+        await _repositories.UnitOfWork.SaveChangesAsync();
+
+        await _emailNotificationService.SendEmailVerificationOtpAsync(
+            toEmail: user.Email,
+            userName: user.Name,
+            otp: plainOtp,
+            expiryMinutes: _tokenSettings.OtpExpirationMinutes);
     }
 
     #endregion
@@ -231,17 +354,32 @@ internal class UserService : IUserService
             .GetActiveOtp(user.Id, OtpPurposeEnum.PasswordReset)
             .FirstOrDefaultAsync();
 
-        if (otpEntity is null || otpEntity.OtpHash != otpHash)
+        if (otpEntity is null)
             throw new InvalidDataAppException("Invalid or expired OTP.");
+
+        // ── BRUTE-FORCE PROTECTION ─────────────────────────────────────────────
+        if (otpEntity.OtpHash != otpHash)
+        {
+            otpEntity.FailedAttempts++;
+
+            if (otpEntity.FailedAttempts >= _tokenSettings.OtpMaxFailedAttempts)
+            {
+                // Invalidate — force the user to go through forgot-password again
+                otpEntity.IsUsed = true;
+                otpEntity.UsedAt = DateTime.UtcNow;
+                await _repositories.UnitOfWork.SaveChangesAsync();
+                throw new InvalidDataAppException($"Too many incorrect attempts. Please request a new OTP.");
+            }
+
+            await _repositories.UnitOfWork.SaveChangesAsync();
+            throw new InvalidDataAppException("Invalid or expired OTP.");
+        }
 
         otpEntity.IsUsed = true;
         otpEntity.UsedAt = DateTime.UtcNow;
 
         if (PasswordHasher.VerifyPassword(hashedPassword: user.PasswordHash, providedPassword: dto.NewPassword))
-        {
-            await _repositories.UnitOfWork.SaveChangesAsync();
             throw new InvalidDataAppException("New password must be different from your current password.");
-        }
 
         user.PasswordHash = PasswordHasher.HashPassword(dto.NewPassword);
 
@@ -249,13 +387,13 @@ internal class UserService : IUserService
 
         await _repositories.UnitOfWork.SaveChangesAsync();
 
-        var deviceInfo = _httpContext!.GetDeviceInfo();
+        var deviceInfo = _httpContext.GetDeviceInfo();
 
         await _emailNotificationService.SendPasswordChangedAlertAsync(
             toEmail: user.Email,
             userName: user.Name,
             device: $"{deviceInfo.Device} {deviceInfo.Browser} {deviceInfo.OS}",
-            location: _httpContext!.GetClientIp() //TODO: find the actual location from the IP
+            location: _httpContext.GetClientIp() //TODO: find the actual location from the IP
         );
     }
 
@@ -265,7 +403,7 @@ internal class UserService : IUserService
 
     public async Task<AuthUserDto> GetCurrentUserAsync()
     {
-        var userId = Guid.Parse(_httpContext!.GetUserId());
+        var userId = Guid.Parse(_httpContext.GetUserId());
 
         var user = await _repositories.UserRepository.GetById(userId)
             .AsNoTracking()
@@ -280,7 +418,7 @@ internal class UserService : IUserService
 
     public async Task<T> GetUserProfileAsync<T>(Guid? userId = null) where T : class
     {
-        userId = userId ?? Guid.Parse(_httpContext!.GetUserId());
+        userId = userId ?? Guid.Parse(_httpContext.GetUserId());
 
         var user = await _repositories.UserRepository.GetById((Guid)userId)
             .ProjectTo<T>(_mapper.ConfigurationProvider)
@@ -297,7 +435,7 @@ internal class UserService : IUserService
     {
         await _validationService.ValidateAsync<UserUpdateDto>(model);
 
-        var userId = Guid.Parse(_httpContext!.GetUserId());
+        var userId = Guid.Parse(_httpContext.GetUserId());
 
         var user = await _repositories.UserRepository.GetById(userId).FirstOrDefaultAsync();
 
@@ -313,7 +451,7 @@ internal class UserService : IUserService
     {
         await _validationService.ValidateAsync<ImageUploadDto>(dto);
 
-        var userId = Guid.Parse(_httpContext!.GetUserId());
+        var userId = Guid.Parse(_httpContext.GetUserId());
 
         var fileType = dto.File.ValidateFile(FileUsageContextEnum.Avatar);
 
@@ -378,7 +516,7 @@ internal class UserService : IUserService
     private async Task<string?> IssueRefreshTokenAsync(IAuthTokenStrategy strategy, User user, RefreshToken? entity = null)
     {
         var refreshToken = _tokenService.GenerateRefreshToken();
-        var deviceInfo = _httpContext!.GetDeviceInfo();
+        var deviceInfo = _httpContext.GetDeviceInfo();
 
         var refreshTokenEntity = new RefreshToken
         {
@@ -387,7 +525,7 @@ internal class UserService : IUserService
             Device = deviceInfo.Device,
             Browser = deviceInfo.Browser,
             OperatingSystem = deviceInfo.OS,
-            IPAddress = _httpContext!.GetClientIp(),
+            IPAddress = _httpContext.GetClientIp(),
             ExpiresAt = DateTime.UtcNow.AddDays(_tokenSettings.RefreshTokenExpirationDays)
         };
 

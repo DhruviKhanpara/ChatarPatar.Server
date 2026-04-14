@@ -20,6 +20,10 @@ public class OrganizationInviteConfiguration : IEntityTypeConfiguration<Organiza
                 "CK_OrgInvites_UsedConsistency",
                 @"(IsUsed = 0 AND UsedAt IS NULL AND UsedBy IS NULL) OR
                   (IsUsed = 1 AND UsedAt IS NOT NULL AND UsedBy IS NOT NULL)");
+
+            t.HasCheckConstraint(
+                "CK_OrgInvites_FailedAttempts",
+                "[FailedAttempts] >= 0");
         });
 
         builder.HasKey(m => m.Id);
@@ -53,7 +57,14 @@ public class OrganizationInviteConfiguration : IEntityTypeConfiguration<Organiza
                .HasDefaultValue(false)
                .IsRequired();
 
+        builder.Property(m => m.FailedAttempts)
+               .HasDefaultValue(0)
+               .IsRequired();
+
         builder.Property(m => m.CreatedAt)
+               .HasDefaultValueSql("SYSUTCDATETIME()");
+        
+        builder.Property(m => m.UpdatedAt)
                .HasDefaultValueSql("SYSUTCDATETIME()");
 
         // ----------------------------

@@ -21,6 +21,8 @@ public class OtpVerification : BaseEntity
     public bool IsUsed { get; set; }
     public DateTime? UsedAt { get; set; }
 
+    public int FailedAttempts { get; set; } = 0;
+
     public string? IPAddress { get; set; }
 
     public DateTime CreatedAt { get; set; }

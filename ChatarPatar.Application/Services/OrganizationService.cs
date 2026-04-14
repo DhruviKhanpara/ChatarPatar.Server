@@ -31,11 +31,11 @@ internal class OrganizationService : IOrganizationService
         _httpContextAccessor = httpContextAccessor;
         _externalServiceManager = externalServiceManager;
     }
-    private HttpContext? _httpContext => _httpContextAccessor.HttpContext;
+    private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
 
     public async Task<OrganizationDto> GetOrganizationAsync(Guid orgId)
     {
-        var authUserId = Guid.Parse(_httpContext!.GetUserId());
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
 
         // Verify the caller is an active member of this org
         var isMember = await _repositories.OrganizationMemberRepository
@@ -59,7 +59,7 @@ internal class OrganizationService : IOrganizationService
 
     public async Task<List<OrganizationWithRoleDto>> GetMyOrganizationsAsync()
     {
-        var authUserId = Guid.Parse(_httpContext!.GetUserId());
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
 
         return await _repositories.OrganizationMemberRepository
             .GetMembershipsByUserId(authUserId)
@@ -72,7 +72,7 @@ internal class OrganizationService : IOrganizationService
     {
         await _validationService.ValidateAsync<CreateOrganizationDto>(dto);
 
-        var authUserId = Guid.Parse(_httpContext!.GetUserId());
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
         var slug = dto.Slug.Trim();
 
         var slugExists = await _repositories.OrganizationRepository.SlugExistsAsync(slug: slug);
@@ -97,7 +97,7 @@ internal class OrganizationService : IOrganizationService
     {
         await _validationService.ValidateAsync<ImageUploadDto>(dto);
 
-        var userId = Guid.Parse(_httpContext!.GetUserId());
+        var userId = Guid.Parse(_httpContext.GetUserId());
 
         var fileType = dto.File.ValidateFile(FileUsageContextEnum.Org_Logo);
 
@@ -147,6 +147,15 @@ internal class OrganizationService : IOrganizationService
 
         if (org == null)
             throw new NotFoundAppException("Organization");
+
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var isMember = await _repositories.OrganizationMemberRepository
+            .GetOrgMemberAsync(userId: authUserId, orgId: orgId)
+            .AnyAsync();
+
+        if (!isMember)
+            throw new NotFoundAppException("Organization membership");
 
         _mapper.Map<UpdateOrganizationDto, Organization>(dto, org);
 

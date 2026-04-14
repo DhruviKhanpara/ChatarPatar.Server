@@ -1,6 +1,6 @@
 ﻿namespace ChatarPatar.API.Attributes;
 
-internal class ResponseWrapperAttribute
+internal sealed class ResponseWrapperAttribute
 {
     public bool WrapResponse { get; set; } = true;
 }
