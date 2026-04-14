@@ -14,6 +14,9 @@ public interface IUserService
     Task ForgotPasswordAsync(ForgotPasswordDto dto);
     Task ResetPasswordAsync(ResetPasswordDto dto);
 
+    Task VerifyEmailAsync(VerifyEmailDto dto);
+    Task ResendVerificationOtpAsync();
+
     Task<AuthUserDto> GetCurrentUserAsync();
     Task<T> GetUserProfileAsync<T>(Guid? userId = null) where T : class;
     Task UpdateUserAsync(UserUpdateDto model);

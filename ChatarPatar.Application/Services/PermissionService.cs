@@ -22,8 +22,10 @@ internal class PermissionService : IPermissionService
 
     public async Task<bool> HasPermissionAsync(PermissionContext ctx, string[] permissions, PermissionCheckLogicEnum logic)
     {
+        var version = GetUserPermissionVersion(ctx.UserId);
         var permKey = string.Join(",", permissions.OrderBy(x => x));
-        var cacheKey = $"perm:{ctx.UserId}:{ctx.OrgId}:{ctx.TeamId}:{ctx.ChannelId}:{ctx.ConversationId}:{logic}:{permKey}";
+        var cacheKey = $"perm:v{version}:{ctx.UserId}:{ctx.OrgId}:{ctx.TeamId}:{ctx.ChannelId}:{ctx.ConversationId}:{logic}:{permKey}";
+
         if (_cache.TryGetValue(cacheKey, out bool cached)) return cached;
 
         var result = await ComputePermissionAsync(ctx, permissions, logic);
@@ -37,12 +39,30 @@ internal class PermissionService : IPermissionService
         return result;
     }
 
+    /// <summary>
+    /// User this to invalidate the user's store permission(Mostly use when user permission are change or revoke user's all permission).
+    /// </summary>
+    /// <param name="userId"></param>
+    public void InvalidateUserPermissions(Guid userId)
+    {
+        // Increment the version — all old permission cache keys become orphaned
+        var versionKey = $"permver:{userId}";
+        var current = _cache.GetOrCreate(versionKey, _ => 1);
+        _cache.Set(versionKey, current + 1, new MemoryCacheEntryOptions
+        {
+            Priority = CacheItemPriority.NeverRemove
+        });
+    }
+
     #region Private Section
 
     private async Task<bool> ComputePermissionAsync(PermissionContext ctx, string[] permissions, PermissionCheckLogicEnum logic)
     {
+        if (ctx.TeamId.HasValue && !ctx.OrgId.HasValue)
+            throw new ArgumentException("OrgId is required when teamId is provided.");
+
         if (ctx.ChannelId.HasValue && !ctx.TeamId.HasValue)
-            throw new ArgumentException("teamId is required when channelId is provided.");
+            throw new ArgumentException("TeamId is required when channelId is provided.");
 
         var combined = new HashSet<string>(32);
 
@@ -155,6 +175,16 @@ internal class PermissionService : IPermissionService
             PermissionCheckLogicEnum.Any => permissions.Any(combined.Contains),
             _ => throw new AppException($"{nameof(logic)} not configured")
         };
+    }
+
+    private int GetUserPermissionVersion(Guid userId)
+    {
+        // Version key is long-lived — no expiry. Only bumped on role/membership change.
+        return _cache.GetOrCreate($"permver:{userId}", entry =>
+        {
+            entry.Priority = CacheItemPriority.NeverRemove;
+            return 1;
+        });
     }
 
     #endregion

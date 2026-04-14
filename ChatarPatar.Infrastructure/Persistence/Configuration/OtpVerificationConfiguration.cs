@@ -19,6 +19,10 @@ public class OtpVerificationConfiguration : IEntityTypeConfiguration<OtpVerifica
             t.HasCheckConstraint(
                 "CK_OtpVerifications_UsedConsistency",
                 "(IsUsed = 0 AND UsedAt IS NULL) OR (IsUsed = 1 AND UsedAt IS NOT NULL)");
+
+            t.HasCheckConstraint(
+               "CK_OtpVerifications_FailedAttempts",
+               "[FailedAttempts] >= 0");
         });
 
         builder.HasKey(x => x.Id);
@@ -45,6 +49,10 @@ public class OtpVerificationConfiguration : IEntityTypeConfiguration<OtpVerifica
 
         builder.Property(x => x.IsUsed)
                .HasDefaultValue(false)
+               .IsRequired();
+
+        builder.Property(x => x.FailedAttempts)
+               .HasDefaultValue(0)
                .IsRequired();
 
         builder.Property(x => x.CreatedAt)

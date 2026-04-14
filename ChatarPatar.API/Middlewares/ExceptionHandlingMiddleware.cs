@@ -36,10 +36,9 @@ public class ExceptionHandlingMiddleware
             {
                 _logger.LogError(
                     ex,
-                    "App exception at {Endpoint}: {Message} {InnerException}",
+                    "App exception at {Endpoint}: {Message}",
                     httpContext?.GetEndpoint()?.DisplayName ?? "[Unknown endpoint]",
-                    ex.Message,
-                    ex.InnerException?.Message
+                    ex.Message
                 );
             }
 
@@ -66,10 +65,9 @@ public class ExceptionHandlingMiddleware
         {
             _logger.LogError(
                 ex,
-                "Unhandled exception at {Endpoint}: {Message} {InnerException}",
+                "Unhandled exception at {Endpoint}: {Message}",
                 httpContext?.GetEndpoint()?.DisplayName ?? "[Unknown endpoint]",
-                ex.Message,
-                ex.InnerException?.Message
+                ex.Message
             );
 
             string exceptionMessage = "Something went wrong. Please try again later.";

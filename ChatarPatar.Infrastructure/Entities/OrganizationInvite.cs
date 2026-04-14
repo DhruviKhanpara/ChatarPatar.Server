@@ -28,6 +28,8 @@ public class OrganizationInvite : BaseEntity
     public DateTime? UsedAt { get; set; }
     public Guid? UsedBy { get; set; }
 
+    public int FailedAttempts { get; set; } = 0;
+
     public DateTime ExpiresAt { get; set; } // typically CreatedAt + 7 days
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }

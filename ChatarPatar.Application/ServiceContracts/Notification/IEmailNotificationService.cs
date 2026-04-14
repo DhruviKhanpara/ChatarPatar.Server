@@ -16,4 +16,10 @@ public interface IEmailNotificationService
     /// Sends a security alert of password change using the PasswordChangedAlert notification template.
     /// </summary>
     Task SendPasswordChangedAlertAsync(string toEmail, string userName, string device, string location);
+
+    /// <summary>
+    /// Sends an email verification OTP using the EmailVerification notification template.
+    /// Called after registration and on resend requests.
+    /// </summary>
+    Task SendEmailVerificationOtpAsync(string toEmail, string userName, string otp, double expiryMinutes);
 }

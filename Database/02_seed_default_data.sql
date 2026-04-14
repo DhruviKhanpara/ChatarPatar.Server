@@ -661,29 +661,29 @@ USING (
     UNION ALL
 
     SELECT 
-        N'Forgot Password',
-        N'Email',
-        N'Your {{appName}} Password Reset OTP',
-        @PasswordResetBody,
-        1
+        N'Forgot Password' AS Name,
+        N'Email' AS TemplateType,
+        N'Your {{appName}} Password Reset OTP' AS SubjectText,
+        @PasswordResetBody AS BodyText,
+        1 AS IsActive
 
     UNION ALL
 
     SELECT 
-        N'Email Verification',
-        N'Email',
-        N'Your {{appName}} email verification OTP',
-        @PasswordResetBody,
-        1
+        N'Email Verification' AS Name,
+        N'Email' AS TemplateType,
+        N'Verify your {{appName}} email address' AS SubjectText,
+        @VerifyEmailBody AS BodyText,
+        1 AS IsActive
     
     UNION ALL
 
     SELECT 
-        N'Password Changed Alert',
-        N'Email',
-        N'Security Alert: Your password was changed',
-        @PasswordChangedAlertBody,
-        1
+        N'Password Changed Alert' AS Name,
+        N'Email' AS TemplateType,
+        N'Security Alert: Your password was changed' AS SubjectText,
+        @PasswordChangedAlertBody AS BodyText,
+        1 AS IsActive
 ) AS SOURCE
 ON TARGET.Name = SOURCE.Name 
 AND TARGET.TemplateType = SOURCE.TemplateType

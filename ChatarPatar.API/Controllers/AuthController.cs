@@ -1,4 +1,5 @@
-﻿using ChatarPatar.Application.DTOs.User;
+﻿using ChatarPatar.API.Attributes;
+using ChatarPatar.Application.DTOs.User;
 using ChatarPatar.Application.ServiceContracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,6 +19,7 @@ public class AuthController : ControllerBase
 
     [HttpPost("login")]
     [AllowAnonymous]
+    [SkipPermission]
     public async Task<ActionResult<LoginResponseDto>> Login(UserLoginDto login)
     {
         var authUser = await _services.UserService.LoginUserAsync(login);
@@ -26,6 +28,7 @@ public class AuthController : ControllerBase
 
     [HttpPost("register")]
     [AllowAnonymous]
+    [SkipPermission]
     public async Task<ActionResult<LoginResponseDto>> Register(UserRegisterDto user)
     {
         var authUser = await _services.UserService.RegisterUserAsync(user);
@@ -34,6 +37,7 @@ public class AuthController : ControllerBase
 
     [HttpPost("refresh-token")]
     [AllowAnonymous]
+    [SkipPermission]
     public async Task<IActionResult> RefreshToken()
     {
         var authUser = await _services.UserService.RefreshAuthToken();
@@ -42,6 +46,7 @@ public class AuthController : ControllerBase
 
     [HttpPost("logout")]
     [Authorize]
+    [SkipPermission]
     public async Task<IActionResult> Logout()
     {
         await _services.UserService.LogoutUser();
@@ -50,6 +55,7 @@ public class AuthController : ControllerBase
 
     [HttpPost("logout-all-sessions")]
     [Authorize]
+    [SkipPermission]
     public async Task<IActionResult> LogoutAllSessions()
     {
         await _services.UserService.LogoutAllUserSessions();
@@ -57,10 +63,36 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// Verifies the OTP sent to the user's registered email address.
+    /// Marks IsEmailVerified = true on success.
+    /// </summary>
+    [HttpPost("verify-email")]
+    [Authorize]
+    [SkipPermission]
+    public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailDto dto)
+    {
+        await _services.UserService.VerifyEmailAsync(dto);
+        return Ok("Email verified successfully.");
+    }
+
+    /// <summary>
+    /// Resends the email verification OTP.
+    /// </summary>
+    [HttpPost("resend-verification")]
+    [Authorize]
+    [SkipPermission]
+    public async Task<IActionResult> ResendVerification()
+    {
+        await _services.UserService.ResendVerificationOtpAsync();
+        return Ok("If your email is unverified, a new OTP has been sent.");
+    }
+
+    /// <summary>
     /// Step 1 — Request a password-reset OTP.
     /// </summary>
     [HttpPost("forgot-password")]
     [AllowAnonymous]
+    [SkipPermission]
     public async Task<IActionResult> ForgotPassword(ForgotPasswordDto dto)
     {
         await _services.UserService.ForgotPasswordAsync(dto);
@@ -72,6 +104,7 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("reset-password")]
     [AllowAnonymous]
+    [SkipPermission]
     public async Task<IActionResult> ResetPassword(ResetPasswordDto dto)
     {
         await _services.UserService.ResetPasswordAsync(dto);

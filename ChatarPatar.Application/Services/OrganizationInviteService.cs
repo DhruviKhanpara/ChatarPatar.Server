@@ -33,7 +33,7 @@ internal class OrganizationInviteService : IOrganizationInviteService
         _tokenService = tokenService;
         _emailNotificationService = emailNotificationService;
     }
-    private HttpContext? _httpContext => _httpContextAccessor.HttpContext;
+    private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
 
     public async Task<PagedResult<OrganizationInviteListItemDto>> GetPendingInvitesAsync(Guid orgId, InviteQueryParams queryParams)
     {
@@ -55,8 +55,8 @@ internal class OrganizationInviteService : IOrganizationInviteService
     {
         await _validationService.ValidateAsync<SendInviteDto>(dto);
 
-        var authUserId = Guid.Parse(_httpContext!.GetUserId());
-        var authUser = _httpContext!.GetUserName();
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+        var authUser = _httpContext.GetUserName();
         var email = dto.Email.Trim().ToLower();
 
         var user = await _repositories.UserRepository.GetUserByEmailAsync(email: email);

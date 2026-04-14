@@ -20,19 +20,21 @@ internal class OrganizationMemberService : IOrganizationMemberService
     private readonly IMapper _mapper;
     private readonly IValidationService _validationService;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IPermissionService _permissionService;
 
-    public OrganizationMemberService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor)
+    public OrganizationMemberService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IPermissionService permissionService)
     {
         _repositories = repositories;
         _mapper = mapper;
         _validationService = validationService;
         _httpContextAccessor = httpContextAccessor;
+        _permissionService = permissionService;
     }
-    private HttpContext? _httpContext => _httpContextAccessor.HttpContext;
+    private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
 
     public async Task<PagedResult<OrganizationMemberDto>> GetMembersAsync(Guid orgId, MemberQueryParams queryParams)
     {
-        var authUserId = Guid.Parse(_httpContext!.GetUserId());
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
 
         var isMember = await _repositories.OrganizationMemberRepository
             .GetOrgMemberAsync(userId: authUserId, orgId: orgId)
@@ -57,7 +59,7 @@ internal class OrganizationMemberService : IOrganizationMemberService
 
     public async Task<OrganizationMemberDto> GetMemberAsync(Guid orgId, Guid membershipId)
     {
-        var authUserId = Guid.Parse(_httpContext!.GetUserId());
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
 
         // Caller must be an active member of the org
         var isMember = await _repositories.OrganizationMemberRepository
@@ -92,7 +94,7 @@ internal class OrganizationMemberService : IOrganizationMemberService
         if (hasMembership)
             throw new DuplicateEntryAppException("User is already a member of this organization");
 
-        var authUserId = Guid.Parse(_httpContext!.GetUserId());
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
 
         var memberEntity = _mapper.Map<OrganizationMember>(dto);
 
@@ -114,14 +116,18 @@ internal class OrganizationMemberService : IOrganizationMemberService
         if (membership is null || membership.OrgId != orgId)
             throw new NotFoundAppException("Organization membership");
 
+        if (membership.Role == OrganizationRoleEnum.OrgOwner)
+            throw new InvalidDataAppException("The organization owner role can't change from here");
+
         membership.Role = dto.Role;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
+        _permissionService.InvalidateUserPermissions(membership.UserId);
     }
 
     public async Task RemoveMemberAsync(Guid orgId, Guid membershipId)
     {
-        var authUserId = Guid.Parse(_httpContext!.GetUserId());
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
 
         var membership = await _repositories.OrganizationMemberRepository
             .GetById(membershipId)
@@ -138,9 +144,8 @@ internal class OrganizationMemberService : IOrganizationMemberService
             throw new InvalidDataAppException("You cannot remove yourself. Use the leave organization action instead.");
 
         membership.IsDeleted = true;
-        //membership.DeletedAt = DateTime.UtcNow;
-        //membership.DeletedBy = authUserId;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
+        _permissionService.InvalidateUserPermissions(membership.UserId);
     }
 }

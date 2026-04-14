@@ -98,6 +98,29 @@ internal class EmailNotificationService : IEmailNotificationService
         if (template.SubjectText == null)
             throw new NotFoundAppException("Subject not found in Email template.");
 
+        var body = GenerateEmailTemplate(template.BodyText, replacements);
+
+        await SendAsync(emailBody: body, subject: template.SubjectText, toAddresses: new List<string> { toEmail }, null, null);
+    }
+
+    public async Task SendEmailVerificationOtpAsync(string toEmail, string userName, string otp, double expiryMinutes)
+    {
+        var replacements = new Dictionary<string, string>
+        {
+            { "{{appName}}",       _appName },
+            { "{{userName}}",      userName },
+            { "{{otp}}",           otp },
+            { "{{expiryMinutes}}", expiryMinutes.ToString() },
+            { "verificationLink",  $"{_baseUrl}/auth/verify-email" },
+            { "{{year}}",          DateTime.UtcNow.Year.ToString() },
+            { "{{privacyPolicy}}", $"{_baseUrl}/privacy" }
+        };
+
+        var template = await RetrieveTemplate(NotificationTemplateNames.EmailVerification);
+
+        if (template.SubjectText == null)
+            throw new NotFoundAppException("Subject not found in Email template.");
+
         var subject = GenerateEmailTemplate(template.SubjectText, replacements);
         var body = GenerateEmailTemplate(template.BodyText, replacements);
 

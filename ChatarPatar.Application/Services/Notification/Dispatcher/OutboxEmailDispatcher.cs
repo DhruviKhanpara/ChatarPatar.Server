@@ -1,4 +1,5 @@
 ﻿using ChatarPatar.Application.ServiceContracts.Notification;
+using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.HttpUserDetails;
 using ChatarPatar.Common.Models;
 using ChatarPatar.Infrastructure.Entities;
@@ -11,21 +12,22 @@ namespace ChatarPatar.Application.Services.Notification.Dispatcher;
 internal class OutboxEmailDispatcher : INotificationDispatcher
 {
     private readonly IRepositoryManager _repositoryManager;
-    private readonly HttpContext? _httpContext;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IOutboxBackgroundQueue _queue;
 
     public OutboxEmailDispatcher(IRepositoryManager repositoryManager, IHttpContextAccessor httpContextAccessor, IOutboxBackgroundQueue queue)
     {
         _repositoryManager = repositoryManager;
-        _httpContext = httpContextAccessor.HttpContext;
+        _httpContextAccessor = httpContextAccessor;
         _queue = queue;
     }
+    private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
 
     public async Task DispatchAsync(NotificationPayload payload)
     {
-        payload.InitiatedBy = _httpContext?.GetUserName()
-            ?? _httpContext?.GetUserEmail()
-            ?? _httpContext?.GetUserId()
+        payload.InitiatedBy = _httpContext.GetUserName()
+            ?? _httpContext.GetUserEmail()
+            ?? _httpContext.GetUserId()
             ?? "System";
 
         var message = new OutboxMessage
@@ -34,7 +36,7 @@ internal class OutboxEmailDispatcher : INotificationDispatcher
             Payload = JsonConvert.SerializeObject(payload),
             IsProcessed = false,
             CreatedAt = DateTime.UtcNow,
-            CreatedBy = Guid.TryParse(_httpContext!.GetUserId(), out Guid userId) ? userId : null,
+            CreatedBy = Guid.TryParse(_httpContext.GetUserId(), out Guid userId) ? userId : null,
             IsDeleted = false
         };
 
@@ -46,9 +48,9 @@ internal class OutboxEmailDispatcher : INotificationDispatcher
 
     public async Task DispatchManyAsync(List<NotificationPayload> payload)
     {
-        var initiatedBy = _httpContext?.GetUserName()
-            ?? _httpContext?.GetUserEmail()
-            ?? _httpContext?.GetUserId()
+        var initiatedBy = _httpContext.GetUserName()
+            ?? _httpContext.GetUserEmail()
+            ?? _httpContext.GetUserId()
             ?? "System";
 
         List<OutboxMessage> messages = payload.Select(item =>
@@ -60,7 +62,7 @@ internal class OutboxEmailDispatcher : INotificationDispatcher
                 Payload = JsonConvert.SerializeObject(item),
                 IsProcessed = false,
                 CreatedAt = DateTime.UtcNow,
-                CreatedBy = Guid.TryParse(_httpContext!.GetUserId(), out Guid userId) ? userId : null,
+                CreatedBy = Guid.TryParse(_httpContext.GetUserId(), out Guid userId) ? userId : null,
                 IsDeleted = false
             };
         }).ToList();
