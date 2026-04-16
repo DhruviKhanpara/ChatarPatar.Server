@@ -110,4 +110,23 @@ internal class OrganizationInviteService : IOrganizationInviteService
             expiryDays: (expiresAt.Date - DateTime.UtcNow.Date).Days
         );
     }
+
+    public async Task CancelInviteAsync(Guid orgId, Guid inviteId)
+    {
+        var invite = await _repositories.OrganizationInviteRepository
+            .GetByIdInOrg(id: inviteId, orgId: orgId)
+            .FirstOrDefaultAsync();
+
+        if (invite is null)
+            throw new NotFoundAppException("Invite");
+
+        if (invite.IsUsed)
+            throw new InvalidDataAppException("Invite already used or invalid");
+
+        invite.IsUsed = true;
+        invite.UsedAt = DateTime.UtcNow;
+        invite.UpdatedAt = DateTime.UtcNow;
+
+        await _repositories.UnitOfWork.SaveChangesAsync();
+    }
 }

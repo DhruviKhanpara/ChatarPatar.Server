@@ -23,6 +23,7 @@ public static class RolePermissions
             Permissions.ORG_MEMBERS_INVITE,
             Permissions.ORG_MEMBERS_REMOVE,
             Permissions.ORG_MEMBERS_ROLE_CHANGE,
+            Permissions.ORG_INVITES_MANAGE,
             Permissions.ORG_TEAMS_CREATE,
             Permissions.ORG_TEAMS_DELETE,
             Permissions.TEAM_ARCHIVE,

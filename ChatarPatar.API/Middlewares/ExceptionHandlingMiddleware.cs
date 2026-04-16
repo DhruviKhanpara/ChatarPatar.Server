@@ -24,8 +24,7 @@ public class ExceptionHandlingMiddleware
             if (ex is ValidationAppException validationEx)
             {
                 _logger.LogWarning(
-                    "Validation failed at {Endpoint} — {ErrorCount} error(s): {ValidationErrors}",
-                    httpContext?.GetEndpoint()?.DisplayName ?? "[Unknown]",
+                    "Validation failed was thrown — {ErrorCount} error(s): {ValidationErrors}",
                     validationEx.Errors.Count,
                     validationEx.GroupedErrors
                 );
@@ -36,8 +35,7 @@ public class ExceptionHandlingMiddleware
             {
                 _logger.LogError(
                     ex,
-                    "App exception at {Endpoint}: {Message}",
-                    httpContext?.GetEndpoint()?.DisplayName ?? "[Unknown endpoint]",
+                    "An exception was thrown: {ExcetionMessage}",
                     ex.Message
                 );
             }
@@ -64,10 +62,9 @@ public class ExceptionHandlingMiddleware
         catch (Exception ex)
         {
             _logger.LogError(
-                ex,
-                "Unhandled exception at {Endpoint}: {Message}",
-                httpContext?.GetEndpoint()?.DisplayName ?? "[Unknown endpoint]",
-                ex.Message
+                    ex,
+                    "An exception was thrown: {ExcetionMessage}",
+                    ex.Message
             );
 
             string exceptionMessage = "Something went wrong. Please try again later.";

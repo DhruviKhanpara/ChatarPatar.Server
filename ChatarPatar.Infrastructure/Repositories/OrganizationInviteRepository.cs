@@ -10,13 +10,8 @@ internal class OrganizationInviteRepository : BaseRepository<OrganizationInvite>
 {
     public OrganizationInviteRepository(AppDbContext context) : base(context) { }
 
-    public async Task<OrganizationInvite?> GetValidInviteAsync(string token, string email) => 
-        await FindByCondition(x => x.Token == token 
-            && x.Email == email 
-            && !x.IsUsed
-            && x.ExpiresAt > DateTime.UtcNow)
-        .AsNoTracking()
-        .FirstOrDefaultAsync();
+    public IQueryable<OrganizationInvite> GetByIdInOrg(Guid id, Guid orgId) =>
+        FindByCondition(i => i.Id == id && i.OrganizationId == orgId);
 
     public IQueryable<OrganizationInvite> GetPendingByToken(string token) =>
         FindByCondition(i => i.Token == token 

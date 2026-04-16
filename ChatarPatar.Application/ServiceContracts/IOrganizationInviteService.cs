@@ -7,4 +7,5 @@ public interface IOrganizationInviteService
 {
     Task<PagedResult<OrganizationInviteListItemDto>> GetPendingInvitesAsync(Guid orgId, InviteQueryParams queryParams);
     Task SendInviteAsync(Guid orgId, SendInviteDto dto);
+    Task CancelInviteAsync(Guid orgId, Guid inviteId);
 }

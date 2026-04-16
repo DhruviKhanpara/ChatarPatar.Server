@@ -6,9 +6,9 @@ namespace ChatarPatar.Infrastructure.RepositoryContracts;
 public interface IOrganizationInviteRepository : IBaseRepository<OrganizationInvite>
 {
     /// <summary>
-    /// Returns valid pending (not used, not expired) invites by token and email.
+    /// Return Invite of provided Id in provided Organization Id
     /// </summary>
-    Task<OrganizationInvite?> GetValidInviteAsync(string token, string email);
+    IQueryable<OrganizationInvite> GetByIdInOrg(Guid id, Guid orgId);
 
     /// <summary>
     /// Returns valid pending (not used, not expired) invites for token.

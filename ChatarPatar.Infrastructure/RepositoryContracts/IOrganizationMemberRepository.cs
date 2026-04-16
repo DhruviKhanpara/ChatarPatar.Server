@@ -11,6 +11,11 @@ public interface IOrganizationMemberRepository : IBaseSoftDeleteRepository<Organ
     IQueryable<OrganizationMember> GetById(Guid id);
 
     /// <summary>
+    /// Returns a active membership by its Id in particular organization.
+    /// </summary>
+    IQueryable<OrganizationMember> GetByIdInOrg(Guid id, Guid orgId);
+
+    /// <summary>
     /// Returns active membership of user of the org.
     /// </summary>
     IQueryable<OrganizationMember> GetOrgMemberAsync(Guid userId, Guid orgId);
@@ -23,9 +28,9 @@ public interface IOrganizationMemberRepository : IBaseSoftDeleteRepository<Organ
     IQueryable<OrganizationMember> GetMembersQuery(Guid orgId, string? search = null, OrganizationRoleEnum? role = null);
 
     /// <summary>
-    /// Returns a single active membership by its Id, including User and AvatarFile.
+    /// Returns a single active membership by its Id in particular org, including User and AvatarFile.
     /// </summary>
-    IQueryable<OrganizationMember> GetMemberById(Guid membershipId);
+    IQueryable<OrganizationMember> GetMemberByIdInOrg(Guid membershipId, Guid orgId);
 
     /// <summary>
     /// Returns all active org memberships for a user, including the Organization and its LogoFile.

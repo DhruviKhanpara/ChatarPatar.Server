@@ -21,4 +21,5 @@ public interface IUserService
     Task<T> GetUserProfileAsync<T>(Guid? userId = null) where T : class;
     Task UpdateUserAsync(UserUpdateDto model);
     Task UpdateAvatarAsync(ImageUploadDto dto);
+    Task ChangePasswordAsync(ChangePasswordDto dto);
 }

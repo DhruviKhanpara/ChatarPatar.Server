@@ -11,6 +11,7 @@ using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace ChatarPatar.Application.Services;
 
@@ -21,14 +22,16 @@ internal class OrganizationMemberService : IOrganizationMemberService
     private readonly IValidationService _validationService;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IPermissionService _permissionService;
+    private readonly ILogger<OrganizationMemberService> _logger;
 
-    public OrganizationMemberService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IPermissionService permissionService)
+    public OrganizationMemberService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IPermissionService permissionService, ILogger<OrganizationMemberService> logger)
     {
         _repositories = repositories;
         _mapper = mapper;
         _validationService = validationService;
         _httpContextAccessor = httpContextAccessor;
         _permissionService = permissionService;
+        _logger = logger;
     }
     private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
 
@@ -70,11 +73,11 @@ internal class OrganizationMemberService : IOrganizationMemberService
             throw new NotFoundAppException("Organization");
 
         var membership = await _repositories.OrganizationMemberRepository
-            .GetMemberById(membershipId)
+            .GetMemberByIdInOrg(membershipId: membershipId, orgId: orgId)
             .AsNoTracking()
             .FirstOrDefaultAsync();
 
-        if (membership is null || membership.OrgId != orgId)
+        if (membership is null)
             throw new NotFoundAppException("Organization membership");
 
         return _mapper.Map<OrganizationMemberDto>(membership);
@@ -84,12 +87,18 @@ internal class OrganizationMemberService : IOrganizationMemberService
     {
         await _validationService.ValidateAsync<AddOrganizationMemberDto>(dto);
 
-        var user = await _repositories.UserRepository.GetById(id: dto.UserId).AsNoTracking().FirstOrDefaultAsync();
+        var user = await _repositories.UserRepository
+            .GetById(id: dto.UserId)
+            .AsNoTracking()
+            .FirstOrDefaultAsync();
 
         if (user is null)
             throw new NotFoundAppException("User");
 
-        var hasMembership = await _repositories.OrganizationMemberRepository.GetOrgMemberAsync(orgId: orgId, userId: dto.UserId).AsNoTracking().AnyAsync();
+        var hasMembership = await _repositories.OrganizationMemberRepository
+            .GetOrgMemberAsync(orgId: orgId, userId: dto.UserId)
+            .AsNoTracking()
+            .AnyAsync();
 
         if (hasMembership)
             throw new DuplicateEntryAppException("User is already a member of this organization");
@@ -107,13 +116,15 @@ internal class OrganizationMemberService : IOrganizationMemberService
         await _repositories.UnitOfWork.SaveChangesAsync();
     }
 
-    public async Task UpdateOrganizationMemberRole(Guid orgId, Guid membershipId, UpdateOrganizationMemberRoleDto dto)
+    public async Task UpdateOrganizationMemberRoleAsync(Guid orgId, Guid membershipId, UpdateOrganizationMemberRoleDto dto)
     {
         await _validationService.ValidateAsync<UpdateOrganizationMemberRoleDto>(dto);
 
-        var membership = await _repositories.OrganizationMemberRepository.GetById(id: membershipId).FirstOrDefaultAsync();
+        var membership = await _repositories.OrganizationMemberRepository
+            .GetByIdInOrg(id: membershipId, orgId: orgId)
+            .FirstOrDefaultAsync();
 
-        if (membership is null || membership.OrgId != orgId)
+        if (membership is null)
             throw new NotFoundAppException("Organization membership");
 
         if (membership.Role == OrganizationRoleEnum.OrgOwner)
@@ -130,10 +141,10 @@ internal class OrganizationMemberService : IOrganizationMemberService
         var authUserId = Guid.Parse(_httpContext.GetUserId());
 
         var membership = await _repositories.OrganizationMemberRepository
-            .GetById(membershipId)
+            .GetByIdInOrg(id:membershipId, orgId:orgId)
             .FirstOrDefaultAsync();
 
-        if (membership is null || membership.OrgId != orgId)
+        if (membership is null)
             throw new NotFoundAppException("Organization membership");
 
         // Owners cannot be removed — they must transfer ownership first
@@ -146,6 +157,113 @@ internal class OrganizationMemberService : IOrganizationMemberService
         membership.IsDeleted = true;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
-        _permissionService.InvalidateUserPermissions(membership.UserId);
+        
+        try
+        {
+            _permissionService.InvalidateUserPermissions(membership.UserId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Error while invalidating permissions for user {UserId}",
+                membership.UserId
+            );
+        }
+    }
+
+    public async Task TransferOrganizationOwnershipAsync(Guid orgId, Guid membershipId)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var authUserMembership = await _repositories.OrganizationMemberRepository
+            .GetOrgMemberAsync(userId: authUserId, orgId: orgId)
+            .FirstOrDefaultAsync();
+
+        if (authUserMembership is null)
+            throw new NotFoundAppException("Organization membership");
+
+        if (authUserMembership.Role != OrganizationRoleEnum.OrgOwner)
+            throw new InvalidDataAppException("You must be the organization owner to transfer ownership");
+
+        if (authUserMembership.Id == membershipId)
+            throw new InvalidDataAppException("Cannot transfer ownership to yourself");
+
+        var requestedMembership = await _repositories.OrganizationMemberRepository
+            .GetByIdInOrg(id: membershipId, orgId: orgId)
+            .FirstOrDefaultAsync();
+
+        if (requestedMembership is null)
+            throw new NotFoundAppException("Organization membership");
+
+        if (requestedMembership.Role == OrganizationRoleEnum.OrgOwner)
+            throw new InvalidDataAppException("Target user is already the owner");
+
+        await using var transaction = await _repositories.UnitOfWork.BeginTransactionAsync();
+        try
+        {
+            requestedMembership.Role = OrganizationRoleEnum.OrgOwner;
+            authUserMembership.Role = OrganizationRoleEnum.OrgAdmin;
+
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+
+            await transaction.CommitAsync();
+
+            // Only write audit logs AFTER commit succeeds.
+            _repositories.UnitOfWork.FlushPendingAuditLogs();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+
+        try
+        {
+            _permissionService.InvalidateUserPermissions(authUserMembership.UserId);
+            _permissionService.InvalidateUserPermissions(requestedMembership.UserId);
+        }
+        catch(Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Error while invalidating permissions for users {AuthUserId} and {TargetUserId}",
+                authUserMembership.UserId,
+                requestedMembership.UserId
+            );
+        }
+    }
+
+    public async Task LeaveOrganizationAsync(Guid orgId)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var membership = await _repositories.OrganizationMemberRepository
+            .GetOrgMemberAsync(userId: authUserId, orgId: orgId)
+            .FirstOrDefaultAsync();
+
+        if (membership is null)
+            throw new NotFoundAppException("Organization membership");
+
+        // Owners cannot be removed — they must transfer ownership first
+        if (membership.Role == OrganizationRoleEnum.OrgOwner)
+            throw new InvalidDataAppException("You cannot leave the organization as the owner. Transfer ownership first.");
+
+        membership.IsDeleted = true;
+
+        await _repositories.UnitOfWork.SaveChangesAsync();
+        
+        try
+        {
+            _permissionService.InvalidateUserPermissions(membership.UserId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Error while invalidating permissions for user {UserId}",
+                membership.UserId
+            );
+        }
     }
 }

@@ -73,4 +73,15 @@ public class UserController : ControllerBase
         await _services.UserService.UpdateAvatarAsync(dto: dto);
         return Ok("Update avatar successfully.");
     }
+
+    /// <summary>
+    /// Change password for the currently logged-in user.
+    /// </summary>
+    [SkipPermission]
+    [HttpPost("me/change-password")]
+    public async Task<IActionResult> ChangePassword(ChangePasswordDto dto)
+    {
+        await _services.UserService.ChangePasswordAsync(dto);
+        return Ok("Password change successfully.");
+    }
 }

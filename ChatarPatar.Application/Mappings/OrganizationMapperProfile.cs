@@ -30,7 +30,7 @@ public class OrganizationMapperProfile : Profile
             .ForMember(dest => dest.LogoUrl, opt => opt.MapFrom(src => src.Organization.LogoFile != null ? src.Organization.LogoFile.Url : null))
             .ForMember(dest => dest.LogoThumbnailUrl, opt => opt.MapFrom(src => src.Organization.LogoFile != null ? src.Organization.LogoFile.ThumbnailUrl : null))
             .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.Organization.CreatedAt))
-            .ForMember(dest => dest.MyRole, opt => opt.MapFrom(src => src.Role));
+            .ForMember(dest => dest.Role, opt => opt.MapFrom(src => src.Role));
 
         CreateMap<OrganizationMember, OrganizationMemberDto>()
             .ForMember(dest => dest.MembershipId, opt => opt.MapFrom(src => src.Id))

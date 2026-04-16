@@ -77,10 +77,6 @@ public class PinnedMessageConfiguration : IEntityTypeConfiguration<PinnedMessage
         // Indexes
         // ----------------------------
 
-        builder.HasIndex(p => new { p.MessageId, p.ConversationId })
-               .IsUnique()
-               .HasDatabaseName("UQ_PinnedConversationMessages");
-
         builder.HasIndex(p => new { p.MessageId, p.ChannelId })
                .IsUnique()
                .HasDatabaseName("UX_Pinned_Channel_Active")
