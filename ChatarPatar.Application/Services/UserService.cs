@@ -443,6 +443,7 @@ internal class UserService : IUserService
             throw new NotFoundAppException("User");
 
         _mapper.Map<UserUpdateDto, User>(model, user);
+        user.UpdatedAt = DateTime.UtcNow;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
     }
@@ -490,9 +491,43 @@ internal class UserService : IUserService
             FileType = fileType,
         };
 
+        user.UpdatedAt = DateTime.UtcNow;
+
         await _repositories.UnitOfWork.SaveChangesAsync();
     }
 
+    public async Task ChangePasswordAsync(ChangePasswordDto dto)
+    {
+        var userId = Guid.Parse(_httpContext.GetUserId());
+
+        var user = await _repositories.UserRepository
+            .GetById(userId)
+            .FirstOrDefaultAsync();
+
+        if (user is null)
+            throw new NotFoundAppException("User");
+
+        var isValid = PasswordHasher.VerifyPassword(hashedPassword: user.PasswordHash, providedPassword: dto.CurrentPassword);
+        if (!isValid)
+            throw new InvalidDataAppException("Current password is incorrect");
+
+        user.PasswordHash = PasswordHasher.HashPassword(password: dto.NewPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+
+        // revoke all sessions except current
+        await RevokeAllActiveSessionsAsync(user.Id);
+
+        await _repositories.UnitOfWork.SaveChangesAsync();
+
+        var deviceInfo = _httpContext.GetDeviceInfo();
+
+        await _emailNotificationService.SendPasswordChangedAlertAsync(
+            toEmail: user.Email,
+            userName: user.Name,
+            device: $"{deviceInfo.Device} {deviceInfo.Browser} {deviceInfo.OS}",
+            location: _httpContext.GetClientIp() //TODO: find the actual location from the IP
+        );
+    }
     #endregion
 
     #region Private section

@@ -14,6 +14,6 @@ public class OrganizationDto
 
 public class OrganizationWithRoleDto : OrganizationDto
 {
-    public OrganizationRoleEnum MyRole { get; set; }
+    public OrganizationRoleEnum Role { get; set; }
     public DateTime JoinedAt { get; set; }
 }

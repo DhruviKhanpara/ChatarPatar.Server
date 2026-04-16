@@ -13,6 +13,9 @@ internal class OrganizationMemberRepository : BaseSoftDeleteRepository<Organizat
     public IQueryable<OrganizationMember> GetById(Guid id) =>
         FindByCondition(x => x.Id == id);
 
+    public IQueryable<OrganizationMember> GetByIdInOrg(Guid id, Guid orgId) =>
+        FindByCondition(x => x.Id == id && x.OrgId == orgId);
+
     public IQueryable<OrganizationMember> GetOrgMemberAsync(Guid userId, Guid orgId) =>
         FindByCondition(x => x.UserId == userId && x.OrgId == orgId);
 
@@ -37,7 +40,7 @@ internal class OrganizationMemberRepository : BaseSoftDeleteRepository<Organizat
         return query.OrderBy(x => x.JoinedAt);
     }
 
-    public IQueryable<OrganizationMember> GetMemberById(Guid membershipId) =>
+    public IQueryable<OrganizationMember> GetMemberByIdInOrg(Guid membershipId, Guid orgId) =>
         FindByCondition(x => x.Id == membershipId)
             .Include(x => x.User)
                 .ThenInclude(u => u.AvatarFile);

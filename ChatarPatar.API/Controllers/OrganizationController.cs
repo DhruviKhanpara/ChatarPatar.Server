@@ -108,6 +108,18 @@ public class OrganizationController : ControllerBase
         return Ok("Your Invite send successfully");
     }
 
+    /// <summary>
+    /// Cancel the active organization invite.
+    /// </summary>
+    [Authorize]
+    [RequirePermission(PermissionCheckLogicEnum.All, Permissions.ORG_INVITES_MANAGE)]
+    [HttpDelete("{orgId}/invites/{inviteId}")]
+    public async Task<IActionResult> CancelInvite(Guid orgId, Guid inviteId)
+    {
+        await _services.OrganizationInviteService.CancelInviteAsync(orgId, inviteId);
+        return Ok("Invite canceled successfully");
+    }
+
     #endregion
 
     #region Organization Membership
@@ -118,7 +130,7 @@ public class OrganizationController : ControllerBase
     /// </summary>
     [HttpGet("{orgId:guid}/members")]
     [SkipPermission]
-    public async Task<ActionResult<PagedResult<OrganizationMemberDto>>> GetMembers( [FromRoute] Guid orgId, [FromQuery] MemberQueryParams queryParams)
+    public async Task<ActionResult<PagedResult<OrganizationMemberDto>>> GetMembers([FromRoute] Guid orgId, [FromQuery] MemberQueryParams queryParams)
     {
         var result = await _services.OrganizationMemberService.GetMembersAsync(orgId, queryParams);
         return Ok(result);
@@ -153,8 +165,19 @@ public class OrganizationController : ControllerBase
     [RequirePermission(PermissionCheckLogicEnum.All, Permissions.ORG_MEMBERS_ROLE_CHANGE)]
     public async Task<IActionResult> UpdateOrganizationMemberRole([FromRoute] Guid orgId, [FromRoute] Guid membershipId, [FromBody] UpdateOrganizationMemberRoleDto dto)
     {
-        await _services.OrganizationMemberService.UpdateOrganizationMemberRole(orgId, membershipId, dto);
+        await _services.OrganizationMemberService.UpdateOrganizationMemberRoleAsync(orgId, membershipId, dto);
         return Ok("Member role updated successfully");
+    }
+
+    /// <summary>
+    /// Transfer ownership to any of one member from organization
+    /// </summary>
+    [HttpPatch("{orgId:guid}/members/{membershipId:guid}/transfer-ownership")]
+    [SkipPermission]
+    public async Task<IActionResult> TransferOwnership([FromRoute] Guid orgId, [FromRoute] Guid membershipId)
+    {
+        await _services.OrganizationMemberService.TransferOrganizationOwnershipAsync(orgId, membershipId);
+        return Ok("Ownership transfer successfully");
     }
 
     /// <summary>
@@ -165,6 +188,17 @@ public class OrganizationController : ControllerBase
     public async Task<IActionResult> RemoveMember([FromRoute] Guid orgId, [FromRoute] Guid membershipId)
     {
         await _services.OrganizationMemberService.RemoveMemberAsync(orgId, membershipId);
+        return Ok("Member removed from organization successfully");
+    }
+
+    /// <summary>
+    /// Leave the organization (soft delete). Owners cannot be removed.
+    /// </summary>
+    [HttpDelete("{orgId:guid}/leave")]
+    [SkipPermission]
+    public async Task<IActionResult> LeaveOrganization([FromRoute] Guid orgId)
+    {
+        await _services.OrganizationMemberService.LeaveOrganizationAsync(orgId);
         return Ok("Member removed from organization successfully");
     }
 
