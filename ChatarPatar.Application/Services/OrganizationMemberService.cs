@@ -108,7 +108,6 @@ internal class OrganizationMemberService : IOrganizationMemberService
         var memberEntity = _mapper.Map<OrganizationMember>(dto);
 
         memberEntity.OrgId = orgId;
-        memberEntity.UserId = dto.UserId;
         memberEntity.InvitedByUserId = authUserId;
         memberEntity.JoinedAt = DateTime.UtcNow;
 
@@ -133,7 +132,19 @@ internal class OrganizationMemberService : IOrganizationMemberService
         membership.Role = dto.Role;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
-        _permissionService.InvalidateUserPermissions(membership.UserId);
+
+        try
+        {
+            _permissionService.InvalidateUserPermissions(membership.UserId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Failed to invalidate permissions for user {UserId} after team role change",
+                membership.UserId
+            );
+        }
     }
 
     public async Task RemoveMemberAsync(Guid orgId, Guid membershipId)

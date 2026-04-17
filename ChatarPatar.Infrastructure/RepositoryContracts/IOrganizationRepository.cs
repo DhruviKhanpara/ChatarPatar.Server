@@ -12,7 +12,7 @@ public interface IOrganizationRepository : IBaseSoftDeleteRepository<Organizatio
     /// <summary>
     /// Check existence of slug in orgs.
     /// </summary>
-    Task<bool> SlugExistsAsync(string slug);
+    Task<bool> SlugExistsAsync(string slug, Guid? excludeTeamId = null);
 
     /// <summary>
     /// Returns a single org with its LogoFile navigation property loaded.

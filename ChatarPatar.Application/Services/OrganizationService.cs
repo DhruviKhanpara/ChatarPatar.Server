@@ -93,7 +93,7 @@ internal class OrganizationService : IOrganizationService
         await _repositories.UnitOfWork.SaveChangesAsync();
     }
 
-    public async Task UpdateLogoAsync(Guid orgId, ImageUploadDto dto)
+    public async Task UpdateOrganizationLogoAsync(Guid orgId, ImageUploadDto dto)
     {
         await _validationService.ValidateAsync<ImageUploadDto>(dto);
 
@@ -110,10 +110,8 @@ internal class OrganizationService : IOrganizationService
         {
             var orgLogoFile = await _repositories.FileRepository.GetByIdAsync((Guid)org.LogoFileId).FirstOrDefaultAsync();
 
-            if (orgLogoFile == null)
-                throw new NotFoundAppException("Exist Organization Logo file data");
-
-            orgLogoFile.IsDeleted = true;
+            if (orgLogoFile != null)
+                orgLogoFile.IsDeleted = true;
         }
 
         var publicId = CloudinaryPublicId.OrgLogo(org.Id);
@@ -158,6 +156,29 @@ internal class OrganizationService : IOrganizationService
             throw new NotFoundAppException("Organization membership");
 
         _mapper.Map<UpdateOrganizationDto, Organization>(dto, org);
+
+        await _repositories.UnitOfWork.SaveChangesAsync();
+    }
+
+    public async Task RemoveOrganizationLogoAsync(Guid orgId)
+    {
+        var org = await _repositories.OrganizationRepository.GetById(orgId).FirstOrDefaultAsync();
+
+        if (org == null)
+            throw new NotFoundAppException("Organization");
+
+        if (org.LogoFileId == null)
+            return;
+
+        var existingLogo = await _repositories.FileRepository.GetByIdAsync((Guid)org.LogoFileId).FirstOrDefaultAsync();
+
+        if (existingLogo != null)
+        {
+            existingLogo.IsDeleted = true;
+            await _externalServiceManager.CloudinaryService.DeleteFileAsync(existingLogo.PublicId);
+        }
+
+        org.LogoFileId = null;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
     }

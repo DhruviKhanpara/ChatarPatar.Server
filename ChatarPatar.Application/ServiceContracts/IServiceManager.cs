@@ -7,5 +7,8 @@ public interface IServiceManager
     IOrganizationInviteService OrganizationInviteService { get; }
     IOrganizationMemberService OrganizationMemberService { get; }
 
+    ITeamService TeamService { get; }
+    ITeamMemberService TeamMemberService { get; }
+
     IPermissionService PermissionService { get; }
 }
