@@ -250,35 +250,8 @@ internal class UserService : IUserService
         if (user.IsEmailVerified)
             throw new InvalidDataAppException("Email is already verified.");
 
-        var otpEntity = await _repositories.OtpVerificationRepository
-            .GetActiveOtp(userId, OtpPurposeEnum.EmailVerification)
-            .FirstOrDefaultAsync();
+        var otpEntity = await VerifyOtpAsync(userId: userId, OtpPurposeEnum.EmailVerification, dto.Otp);
 
-        if (otpEntity is null)
-            throw new InvalidDataAppException("Invalid or expired OTP.");
-
-        var otpHash = _tokenService.HashToken(dto.Otp.Trim());
-
-        // ── BRUTE-FORCE PROTECTION ─────────────────────────────────────────────
-        if (otpEntity.OtpHash != otpHash)
-        {
-            otpEntity.FailedAttempts++;
-
-            if (otpEntity.FailedAttempts >= _tokenSettings.OtpMaxFailedAttempts)
-            {
-                otpEntity.IsUsed = true;
-                otpEntity.UsedAt = DateTime.UtcNow;
-                await _repositories.UnitOfWork.SaveChangesAsync();
-                throw new InvalidDataAppException("Too many incorrect attempts. Please request a new OTP.");
-            }
-
-            await _repositories.UnitOfWork.SaveChangesAsync();
-            throw new InvalidDataAppException("Invalid or expired OTP.");
-        }
-
-        // ── CORRECT OTP ────────────────────────────────────────────────────────
-        otpEntity.IsUsed = true;
-        otpEntity.UsedAt = DateTime.UtcNow;
         user.IsEmailVerified = true;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
@@ -348,35 +321,7 @@ internal class UserService : IUserService
         if (user is null)
             throw new InvalidDataAppException("Invalid or expired OTP.");
 
-        var otpHash = _tokenService.HashToken(dto.Otp.Trim());
-
-        var otpEntity = await _repositories.OtpVerificationRepository
-            .GetActiveOtp(user.Id, OtpPurposeEnum.PasswordReset)
-            .FirstOrDefaultAsync();
-
-        if (otpEntity is null)
-            throw new InvalidDataAppException("Invalid or expired OTP.");
-
-        // ── BRUTE-FORCE PROTECTION ─────────────────────────────────────────────
-        if (otpEntity.OtpHash != otpHash)
-        {
-            otpEntity.FailedAttempts++;
-
-            if (otpEntity.FailedAttempts >= _tokenSettings.OtpMaxFailedAttempts)
-            {
-                // Invalidate — force the user to go through forgot-password again
-                otpEntity.IsUsed = true;
-                otpEntity.UsedAt = DateTime.UtcNow;
-                await _repositories.UnitOfWork.SaveChangesAsync();
-                throw new InvalidDataAppException($"Too many incorrect attempts. Please request a new OTP.");
-            }
-
-            await _repositories.UnitOfWork.SaveChangesAsync();
-            throw new InvalidDataAppException("Invalid or expired OTP.");
-        }
-
-        otpEntity.IsUsed = true;
-        otpEntity.UsedAt = DateTime.UtcNow;
+        var otpEntity = await VerifyOtpAsync(userId: user.Id, OtpPurposeEnum.PasswordReset, dto.Otp);
 
         if (PasswordHasher.VerifyPassword(hashedPassword: user.PasswordHash, providedPassword: dto.NewPassword))
             throw new InvalidDataAppException("New password must be different from your current password.");
@@ -651,6 +596,42 @@ internal class UserService : IUserService
 
         await _repositories.OtpVerificationRepository.AddAsync(otpEntity);
         return plainOtp;
+    }
+
+    private async Task<OtpVerification> VerifyOtpAsync(Guid userId, OtpPurposeEnum purpose, string otp)
+    {
+        var otpEntity = await _repositories.OtpVerificationRepository
+            .GetActiveOtp(userId, purpose)
+            .FirstOrDefaultAsync();
+
+        var otpHash = _tokenService.HashToken(otp.Trim());
+
+        if (otpEntity is null)
+            throw new InvalidDataAppException("Invalid or expired OTP.");
+
+        // ── BRUTE-FORCE PROTECTION ─────────────────────────────────────────────
+        if (otpEntity.OtpHash != otpHash)
+        {
+            otpEntity.FailedAttempts++;
+
+            if (otpEntity.FailedAttempts >= _tokenSettings.OtpMaxFailedAttempts)
+            {
+                // Invalidate — force the user to go through forgot-password again
+                otpEntity.IsUsed = true;
+                otpEntity.UsedAt = DateTime.UtcNow;
+                await _repositories.UnitOfWork.SaveChangesAsync();
+                throw new InvalidDataAppException("Invalid or expired OTP.");
+            }
+
+            await _repositories.UnitOfWork.SaveChangesAsync();
+            throw new InvalidDataAppException("Invalid or expired OTP.");
+        }
+
+        // ── CORRECT OTP ────────────────────────────────────────────────────────
+        otpEntity.IsUsed = true;
+        otpEntity.UsedAt = DateTime.UtcNow;
+
+        return otpEntity;
     }
 
     private IAuthTokenStrategy GetTokenStrategy() => _tokenStrategyFactory.Resolve();

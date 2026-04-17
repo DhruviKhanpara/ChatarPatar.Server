@@ -120,11 +120,14 @@ internal class OrganizationInviteService : IOrganizationInviteService
         if (invite is null)
             throw new NotFoundAppException("Invite");
 
-        if (invite.IsUsed)
+        if (invite.IsUsed || invite.ExpiresAt <= DateTime.UtcNow)
             throw new InvalidDataAppException("Invite already used or invalid");
+
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
 
         invite.IsUsed = true;
         invite.UsedAt = DateTime.UtcNow;
+        invite.UsedBy = authUserId;
         invite.UpdatedAt = DateTime.UtcNow;
 
         await _repositories.UnitOfWork.SaveChangesAsync();

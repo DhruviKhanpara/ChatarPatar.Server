@@ -19,5 +19,8 @@ internal sealed class ServiceManager : IServiceManager
     public IOrganizationInviteService OrganizationInviteService => Get<IOrganizationInviteService>();
     public IOrganizationMemberService OrganizationMemberService => Get<IOrganizationMemberService>();
 
+    public ITeamService TeamService => Get<ITeamService>();
+    public ITeamMemberService TeamMemberService => Get<ITeamMemberService>();
+
     public IPermissionService PermissionService => Get<IPermissionService>();
 }

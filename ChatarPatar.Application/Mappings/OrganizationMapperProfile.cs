@@ -41,8 +41,7 @@ public class OrganizationMapperProfile : Profile
         CreateMap<AddOrganizationMemberDto, OrganizationMember>(MemberList.Source)
             .ForMember(dest => dest.OrgId, opt => opt.Ignore())
             .ForMember(dest => dest.InvitedByUserId, opt => opt.Ignore())
-            .ForMember(dest => dest.JoinedAt, opt => opt.Ignore())
-            .ForMember(dest => dest.UserId, opt => opt.Ignore());
+            .ForMember(dest => dest.JoinedAt, opt => opt.Ignore());
 
         // Organization Invite
         CreateMap<OrganizationInvite, OrganizationInviteListItemDto>()

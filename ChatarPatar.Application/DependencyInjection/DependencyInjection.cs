@@ -35,6 +35,10 @@ public static class DependencyInjection
         services.AddScoped<IOrganizationService, OrganizationService>();
         services.AddScoped<IOrganizationInviteService, OrganizationInviteService>();
         services.AddScoped<IOrganizationMemberService, OrganizationMemberService>();
+
+        services.AddScoped<ITeamService, TeamService>();
+        services.AddScoped<ITeamMemberService, TeamMemberService>();
+
         services.AddScoped<IPermissionService, PermissionService>();
 
         // --- Notification ---
