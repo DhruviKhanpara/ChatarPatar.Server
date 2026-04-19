@@ -15,7 +15,7 @@ internal class TeamRepository : BaseSoftDeleteRepository<Team>, ITeamRepository
     public async Task<bool> NameExistsInOrgAsync(Guid orgId, string name, Guid? excludeTeamId = null)
     {
         var query = FindByCondition(t => t.OrgId == orgId
-            && t.Name == name.Trim());
+            && t.Name.ToLower() == name.Trim().ToLower());
 
         if (excludeTeamId.HasValue)
             query = query.Where(t => t.Id != excludeTeamId.Value);

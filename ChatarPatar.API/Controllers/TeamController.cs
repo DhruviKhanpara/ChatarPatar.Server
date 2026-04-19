@@ -48,7 +48,7 @@ public class TeamController : ControllerBase
     /// </summary>
     [HttpPatch("{teamId:guid}")]
     [RequirePermission(PermissionCheckLogicEnum.All, Permissions.TEAM_SETTINGS_EDIT)]
-    public async Task<IActionResult> UpdateOrganization([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromBody] UpdateTeamDto dto)
+    public async Task<IActionResult> UpdateTeam([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromBody] UpdateTeamDto dto)
     {
         await _services.TeamService.UpdateTeamAsync(orgId, teamId, dto);
         return Ok("Team updated successfully");
@@ -59,7 +59,7 @@ public class TeamController : ControllerBase
     /// </summary>
     [HttpDelete("{teamId:guid}/icon")]
     [RequirePermission(PermissionCheckLogicEnum.All, Permissions.TEAM_SETTINGS_EDIT)]
-    public async Task<IActionResult> RemoveOrganizationLogo([FromRoute] Guid orgId, [FromRoute] Guid teamId)
+    public async Task<IActionResult> RemoveTeamIcon([FromRoute] Guid orgId, [FromRoute] Guid teamId)
     {
         await _services.TeamService.RemoveTeamIconAsync(orgId, teamId);
         return Ok("Team icon removed successfully");

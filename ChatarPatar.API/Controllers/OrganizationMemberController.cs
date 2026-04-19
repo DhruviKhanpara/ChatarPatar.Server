@@ -40,7 +40,7 @@ public class OrganizationMemberController : ControllerBase
     [SkipPermission]
     public async Task<ActionResult<OrganizationMemberDto>> GetMember([FromRoute] Guid orgId, [FromRoute] Guid membershipId)
     {
-        var result = await _services.OrganizationMemberService.GetMemberAsync(orgId, membershipId);
+        var result = await _services.OrganizationMemberService.GetOrganizationMemberAsync(orgId, membershipId);
         return Ok(result);
     }
 

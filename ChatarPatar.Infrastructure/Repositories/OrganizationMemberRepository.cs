@@ -41,7 +41,7 @@ internal class OrganizationMemberRepository : BaseSoftDeleteRepository<Organizat
     }
 
     public IQueryable<OrganizationMember> GetMemberByIdInOrg(Guid membershipId, Guid orgId) =>
-        FindByCondition(x => x.Id == membershipId)
+        FindByCondition(x => x.Id == membershipId && x.OrgId == orgId)
             .Include(x => x.User)
                 .ThenInclude(u => u.AvatarFile);
 
