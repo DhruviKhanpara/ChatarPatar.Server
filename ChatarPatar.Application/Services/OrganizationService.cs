@@ -162,7 +162,10 @@ internal class OrganizationService : IOrganizationService
 
     public async Task RemoveOrganizationLogoAsync(Guid orgId)
     {
-        var org = await _repositories.OrganizationRepository.GetById(orgId).FirstOrDefaultAsync();
+        var org = await _repositories.OrganizationRepository
+            .GetById(orgId)
+            .Include(x => x.LogoFile)
+            .FirstOrDefaultAsync();
 
         if (org == null)
             throw new NotFoundAppException("Organization");
@@ -170,16 +173,14 @@ internal class OrganizationService : IOrganizationService
         if (org.LogoFileId == null)
             return;
 
-        var existingLogo = await _repositories.FileRepository.GetByIdAsync((Guid)org.LogoFileId).FirstOrDefaultAsync();
-
-        if (existingLogo != null)
-        {
-            existingLogo.IsDeleted = true;
-            await _externalServiceManager.CloudinaryService.DeleteFileAsync(existingLogo.PublicId);
-        }
+        if (org.LogoFile != null)
+            org.LogoFile.IsDeleted = true;
 
         org.LogoFileId = null;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
+
+        if(org.LogoFile != null)
+            await _externalServiceManager.CloudinaryService.DeleteFileAsync(org.LogoFile.PublicId);
     }
 }

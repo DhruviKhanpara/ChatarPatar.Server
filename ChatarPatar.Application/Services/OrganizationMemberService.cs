@@ -60,7 +60,7 @@ internal class OrganizationMemberService : IOrganizationMemberService
         return new PagedResult<OrganizationMemberDto>(items, totalCount, queryParams.PageNumber, queryParams.PageSize);
     }
 
-    public async Task<OrganizationMemberDto> GetMemberAsync(Guid orgId, Guid membershipId)
+    public async Task<OrganizationMemberDto> GetOrganizationMemberAsync(Guid orgId, Guid membershipId)
     {
         var authUserId = Guid.Parse(_httpContext.GetUserId());
 
@@ -141,7 +141,7 @@ internal class OrganizationMemberService : IOrganizationMemberService
         {
             _logger.LogError(
                 ex,
-                "Failed to invalidate permissions for user {UserId} after team role change",
+                "Failed to invalidate permissions for user {UserId} after organization role change",
                 membership.UserId
             );
         }
@@ -149,6 +149,7 @@ internal class OrganizationMemberService : IOrganizationMemberService
 
     public async Task RemoveMemberAsync(Guid orgId, Guid membershipId)
     {
+        // TODO: Remove Team, Channel membership too
         var authUserId = Guid.Parse(_httpContext.GetUserId());
 
         var membership = await _repositories.OrganizationMemberRepository

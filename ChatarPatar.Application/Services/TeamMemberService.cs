@@ -19,9 +19,9 @@ internal class TeamMemberService : ITeamMemberService
     private readonly IValidationService _validationService;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IPermissionService _permissionService;
-    private readonly ILogger<OrganizationMemberService> _logger;
+    private readonly ILogger<TeamMemberService> _logger;
 
-    public TeamMemberService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IPermissionService permissionService, ILogger<OrganizationMemberService> logger)
+    public TeamMemberService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IPermissionService permissionService, ILogger<TeamMemberService> logger)
     {
         _repositories = repositories;
         _mapper = mapper;

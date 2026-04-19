@@ -26,7 +26,7 @@ public class TeamMemberController : ControllerBase
     /// </summary>
     [HttpPost]
     [RequirePermission(PermissionCheckLogicEnum.All, Permissions.TEAM_MEMBERS_INVITE)]
-    public async Task<IActionResult> AddMember([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromBody] AddTeamMemberDto dto)
+    public async Task<IActionResult> AddTeamMember([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromBody] AddTeamMemberDto dto)
     {
         await _services.TeamMemberService.AddTeamMemberAsync(orgId, teamId, dto);
         return Ok("Member added to team successfully.");

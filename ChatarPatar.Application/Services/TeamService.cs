@@ -46,6 +46,13 @@ internal class TeamService : ITeamService
         if (!orgExists)
             throw new NotFoundAppException("Organization");
 
+        var orgMemberExists = await _repositories.OrganizationMemberRepository
+            .GetOrgMemberAsync(userId: authUserId, orgId: orgId)
+            .AnyAsync();
+
+        if (!orgMemberExists)
+            throw new NotFoundAppException("Organization Member");
+
         var nameExists = await _repositories.TeamRepository
             .NameExistsInOrgAsync(orgId, dto.Name);
 
@@ -80,6 +87,9 @@ internal class TeamService : ITeamService
 
         if (team is null)
             throw new NotFoundAppException("Team");
+
+        if (team.IsArchived)
+            throw new InvalidDataAppException("Archived teams cannot be modified. Unarchive the team first.");
 
         if (team.IconFileId != null)
         {
@@ -140,26 +150,29 @@ internal class TeamService : ITeamService
 
     public async Task RemoveTeamIconAsync(Guid orgId, Guid teamId)
     {
-        var team = await _repositories.TeamRepository.GetByIdInOrg(teamId, orgId).FirstOrDefaultAsync();
+        var team = await _repositories.TeamRepository
+            .GetByIdInOrg(teamId, orgId)
+            .Include(x => x.IconFile)
+            .FirstOrDefaultAsync();
 
         if (team is null)
             throw new NotFoundAppException("Team");
 
+        if (team.IsArchived)
+            throw new InvalidDataAppException("Archived teams cannot be modified. Unarchive the team first.");
+
         if (team.IconFileId == null)
             return;
 
-        var existingIcon = await _repositories.FileRepository.GetByIdAsync((Guid)team.IconFileId).FirstOrDefaultAsync();
-
-        if (existingIcon != null)
-        {
-            existingIcon.IsDeleted = true;
-
-            await _externalServiceManager.CloudinaryService.DeleteFileAsync(existingIcon.PublicId);
-        }
+        if (team.IconFile != null)
+            team.IconFile.IsDeleted = true;
 
         team.IconFileId = null;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
+
+        if(team.IconFile != null)
+            await _externalServiceManager.CloudinaryService.DeleteFileAsync(team.IconFile.PublicId);
     }
 
 }
