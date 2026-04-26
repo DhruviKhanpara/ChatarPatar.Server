@@ -123,13 +123,7 @@ internal class OrganizationInviteService : IOrganizationInviteService
         if (invite.IsUsed || invite.ExpiresAt <= DateTime.UtcNow)
             throw new InvalidDataAppException("Invite already used or invalid");
 
-        var authUserId = Guid.Parse(_httpContext.GetUserId());
-
-        invite.IsUsed = true;
-        invite.UsedAt = DateTime.UtcNow;
-        invite.UsedBy = authUserId;
-        invite.UpdatedAt = DateTime.UtcNow;
-
+        _repositories.OrganizationInviteRepository.Remove(invite);
         await _repositories.UnitOfWork.SaveChangesAsync();
     }
 }

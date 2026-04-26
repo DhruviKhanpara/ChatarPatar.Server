@@ -12,6 +12,7 @@ using ChatarPatar.Infrastructure.ExternalServiceContracts;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace ChatarPatar.Application.Services;
 
@@ -22,14 +23,16 @@ internal class OrganizationService : IOrganizationService
     private readonly IValidationService _validationService;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IExternalServiceManager _externalServiceManager;
+    private readonly ILogger<OrganizationService> _logger;
 
-    public OrganizationService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IExternalServiceManager externalServiceManager)
+    public OrganizationService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IExternalServiceManager externalServiceManager, ILogger<OrganizationService> logger)
     {
         _repositories = repositories;
         _mapper = mapper;
         _validationService = validationService;
         _httpContextAccessor = httpContextAccessor;
         _externalServiceManager = externalServiceManager;
+        _logger = logger;
     }
     private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
 
@@ -181,6 +184,12 @@ internal class OrganizationService : IOrganizationService
         await _repositories.UnitOfWork.SaveChangesAsync();
 
         if(org.LogoFile != null)
-            await _externalServiceManager.CloudinaryService.DeleteFileAsync(org.LogoFile.PublicId);
+        {
+            try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(org.LogoFile.PublicId); }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete org logo from Cloudinary. PublicId: {PublicId}", org.LogoFile.PublicId);
+            }
+        }
     }
 }

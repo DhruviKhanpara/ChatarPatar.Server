@@ -36,25 +36,52 @@ internal class TeamMemberService : ITeamMemberService
     {
         await _validationService.ValidateAsync<AddTeamMemberDto>(dto);
 
-        var isOrgMember = await _repositories.OrganizationMemberRepository
-            .GetOrgMemberAsync(userId: dto.UserId, orgId: orgId)
-            .AnyAsync();
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
 
-        if (!isOrgMember)
-            throw new InvalidDataAppException("User must be a member of the organization before being added to a team.");
-
-        var teamExists = await _repositories.TeamRepository
+        var context = await _repositories.TeamRepository
             .GetByIdInOrg(teamId, orgId)
-            .Include(x => x.TeamMembers.Where(x => x.UserId == dto.UserId))
+            .AsNoTracking()
+            .Select(t => new
+            {
+                t.IsArchived,
+                TargetIsOrgMember = t.Organization.OrganizationMembers
+                    .Any(m => m.UserId == dto.UserId && !m.IsDeleted),
+                AlreadyTeamMember = t.TeamMembers
+                    .Any(m => m.UserId == dto.UserId),
+                CallerTeamRole = t.TeamMembers
+                    .Where(m => m.UserId == authUserId && !m.IsDeleted)
+                    .Select(m => (TeamRoleEnum?)m.Role)
+                    .FirstOrDefault(),
+                CallerOrgRole = t.Organization.OrganizationMembers
+                    .Where(m => m.UserId == authUserId && !m.IsDeleted)
+                    .Select(m => (OrganizationRoleEnum?)m.Role)
+                    .FirstOrDefault()
+            })
             .FirstOrDefaultAsync();
 
-        if (teamExists == null)
+        if (context is null)
             throw new NotFoundAppException("Team");
 
-        if (teamExists.TeamMembers.Any())
+        if (context.IsArchived)
+            throw new InvalidDataAppException("Cannot add members to an archived team.");
+
+        if (!context.TargetIsOrgMember)
+            throw new InvalidDataAppException("User must be a member of the organization before being added to a team.");
+
+        if (context.AlreadyTeamMember)
             throw new DuplicateEntryAppException("User is already a member of this team.");
 
-        var authUserId = Guid.Parse(_httpContext.GetUserId());
+        if (dto.Role == TeamRoleEnum.TeamAdmin)
+        {
+            var callerIsOrgAdmin =
+                context.CallerOrgRole is OrganizationRoleEnum.OrgOwner or OrganizationRoleEnum.OrgAdmin;
+
+            var callerIsTeamAdmin =
+                context.CallerTeamRole is TeamRoleEnum.TeamAdmin;
+
+            if (!callerIsOrgAdmin && !callerIsTeamAdmin)
+                throw new AppException("Only a team admin or org admin can add a member with the TeamAdmin role.");
+        }
 
         var memberEntity = _mapper.Map<TeamMember>(dto);
 
@@ -70,6 +97,29 @@ internal class TeamMemberService : ITeamMemberService
     {
         await _validationService.ValidateAsync<UpdateTeamMemberRoleDto>(dto);
 
+        var context = await _repositories.TeamRepository
+            .GetByIdInOrg(teamId, orgId)
+            .AsNoTracking()
+            .Select(t => new
+            {
+                t.IsArchived,
+                Membership = t.TeamMembers.Where(m => m.Id == membershipId).Select(m => new { m.UserId, m.Role }).FirstOrDefault(),
+                AdminCount = t.TeamMembers.Count(m => m.Role == TeamRoleEnum.TeamAdmin)
+            })
+            .FirstOrDefaultAsync();
+
+        if (context is null)
+            throw new NotFoundAppException("Team");
+
+        if (context.IsArchived)
+            throw new InvalidDataAppException("Cannot update members of an archived team.");
+
+        if (context.Membership is null)
+            throw new NotFoundAppException("Team membership");
+        
+        if (context.Membership.Role == TeamRoleEnum.TeamAdmin && dto.Role != TeamRoleEnum.TeamAdmin && context.AdminCount <= 1)
+            throw new InvalidDataAppException("This user is the only admin of the team. Assign another admin before changing their role.");
+
         var membership = await _repositories.TeamMemberRepository
             .GetByIdInTeam(membershipId, teamId)
             .FirstOrDefaultAsync();
@@ -77,30 +127,113 @@ internal class TeamMemberService : ITeamMemberService
         if (membership is null)
             throw new NotFoundAppException("Team membership");
 
-        var teamBelongsToOrg = await _repositories.TeamRepository
-            .GetByIdInOrg(teamId, orgId)
-            .Include(x => x.TeamMembers.Where(x => x.Role == TeamRoleEnum.TeamAdmin))
-            .FirstOrDefaultAsync();
-
-        if (teamBelongsToOrg == null)
-            throw new NotFoundAppException("Team");
-
-        if (membership.Role == TeamRoleEnum.TeamAdmin && dto.Role != TeamRoleEnum.TeamAdmin && !teamBelongsToOrg.TeamMembers.Any(x => x.Id != membershipId))
-            throw new InvalidDataAppException("User is the only admin of this team. Assign another admin before change.");
-
         membership.Role = dto.Role;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
 
+        TryInvalidatePermissions(context.Membership.UserId, "Failed to invalidate permissions for user {UserId} after team role change");
+    }
+
+    public async Task RemoveTeamMemberAsync(Guid orgId, Guid teamId, Guid membershipId)
+    {
+        // TODO: Remove Channel membership too
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var context = await _repositories.TeamRepository
+            .GetByIdInOrg(teamId, orgId)
+            .AsNoTracking()
+            .Select(t => new
+            {
+                t.IsArchived,
+                Membership = t.TeamMembers.Where(m => m.Id == membershipId).Select(m => new { m.UserId, m.Role }).FirstOrDefault(),
+                AdminCount = t.TeamMembers.Count(m => m.Role == TeamRoleEnum.TeamAdmin)
+            })
+            .FirstOrDefaultAsync();
+
+        if (context is null)
+            throw new NotFoundAppException("Team");
+
+        if (context.IsArchived)
+            throw new InvalidDataAppException("Cannot remove members from an archived team.");
+
+        if (context.Membership is null)
+            throw new NotFoundAppException("Team membership");
+
+        if (context.Membership.UserId == authUserId)
+            throw new InvalidDataAppException("You cannot remove yourself. Use the leave team action instead.");
+
+        if (context.Membership.Role == TeamRoleEnum.TeamAdmin && context.AdminCount <= 1)
+            throw new InvalidDataAppException("Cannot remove the only admin of the team. Assign another admin first.");
+
+        var membership = await _repositories.TeamMemberRepository
+            .GetByIdInTeam(membershipId, teamId)
+            .FirstOrDefaultAsync();
+
+        if (membership is null)
+            throw new NotFoundAppException("Team membership");
+
+        membership.IsDeleted = true;
+
+        await _repositories.UnitOfWork.SaveChangesAsync();
+
+        TryInvalidatePermissions(membership.UserId, "Failed to invalidate permissions for user {UserId} after team member removal");
+    }
+
+    public async Task LeaveTeamAsync(Guid orgId, Guid teamId)
+    {
+        // TODO: Channel membership too
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var context = await _repositories.TeamRepository
+            .GetByIdInOrg(teamId, orgId)
+            .AsNoTracking()
+            .Select(t => new
+            {
+                t.IsArchived,
+                Membership = t.TeamMembers.Where(m => m.UserId == authUserId).Select(m => new { m.Id, m.Role }).FirstOrDefault(),
+                AdminCount = t.TeamMembers.Count(m => m.Role == TeamRoleEnum.TeamAdmin)
+            })
+            .FirstOrDefaultAsync();
+
+        if (context is null)
+            throw new NotFoundAppException("Team");
+
+        if (context.IsArchived)
+            throw new InvalidDataAppException("Cannot leave an archived team.");
+
+        if (context.Membership is null)
+            throw new NotFoundAppException("Team membership");
+
+        if (context.Membership.Role == TeamRoleEnum.TeamAdmin && context.AdminCount <= 1)
+            throw new InvalidDataAppException("You are the only admin of this team. Assign another admin before leaving.");
+
+        var membership = await _repositories.TeamMemberRepository
+            .GetByIdInTeam(context.Membership.Id, teamId)
+            .FirstOrDefaultAsync();
+
+        if (membership is null)
+            throw new NotFoundAppException("Team membership");
+
+        membership.IsDeleted = true;
+
+        await _repositories.UnitOfWork.SaveChangesAsync();
+
+        TryInvalidatePermissions(authUserId,"Failed to invalidate permissions for user {UserId} after leaving team");
+    }
+
+    #region Private Section
+
+    private void TryInvalidatePermissions(Guid userId, string errorTemplate)
+    {
         try
         {
-            _permissionService.InvalidateUserPermissions(membership.UserId);
+            _permissionService.InvalidateUserPermissions(userId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex,
-                "Failed to invalidate permissions for user {UserId} after team role change",
-                membership.UserId);
+            _logger.LogError(ex, errorTemplate, userId);
         }
     }
+
+    #endregion
 }

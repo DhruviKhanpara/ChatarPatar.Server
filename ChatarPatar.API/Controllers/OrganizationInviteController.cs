@@ -49,7 +49,7 @@ public class OrganizationInviteController : ControllerBase
     /// </summary>
     [Authorize]
     [RequirePermission(PermissionCheckLogicEnum.All, Permissions.ORG_INVITES_MANAGE)]
-    [HttpDelete("{inviteId}")]
+    [HttpDelete("{inviteId:guid}")]
     public async Task<IActionResult> CancelInvite(Guid orgId, Guid inviteId)
     {
         await _services.OrganizationInviteService.CancelInviteAsync(orgId, inviteId);
