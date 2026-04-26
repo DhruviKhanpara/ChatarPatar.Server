@@ -4,6 +4,7 @@ using ChatarPatar.Application.DTOs.Team;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Common.Consts;
 using ChatarPatar.Common.Enums;
+using ChatarPatar.Common.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -19,6 +20,31 @@ public class TeamController : ControllerBase
     public TeamController(IServiceManager services)
     {
         _services = services;
+    }
+
+    /// <summary>
+    /// Returns a paged list of teams in the organization.
+    /// Public teams are visible to all org members.
+    /// Private teams are visible only to their members and org admins / owners.
+    /// </summary>
+    [HttpGet()]
+    [SkipPermission]
+    public async Task<ActionResult<PagedResult<TeamWithRoleDto>>> GetTeams([FromRoute] Guid orgId, [FromQuery] TeamQueryParams queryParams)
+    {
+        var result = await _services.TeamService.GetTeamsAsync(orgId, queryParams);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Returns a single team.
+    /// Returns 404 for private teams the caller does not belong to (privacy-preserving).
+    /// </summary>
+    [HttpGet("{teamId:guid}")]
+    [SkipPermission]
+    public async Task<ActionResult<TeamDto>> GetTeam([FromRoute] Guid orgId, [FromRoute] Guid teamId)
+    {
+        var result = await _services.TeamService.GetTeamAsync(orgId, teamId);
+        return Ok(result);
     }
 
     /// <summary>

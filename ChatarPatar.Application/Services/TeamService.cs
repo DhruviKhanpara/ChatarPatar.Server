@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using ChatarPatar.Application.DTOs.Common;
 using ChatarPatar.Application.DTOs.Team;
 using ChatarPatar.Application.ServiceContracts;
@@ -6,11 +7,13 @@ using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.Enums;
 using ChatarPatar.Common.Helpers;
 using ChatarPatar.Common.HttpUserDetails;
+using ChatarPatar.Common.Models;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.ExternalServiceContracts;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace ChatarPatar.Application.Services;
 
@@ -21,16 +24,107 @@ internal class TeamService : ITeamService
     private readonly IValidationService _validationService;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IExternalServiceManager _externalServiceManager;
+    private readonly ILogger<TeamService> _logger;
 
-    public TeamService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IExternalServiceManager externalServiceManager)
+    public TeamService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IExternalServiceManager externalServiceManager, ILogger<TeamService> logger)
     {
         _repositories = repositories;
         _mapper = mapper;
         _validationService = validationService;
         _httpContextAccessor = httpContextAccessor;
         _externalServiceManager = externalServiceManager;
+        _logger = logger;
     }
     private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
+
+    public async Task<PagedResult<TeamWithRoleDto>> GetTeamsAsync(Guid orgId, TeamQueryParams queryParams)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var orgRole = await _repositories.OrganizationMemberRepository
+            .GetOrgMemberAsync(userId: authUserId, orgId: orgId)
+            .AsNoTracking()
+            .Select(m => (OrganizationRoleEnum?)m.Role)
+            .FirstOrDefaultAsync();
+
+        if (orgRole is null)
+            throw new NotFoundAppException("Organization");
+
+        var callerIsOrgAdmin = orgRole is OrganizationRoleEnum.OrgOwner or OrganizationRoleEnum.OrgAdmin;
+
+        var baseQuery = _repositories.TeamRepository.GetTeamsQuery(
+            orgId,
+            callerId: authUserId,
+            callerIsOrgAdmin: callerIsOrgAdmin,
+            search: queryParams.Search,
+            isArchived: queryParams.IsArchived,
+            includePrivate: queryParams.IncludePrivate);
+
+        var totalCount = await baseQuery.CountAsync();
+        var items = await baseQuery
+            .PaginateOffset(queryParams.PageSize, queryParams.PageNumber)
+            .AsNoTracking()
+            .ProjectTo<TeamWithRoleDto>(_mapper.ConfigurationProvider)
+            .ToListAsync();
+
+        if (items.Count > 0)
+        {
+            var pageTeamIds = items.Select(t => t.Id).ToList();
+
+            var myTeams = await _repositories.TeamMemberRepository
+                .FindByCondition(m => pageTeamIds.Contains(m.TeamId) && m.UserId == authUserId)
+                .AsNoTracking()
+                .Select(m => new { m.TeamId, m.Role, m.IsMuted, m.JoinedAt })
+                .ToListAsync();
+
+            var myTeamsDict = myTeams.ToDictionary(x => x.TeamId);
+
+            foreach (var item in items)
+            {
+                myTeamsDict.TryGetValue(item.Id, out var myMembership);
+                item.Role = myMembership?.Role ?? null;
+                item.IsMuted = myMembership?.IsMuted ?? null;
+                item.JoinedAt = myMembership?.JoinedAt ?? null;
+            }
+        }
+
+        return new PagedResult<TeamWithRoleDto>(items, totalCount, queryParams.PageNumber, queryParams.PageSize);
+    }
+
+    public async Task<TeamDto> GetTeamAsync(Guid orgId, Guid teamId)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var orgRole = await _repositories.OrganizationMemberRepository
+            .GetOrgMemberAsync(userId: authUserId, orgId: orgId)
+            .AsNoTracking()
+            .Select(m => (OrganizationRoleEnum?)m.Role)
+            .FirstOrDefaultAsync();
+
+        if (orgRole is null)
+            throw new NotFoundAppException("Organization");
+
+        var callerIsOrgAdmin = orgRole is OrganizationRoleEnum.OrgOwner or OrganizationRoleEnum.OrgAdmin;
+
+        var query = _repositories.TeamRepository
+            .GetByIdInOrg(teamId, orgId)
+            .Where(t => !t.IsPrivate || t.TeamMembers.Any(m => m.UserId == authUserId && !m.IsDeleted))
+            .AsNoTracking();
+
+        if (!callerIsOrgAdmin)
+            query = query.Where(t =>
+                !t.IsPrivate ||
+                t.TeamMembers.Any(m => m.UserId == authUserId && !m.IsDeleted));
+
+        var result = await query
+            .ProjectTo<TeamDto>(_mapper.ConfigurationProvider)
+            .FirstOrDefaultAsync();
+
+        if (result is null)
+            throw new NotFoundAppException("Team");
+
+        return result;
+    }
 
     public async Task CreateTeamAsync(Guid orgId, CreateTeamDto dto)
     {
@@ -39,19 +133,12 @@ internal class TeamService : ITeamService
         var authUserId = Guid.Parse(_httpContext.GetUserId());
 
         // Verify org exists and caller is a member
-        var orgExists = await _repositories.OrganizationRepository
-            .GetById(id: orgId)
-            .AnyAsync();
-
-        if (!orgExists)
-            throw new NotFoundAppException("Organization");
-
         var orgMemberExists = await _repositories.OrganizationMemberRepository
             .GetOrgMemberAsync(userId: authUserId, orgId: orgId)
             .AnyAsync();
 
         if (!orgMemberExists)
-            throw new NotFoundAppException("Organization Member");
+            throw new NotFoundAppException("Organization");
 
         var nameExists = await _repositories.TeamRepository
             .NameExistsInOrgAsync(orgId, dto.Name);
@@ -80,7 +167,6 @@ internal class TeamService : ITeamService
         await _validationService.ValidateAsync<ImageUploadDto>(dto);
 
         var authUserId = Guid.Parse(_httpContext.GetUserId());
-
         var fileType = dto.File.ValidateFile(FileUsageContextEnum.Team_Icon);
 
         var team = await _repositories.TeamRepository.GetByIdInOrg(teamId, orgId).FirstOrDefaultAsync();
@@ -171,8 +257,14 @@ internal class TeamService : ITeamService
 
         await _repositories.UnitOfWork.SaveChangesAsync();
 
-        if(team.IconFile != null)
-            await _externalServiceManager.CloudinaryService.DeleteFileAsync(team.IconFile.PublicId);
+        if (team.IconFile != null)
+        {
+            try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(team.IconFile.PublicId); }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete team icon from Cloudinary. PublicId: {PublicId}", team.IconFile.PublicId);
+            }
+        }
     }
 
 }

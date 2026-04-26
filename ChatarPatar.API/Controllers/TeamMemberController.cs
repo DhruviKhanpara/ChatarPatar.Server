@@ -42,4 +42,17 @@ public class TeamMemberController : ControllerBase
         await _services.TeamMemberService.UpdateTeamMemberRoleAsync(orgId, teamId, membershipId, dto);
         return Ok("Member role updated successfully.");
     }
+
+    /// <summary>
+    /// Removes a member from the team (soft-delete).
+    /// Cannot remove yourself — use the leave endpoint instead.
+    /// Cannot remove the last admin.
+    /// </summary>
+    [HttpDelete("{membershipId:guid}")]
+    [RequirePermission(PermissionCheckLogicEnum.All, Permissions.TEAM_MEMBERS_KICK)]
+    public async Task<IActionResult> RemoveMember([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid membershipId)
+    {
+        await _services.TeamMemberService.RemoveTeamMemberAsync(orgId, teamId, membershipId);
+        return Ok("Member removed from team successfully.");
+    }
 }

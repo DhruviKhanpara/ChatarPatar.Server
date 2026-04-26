@@ -456,6 +456,9 @@ internal class UserService : IUserService
         if (!isValid)
             throw new InvalidDataAppException("Current password is incorrect");
 
+        if (PasswordHasher.VerifyPassword(hashedPassword: user.PasswordHash, providedPassword: dto.NewPassword))
+            throw new InvalidDataAppException("New password must be different from your current password.");
+
         user.PasswordHash = PasswordHasher.HashPassword(password: dto.NewPassword);
         user.UpdatedAt = DateTime.UtcNow;
 
