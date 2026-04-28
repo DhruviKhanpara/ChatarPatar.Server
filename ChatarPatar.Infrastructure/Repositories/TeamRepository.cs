@@ -12,10 +12,6 @@ internal class TeamRepository : BaseSoftDeleteRepository<Team>, ITeamRepository
     public IQueryable<Team> GetByIdInOrg(Guid teamId, Guid orgId) =>
         FindByCondition(t => t.Id == teamId && t.OrgId == orgId);
 
-    public IQueryable<Team> GetByIdWithIcon(Guid teamId, Guid orgId) =>
-        FindByCondition(t => t.Id == teamId && t.OrgId == orgId)
-            .Include(t => t.IconFile);
-
     public IQueryable<Team> GetTeamsQuery(Guid orgId, Guid callerId, bool callerIsOrgAdmin, string? search = null, bool? isArchived = null, bool includePrivate = true)
     {
         var query = FindByCondition(t => t.OrgId == orgId)

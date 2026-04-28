@@ -133,18 +133,7 @@ internal class OrganizationMemberService : IOrganizationMemberService
 
         await _repositories.UnitOfWork.SaveChangesAsync();
 
-        try
-        {
-            _permissionService.InvalidateUserPermissions(membership.UserId);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(
-                ex,
-                "Failed to invalidate permissions for user {UserId} after organization role change",
-                membership.UserId
-            );
-        }
+        TryInvalidatePermissions(membership.UserId, "Failed to invalidate permissions for user {UserId} after organization role change");
     }
 
     public async Task RemoveMemberAsync(Guid orgId, Guid membershipId)
@@ -153,7 +142,7 @@ internal class OrganizationMemberService : IOrganizationMemberService
         var authUserId = Guid.Parse(_httpContext.GetUserId());
 
         var membership = await _repositories.OrganizationMemberRepository
-            .GetByIdInOrg(id:membershipId, orgId:orgId)
+            .GetByIdInOrg(id: membershipId, orgId: orgId)
             .FirstOrDefaultAsync();
 
         if (membership is null)
@@ -169,19 +158,8 @@ internal class OrganizationMemberService : IOrganizationMemberService
         membership.IsDeleted = true;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
-        
-        try
-        {
-            _permissionService.InvalidateUserPermissions(membership.UserId);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(
-                ex,
-                "Error while invalidating permissions for user {UserId}",
-                membership.UserId
-            );
-        }
+
+        TryInvalidatePermissions(membership.UserId, "Error while invalidating permissions for user {UserId}");
     }
 
     public async Task TransferOrganizationOwnershipAsync(Guid orgId, Guid membershipId)
@@ -230,20 +208,8 @@ internal class OrganizationMemberService : IOrganizationMemberService
             throw;
         }
 
-        try
-        {
-            _permissionService.InvalidateUserPermissions(authUserMembership.UserId);
-            _permissionService.InvalidateUserPermissions(requestedMembership.UserId);
-        }
-        catch(Exception ex)
-        {
-            _logger.LogError(
-                ex,
-                "Error while invalidating permissions for users {AuthUserId} and {TargetUserId}",
-                authUserMembership.UserId,
-                requestedMembership.UserId
-            );
-        }
+        TryInvalidatePermissions(authUserMembership.UserId, "Error while invalidating permissions for user {UserId}");
+        TryInvalidatePermissions(requestedMembership.UserId, "Error while invalidating permissions for user {UserId}");
     }
 
     public async Task LeaveOrganizationAsync(Guid orgId)
@@ -264,18 +230,23 @@ internal class OrganizationMemberService : IOrganizationMemberService
         membership.IsDeleted = true;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
-        
+
+        TryInvalidatePermissions(membership.UserId, "Error while invalidating permissions for user {UserId}");
+    }
+
+    #region Private Section
+
+    private void TryInvalidatePermissions(Guid userId, string errorTemplate)
+    {
         try
         {
-            _permissionService.InvalidateUserPermissions(membership.UserId);
+            _permissionService.InvalidateUserPermissions(userId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(
-                ex,
-                "Error while invalidating permissions for user {UserId}",
-                membership.UserId
-            );
+            _logger.LogError(ex, errorTemplate, userId);
         }
     }
+
+    #endregion
 }

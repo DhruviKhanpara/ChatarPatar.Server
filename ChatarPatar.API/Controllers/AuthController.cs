@@ -91,7 +91,7 @@ public class AuthController : ControllerBase
     /// Step 1 — Request a password-reset OTP.
     /// </summary>
     [HttpPost("forgot-password")]
-    [Authorize]
+    [AllowAnonymous]
     [SkipPermission]
     public async Task<IActionResult> ForgotPassword(ForgotPasswordDto dto)
     {
@@ -103,7 +103,7 @@ public class AuthController : ControllerBase
     /// Step 2 — Verify the OTP and set a new password.
     /// </summary>
     [HttpPost("reset-password")]
-    [Authorize]
+    [AllowAnonymous]
     [SkipPermission]
     public async Task<IActionResult> ResetPassword(ResetPasswordDto dto)
     {
