@@ -10,11 +10,6 @@ public interface ITeamRepository : IBaseSoftDeleteRepository<Team>
     IQueryable<Team> GetByIdInOrg(Guid teamId, Guid orgId);
 
     /// <summary>
-    /// Returns a team with its icon file loaded.
-    /// </summary>
-    IQueryable<Team> GetByIdWithIcon(Guid teamId, Guid orgId);
-
-    /// <summary>
     /// Returns active (non-deleted) teams for an org.
     /// Caller controls whether archived teams are included.
     /// Optionally filters by name search term.

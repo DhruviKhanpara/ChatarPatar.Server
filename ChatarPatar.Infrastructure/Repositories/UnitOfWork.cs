@@ -25,6 +25,7 @@ internal class UnitOfWork : IUnitOfWork
     }
 
     // Holds audit log entries collected during SaveChangesWithoutAuditAsync calls.
+    // AND entries manually queued via QueueManualAuditLog (e.g. from ExecuteUpdate).
     // Flushed only after CommitAsync() succeeds via FlushPendingAuditLogs().
     private readonly List<AuditLogRequest> _pendingAuditLogs = new();
 
@@ -48,9 +49,11 @@ internal class UnitOfWork : IUnitOfWork
     }
 
     // ── Transactional path ────────────────────────────────────────────────────
-    // Use SaveChangesWithoutAuditAsync for each intermediate SaveChanges inside
-    // an explicit transaction, then call FlushPendingAuditLogs() after CommitAsync.
-    // This guarantees audit logs are never written for rolled-back transactions.
+    /// <summary>
+    /// Use SaveChangesWithoutAuditAsync for each intermediate SaveChanges inside
+    /// an explicit transaction, then call FlushPendingAuditLogs() after CommitAsync.
+    /// This guarantees audit logs are never written for rolled-back transactions.
+    /// </summary>
 
     public async Task<int> SaveChangesWithoutAuditAsync(CancellationToken cancellationToken = default)
     {
