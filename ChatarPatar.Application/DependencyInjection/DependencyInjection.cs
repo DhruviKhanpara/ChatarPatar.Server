@@ -28,6 +28,11 @@ public static class DependencyInjection
 
         // --- Validators ---
         services.AddValidatorsFromAssemblyContaining<UserLoginDtoValidator>();
+
+        // --- Mapper Profiles ---
+        services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+
+        // --- Validator Service ---
         services.AddScoped<IValidationService, ValidationService>();
 
         // --- Application services ---

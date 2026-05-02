@@ -47,10 +47,9 @@ public class OrganizationInviteController : ControllerBase
     /// <summary>
     /// Cancel the active organization invite.
     /// </summary>
-    [Authorize]
-    [RequirePermission(PermissionCheckLogicEnum.All, Permissions.ORG_INVITES_MANAGE)]
     [HttpDelete("{inviteId:guid}")]
-    public async Task<IActionResult> CancelInvite(Guid orgId, Guid inviteId)
+    [RequirePermission(PermissionCheckLogicEnum.All, Permissions.ORG_INVITES_MANAGE)]
+    public async Task<IActionResult> CancelInvite([FromRoute] Guid orgId, [FromRoute] Guid inviteId)
     {
         await _services.OrganizationInviteService.CancelInviteAsync(orgId, inviteId);
         return Ok("Invite canceled successfully");
