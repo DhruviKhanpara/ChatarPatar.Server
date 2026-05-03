@@ -1,9 +1,12 @@
 ﻿using ChatarPatar.API.Attributes;
+using ChatarPatar.API.Models;
 using ChatarPatar.Application.ServiceContracts;
+using ChatarPatar.Common.Consts;
 using ChatarPatar.Common.HttpUserDetails;
 using ChatarPatar.Common.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using System.Net;
 
 namespace ChatarPatar.API.ActionFilters;
 
@@ -43,15 +46,10 @@ public class PermissionFilter : IAsyncActionFilter
         // The developer forgot to annotate this endpoint.
         // Fail closed — return 403 so this is caught during development/review,
         // not silently left open in production.
-        context.Result = new ObjectResult(new
-        {
-            exceptionCode = "MissingPermissionAnnotation",
-            message = "This endpoint has no permission annotation. " +
-                      "Add [RequirePermission(...)] or [SkipPermission]."
-        })
-        {
-            StatusCode = StatusCodes.Status403Forbidden
-        };
+        context.Result = ApiResult(
+            HttpStatusCode.Forbidden,
+            ExceptionCodes.MISSING_PERMISSION_ANNOTATION,
+            "This endpoint has no permission annotation. Add [RequirePermission(...)] or [SkipPermission].");
     }
 
     #region Private section
@@ -63,7 +61,10 @@ public class PermissionFilter : IAsyncActionFilter
         // Must be authenticated — no JWT/cookie means no userId in claims
         if (!Guid.TryParse(httpContext.GetUserId(), out var userId))
         {
-            context.Result = new UnauthorizedResult();
+            context.Result = ApiResult(
+                HttpStatusCode.Unauthorized,
+                ExceptionCodes.AUTH_REQUIRED,
+                "Authentication is required to access this resource.");
             return;
         }
 
@@ -73,7 +74,10 @@ public class PermissionFilter : IAsyncActionFilter
         // At least one scope is required — org-scoped or conversation-scoped
         if (orgId == null && conversationId == null)
         {
-            context.Result = new BadRequestObjectResult("Missing or invalid orgId.");
+            context.Result = ApiResult(
+                HttpStatusCode.BadRequest,
+                ExceptionCodes.INVALID_DATA,
+                "Missing or invalid orgId.");
             return;
         }
 
@@ -93,7 +97,10 @@ public class PermissionFilter : IAsyncActionFilter
 
         if (!allowed)
         {
-            context.Result = new ForbidResult();
+            context.Result = ApiResult(
+                HttpStatusCode.Forbidden,
+                ExceptionCodes.FORBIDDEN,
+                "You do not have permission to perform this action.");
             return;
         }
 
@@ -115,6 +122,12 @@ public class PermissionFilter : IAsyncActionFilter
 
         return null;
     }
+
+    private static ObjectResult ApiResult(HttpStatusCode statusCode, string exceptionCode, string message) =>
+        new(new ApiResponse(statusCode, exceptionCode, result: null, statusMessage: message))
+        {
+            StatusCode = (int)statusCode
+        };
 
     #endregion
 }

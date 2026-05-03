@@ -1,5 +1,9 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿using ChatarPatar.API.Models;
+using ChatarPatar.Common.Consts;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json;
+using System.Net;
 using System.Security.Claims;
 using System.Text;
 
@@ -43,9 +47,56 @@ namespace ChatarPatar.API.Configuration
                         }
 
                         return Task.CompletedTask;
+                    },
+
+                    OnChallenge = async context =>
+                    {
+                        context.HandleResponse();
+
+                        string exceptionCode;
+                        string message;
+
+                        bool hasToken = !string.IsNullOrWhiteSpace(context.Request.Headers["Authorization"]) || context.Request.Cookies.ContainsKey("AccessToken");
+
+                        if (!hasToken)
+                        {
+                            exceptionCode = ExceptionCodes.AUTH_REQUIRED;
+                            message = "Authentication is required. Please provide a valid token.";
+                        }
+                        else if (context.AuthenticateFailure is SecurityTokenExpiredException)
+                        {
+                            exceptionCode = ExceptionCodes.TOKEN_EXPIRED;
+                            message = "Your session has expired. Please log in again.";
+                        }
+                        else
+                        {
+                            exceptionCode = ExceptionCodes.TOKEN_INVALID;
+                            message = "The provided token is invalid.";
+                        }
+
+                        await WriteApiResponseAsync(context.HttpContext, HttpStatusCode.Unauthorized, exceptionCode, message);
+                    },
+
+                    OnForbidden = async context =>
+                    {
+                        await WriteApiResponseAsync(context.HttpContext, HttpStatusCode.Forbidden, ExceptionCodes.FORBIDDEN, "You do not have permission to perform this action.");
                     }
                 };
             });
+        }
+
+        private static async Task WriteApiResponseAsync(HttpContext httpContext, HttpStatusCode statusCode, string exceptionCode, string message)
+        {
+            httpContext.Items["ExceptionCode"] = exceptionCode;
+            httpContext.Items["StatusMessage"] = message;
+
+            var response = new ApiResponse(statusCode, exceptionCode, result: null, statusMessage: message);
+            var json = JsonConvert.SerializeObject(response);
+
+            httpContext.Response.StatusCode = (int)statusCode;
+            httpContext.Response.ContentType = "application/json";
+
+            await httpContext.Response.WriteAsync(json);
         }
     }
 }
