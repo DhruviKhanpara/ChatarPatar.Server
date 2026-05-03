@@ -1,4 +1,5 @@
-﻿using FluentValidation.Results;
+﻿using ChatarPatar.Common.Consts;
+using FluentValidation.Results;
 
 namespace ChatarPatar.Common.AppExceptions.CustomExceptions;
 
@@ -6,8 +7,8 @@ public class ValidationAppException : AppException
 {
     public List<ValidationError> Errors { get; }
 
-    public ValidationAppException(IEnumerable<ValidationFailure> failures)
-        : base("Validation failed for one or more properties.")
+    public ValidationAppException(IEnumerable<ValidationFailure> failures, string? exceptionCode = null)
+        : base("Validation failed for one or more properties.", exceptionCode: exceptionCode ?? ExceptionCodes.VALIDATION_FAILED)
     {
         Errors = failures.Select(err => new ValidationError(err.PropertyName, err.ErrorMessage)).ToList();
     }

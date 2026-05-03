@@ -1027,6 +1027,8 @@ BEGIN
         UsedAt          DATETIME2                   DEFAULT NULL,
         UsedBy          UNIQUEIDENTIFIER            DEFAULT NULL,
 
+        FailedAttempts  INT               NOT NULL  DEFAULT 0,
+
         ExpiresAt       DATETIME2         NOT NULL,
         CreatedAt       DATETIME2         NOT NULL  DEFAULT SYSUTCDATETIME(),
         UpdatedAt       DATETIME2         NOT NULL  DEFAULT SYSUTCDATETIME(),
@@ -1053,7 +1055,10 @@ BEGIN
             CHECK (
                 (IsUsed = 0 AND UsedAt IS NULL  AND UsedBy IS NULL) OR
                 (IsUsed = 1 AND UsedAt IS NOT NULL AND UsedBy IS NOT NULL)
-            )
+            ),
+
+        CONSTRAINT [CK_OrgInvites_FailedAttempts]
+            CHECK ([FailedAttempts] >= 0)
     );
 
     CREATE INDEX IX_OrgInvites_OrgId
@@ -1182,15 +1187,16 @@ IF NOT EXISTS (
 BEGIN
     CREATE TABLE OtpVerifications
     (
-        Id        UNIQUEIDENTIFIER    DEFAULT (NEWSEQUENTIALID())     NOT NULL,
-        UserId    UNIQUEIDENTIFIER                                    NOT NULL,
-        OtpHash   NVARCHAR(512)                                       NOT NULL,
-        Purpose   NVARCHAR(50)                                        NOT NULL,
-        ExpiresAt DATETIME2                                           NOT NULL,
-        IsUsed    BIT                 DEFAULT (0)                     NOT NULL,
-        UsedAt    DATETIME2                                           NULL,
-        IPAddress NVARCHAR(64)                                        NULL,
-        CreatedAt DATETIME2           DEFAULT (SYSUTCDATETIME())      NOT NULL,
+        Id                UNIQUEIDENTIFIER    DEFAULT (NEWSEQUENTIALID())     NOT NULL,
+        UserId            UNIQUEIDENTIFIER                                    NOT NULL,
+        OtpHash           NVARCHAR(512)                                       NOT NULL,
+        Purpose           NVARCHAR(50)                                        NOT NULL,
+        ExpiresAt         DATETIME2                                           NOT NULL,
+        IsUsed            BIT                 DEFAULT (0)                     NOT NULL,
+        UsedAt            DATETIME2                                           NULL,
+        FailedAttempts    INT                 DEFAULT (0)                     NOT NULL,
+        IPAddress         NVARCHAR(64)                                        NULL,
+        CreatedAt         DATETIME2           DEFAULT (SYSUTCDATETIME())      NOT NULL,
  
 
         CONSTRAINT [PK_OtpVerifications] PRIMARY KEY CLUSTERED ([Id] ASC),
@@ -1208,7 +1214,10 @@ BEGIN
                 ([IsUsed] = 0 AND [UsedAt] IS NULL)
                 OR
                 ([IsUsed] = 1 AND [UsedAt] IS NOT NULL)
-            )
+            ),
+        
+        CONSTRAINT [CK_OtpVerifications_FailedAttempts]
+            CHECK ([FailedAttempts] >= 0)
     );
  
     -- find active OTP for a user + purpose

@@ -1,4 +1,8 @@
-﻿using ChatarPatar.Common.AppExceptions.CustomExceptions;
+﻿using ChatarPatar.API.Models;
+using ChatarPatar.Common.AppExceptions.CustomExceptions;
+using ChatarPatar.Common.Consts;
+using Newtonsoft.Json;
+using System.Net;
 
 namespace ChatarPatar.API.Middlewares;
 
@@ -33,31 +37,16 @@ public class ExceptionHandlingMiddleware
             }
             else
             {
-                _logger.LogError(
-                    ex,
-                    "An exception was thrown: {ExcetionMessage}",
-                    ex.Message
-                );
+                _logger.LogError(ex, "An exception was thrown: {ExcetionMessage}", ex.Message);
             }
 
-            string exceptionMessage = !string.IsNullOrEmpty(ex.UserFriendlyMessage) ? ex.UserFriendlyMessage : ex.Message;
+            var (statusCode, exceptionCode) = MapException(ex);
 
-            httpContext.Response.ContentType = "application/json";
-            httpContext.Response.StatusCode = ex switch
-            {
-                InvalidDataAppException or
-                ValidationAppException => StatusCodes.Status400BadRequest,
-                NotFoundAppException => StatusCodes.Status404NotFound,
-                DuplicateEntryAppException => StatusCodes.Status409Conflict,
-                _ => StatusCodes.Status500InternalServerError
-            };
+            string exceptionMessage = !string.IsNullOrEmpty(ex.UserFriendlyMessage) 
+                ? ex.UserFriendlyMessage 
+                : ex.Message;
 
-            httpContext.Items.Add("StatusMessage", exceptionMessage);
-            httpContext.Items["ExceptionCode"] = ex.GetType().Name;
-
-            var errorPayload = new { exceptionCode = ex.GetType().Name, message = ex.UserFriendlyMessage ?? ex.Message };
-
-            await httpContext.Response.WriteAsJsonAsync(errorPayload);
+            await WriteApiResponseAsync(httpContext, statusCode, exceptionCode, exceptionMessage);
         }
         catch (Exception ex)
         {
@@ -69,14 +58,52 @@ public class ExceptionHandlingMiddleware
 
             string exceptionMessage = "Something went wrong. Please try again later.";
 
-            httpContext.Response.HttpContext.Items.Add("StatusMessage", exceptionMessage);
+            httpContext.Items["StatusMessage"] = exceptionMessage;
+            httpContext.Items["ExceptionCode"] = ExceptionCodes.UNHANDLED_EXCEPTION;
 
             httpContext.Response.ContentType = "application/json";
             httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
 
-            var errorPayload = new { exceptionCode = "UnhandledException", message = "Something went wrong. Please try again later." };
-
+            var errorPayload = new { exceptionCode = ExceptionCodes.UNHANDLED_EXCEPTION, message = exceptionMessage };
             await httpContext.Response.WriteAsJsonAsync(errorPayload);
         }
     }
+
+    #region Private Section
+
+    private static async Task WriteApiResponseAsync(HttpContext httpContext, HttpStatusCode statusCode, string exceptionCode, string message)
+    {
+        httpContext.Items["ExceptionCode"] = exceptionCode;
+        httpContext.Items["StatusMessage"] = message;
+
+        var response = new ApiResponse(statusCode, exceptionCode, result: null, statusMessage: message);
+        var json = JsonConvert.SerializeObject(response);
+
+        httpContext.Response.StatusCode = (int)statusCode;
+        httpContext.Response.ContentType = "application/json";
+
+        await httpContext.Response.WriteAsync(json);
+    }
+
+    private static (HttpStatusCode statusCode, string exceptionCode) MapException(AppException ex)
+    {
+        var (statusCode, defaultCode) = ex switch
+        {
+            ValidationAppException => (HttpStatusCode.BadRequest, ExceptionCodes.VALIDATION_FAILED),
+            InvalidDataAppException => (HttpStatusCode.BadRequest, ExceptionCodes.INVALID_DATA),
+            NotFoundAppException => (HttpStatusCode.NotFound, ExceptionCodes.RESOURCE_NOT_FOUND),
+            DuplicateEntryAppException => (HttpStatusCode.Conflict, ExceptionCodes.DUPLICATE_RESOURCE),
+            UnauthorizedAppException => (HttpStatusCode.Unauthorized, ExceptionCodes.AUTH_REQUIRED),
+            ForbiddenAppException => (HttpStatusCode.Forbidden, ExceptionCodes.FORBIDDEN),
+            _ => (HttpStatusCode.InternalServerError, ex.GetType().Name),
+        };
+
+        // Caller-supplied ExceptionCode always wins over the type-level default.
+        // e.g. throw new InvalidDataAppException("...", ExceptionCodes.INVITE_TOKEN_EXPIRED)
+        var resolvedCode = !string.IsNullOrEmpty(ex.ExceptionCode) ? ex.ExceptionCode : defaultCode;
+
+        return (statusCode, resolvedCode);
+    }
+
+    #endregion
 }

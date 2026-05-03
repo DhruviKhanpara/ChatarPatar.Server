@@ -5,6 +5,7 @@ using ChatarPatar.Application.DTOs.User;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Application.ServiceContracts.Notification;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
+using ChatarPatar.Common.Consts;
 using ChatarPatar.Common.Enums;
 using ChatarPatar.Common.Helpers;
 using ChatarPatar.Common.HttpUserDetails;
@@ -58,7 +59,7 @@ internal class UserService : IUserService
         var existUser = await _repositories.UserRepository.GetUserByIdentifierAsync(email: identifier, username: identifier);
 
         if (existUser is null || !PasswordHasher.VerifyPassword(hashedPassword: existUser.PasswordHash, providedPassword: user.Password))
-            throw new InvalidDataAppException("Credentials");
+            throw new UnauthorizedAppException("Invalid Credentials", ExceptionCodes.INVALID_CREDENTIALS);
 
         var strategy = GetTokenStrategy();
         return await AuthenticateUser(strategy, existUser);
@@ -127,7 +128,7 @@ internal class UserService : IUserService
             }
 
             if (invite.Email != email)
-                throw new InvalidDataAppException("Invite token is invalid or has expired");
+                throw new ForbiddenAppException("The Invite was sent to other email.");
 
             var membershipEntity = new OrganizationMember
             {
@@ -179,18 +180,18 @@ internal class UserService : IUserService
         var refreshToken = strategy.GetRefreshToken();
 
         if (string.IsNullOrWhiteSpace(refreshToken))
-            throw new NotFoundAppException("Refresh token");
+            throw new UnauthorizedAppException("Invalid refresh token", ExceptionCodes.REFRESH_TOKEN_INVALID);
 
         var tokenHash = _tokenService.HashToken(refreshToken);
         var storedToken = await _repositories.RefreshTokenRepository.FindActiveRefreshToken(token: tokenHash).AsNoTracking().FirstOrDefaultAsync();
 
         if (storedToken == null)
-            throw new InvalidDataAppException("Refresh token");
+            throw new UnauthorizedAppException("Invalid refresh token", ExceptionCodes.REFRESH_TOKEN_INVALID);
 
         var user = await _repositories.UserRepository.GetById(storedToken.UserId).FirstOrDefaultAsync();
 
         if (user == null)
-            throw new NotFoundAppException("User");
+            throw new UnauthorizedAppException("Invalid refresh token", ExceptionCodes.REFRESH_TOKEN_INVALID);
 
         return await AuthenticateUser(strategy, user, storedToken);
     }
@@ -324,7 +325,7 @@ internal class UserService : IUserService
         var otpEntity = await VerifyOtpAsync(userId: user.Id, OtpPurposeEnum.PasswordReset, dto.Otp);
 
         if (PasswordHasher.VerifyPassword(hashedPassword: user.PasswordHash, providedPassword: dto.NewPassword))
-            throw new InvalidDataAppException("New password must be different from your current password.");
+            throw new InvalidDataAppException("New password must be different from your current password.", ExceptionCodes.PASSWORD_SAME_AS_CURRENT);
 
         user.PasswordHash = PasswordHasher.HashPassword(dto.NewPassword);
 
@@ -454,10 +455,10 @@ internal class UserService : IUserService
 
         var isValid = PasswordHasher.VerifyPassword(hashedPassword: user.PasswordHash, providedPassword: dto.CurrentPassword);
         if (!isValid)
-            throw new InvalidDataAppException("Current password is incorrect");
+            throw new UnauthorizedAppException("Current password is incorrect", ExceptionCodes.INVALID_CREDENTIALS);
 
         if (PasswordHasher.VerifyPassword(hashedPassword: user.PasswordHash, providedPassword: dto.NewPassword))
-            throw new InvalidDataAppException("New password must be different from your current password.");
+            throw new InvalidDataAppException("New password must be different from your current password.", ExceptionCodes.PASSWORD_SAME_AS_CURRENT);
 
         user.PasswordHash = PasswordHasher.HashPassword(password: dto.NewPassword);
         user.UpdatedAt = DateTime.UtcNow;
