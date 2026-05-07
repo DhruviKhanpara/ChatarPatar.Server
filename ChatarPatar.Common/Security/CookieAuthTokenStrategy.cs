@@ -57,7 +57,7 @@ public class CookieAuthTokenStrategy : IAuthTokenStrategy
         HttpOnly = true,
         Secure = true,
         SameSite = SameSiteMode.None,
-        Path = "/api/auth",
+        Path = "/api/v1/auth",
         IsEssential = true,
         MaxAge = TimeSpan.FromDays(_tokenSettings.RefreshTokenExpirationDays)
     };
