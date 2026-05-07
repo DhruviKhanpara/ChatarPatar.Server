@@ -3,6 +3,16 @@
 public class TokenSettings
 {
     /// <summary>
+    /// The cookie/header name for access token
+    /// </summary>
+    public string AccessTokenName { get; set; } = null!;
+
+    /// <summary>
+    /// The cookie/header name for refresh token.
+    /// </summary>
+    public string RefreshTokenName { get; set; } = null!;
+
+    /// <summary>
     /// The secret key for create the access token.
     /// </summary>
     public string SecretKey { get; set; } = null!;

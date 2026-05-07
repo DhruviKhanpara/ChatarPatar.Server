@@ -6,6 +6,7 @@ using ChatarPatar.Common.HttpUserDetails;
 using ChatarPatar.Common.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Newtonsoft.Json;
 using System.Net;
 
 namespace ChatarPatar.API.ActionFilters;
@@ -46,10 +47,13 @@ public class PermissionFilter : IAsyncActionFilter
         // The developer forgot to annotate this endpoint.
         // Fail closed — return 403 so this is caught during development/review,
         // not silently left open in production.
-        context.Result = ApiResult(
+        await WriteResponseAsync(
+            context.HttpContext,
             HttpStatusCode.Forbidden,
             ExceptionCodes.MISSING_PERMISSION_ANNOTATION,
             "This endpoint has no permission annotation. Add [RequirePermission(...)] or [SkipPermission].");
+
+        context.Result = new EmptyResult();
     }
 
     #region Private section
@@ -61,10 +65,12 @@ public class PermissionFilter : IAsyncActionFilter
         // Must be authenticated — no JWT/cookie means no userId in claims
         if (!Guid.TryParse(httpContext.GetUserId(), out var userId))
         {
-            context.Result = ApiResult(
+            await WriteResponseAsync(
+                httpContext,
                 HttpStatusCode.Unauthorized,
                 ExceptionCodes.AUTH_REQUIRED,
                 "Authentication is required to access this resource.");
+            context.Result = new EmptyResult();
             return;
         }
 
@@ -74,10 +80,12 @@ public class PermissionFilter : IAsyncActionFilter
         // At least one scope is required — org-scoped or conversation-scoped
         if (orgId == null && conversationId == null)
         {
-            context.Result = ApiResult(
+            await WriteResponseAsync(
+                httpContext,
                 HttpStatusCode.BadRequest,
                 ExceptionCodes.INVALID_DATA,
                 "Missing or invalid orgId.");
+            context.Result = new EmptyResult();
             return;
         }
 
@@ -97,10 +105,12 @@ public class PermissionFilter : IAsyncActionFilter
 
         if (!allowed)
         {
-            context.Result = ApiResult(
+            await WriteResponseAsync(
+                httpContext,
                 HttpStatusCode.Forbidden,
                 ExceptionCodes.FORBIDDEN,
                 "You do not have permission to perform this action.");
+            context.Result = new EmptyResult();
             return;
         }
 
@@ -123,11 +133,20 @@ public class PermissionFilter : IAsyncActionFilter
         return null;
     }
 
-    private static ObjectResult ApiResult(HttpStatusCode statusCode, string exceptionCode, string message) =>
-        new(new ApiResponse(statusCode, exceptionCode, result: null, statusMessage: message))
-        {
-            StatusCode = (int)statusCode
-        };
+    // Mirrors ExceptionHandlingMiddleware.WriteApiResponseAsync
+    private static async Task WriteResponseAsync(HttpContext httpContext, HttpStatusCode statusCode, string exceptionCode, string message)
+    {
+        httpContext.Items["ExceptionCode"] = exceptionCode;
+        httpContext.Items["StatusMessage"] = message;
+
+        var response = new ApiResponse(statusCode, exceptionCode, result: null, statusMessage: message);
+        var json = JsonConvert.SerializeObject(response);
+
+        httpContext.Response.StatusCode = (int)statusCode;
+        httpContext.Response.ContentType = "application/json";
+
+        await httpContext.Response.WriteAsync(json);
+    }
 
     #endregion
 }

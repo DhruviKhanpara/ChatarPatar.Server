@@ -7,9 +7,6 @@ namespace ChatarPatar.Common.Security;
 
 public class CookieAuthTokenStrategy : IAuthTokenStrategy
 {
-    private const string AccessTokenCookie = "AccessToken";
-    private const string RefreshTokenCookie = "RefreshToken";
-
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly TokenSettings _tokenSettings;
 
@@ -23,25 +20,25 @@ public class CookieAuthTokenStrategy : IAuthTokenStrategy
 
     public string? SetAccessToken(string token)
     {
-        HttpContext.Response.Cookies.Append(AccessTokenCookie, token, BuildAccessCookieOptions());
+        HttpContext.Response.Cookies.Append(_tokenSettings.AccessTokenName, token, BuildAccessCookieOptions());
         return null;
     }
 
     public string? SetRefreshToken(string token)
     {
-        HttpContext.Response.Cookies.Append(RefreshTokenCookie, token, BuildRefreshCookieOptions());
+        HttpContext.Response.Cookies.Append(_tokenSettings.RefreshTokenName, token, BuildRefreshCookieOptions());
         return null;
     }
 
     public void ClearTokens()
     {
-        HttpContext.Response.Cookies.Delete(AccessTokenCookie, new CookieOptions { Path = "/" });
-        HttpContext.Response.Cookies.Delete(RefreshTokenCookie, new CookieOptions { Path = "/api/Auth" });
+        HttpContext.Response.Cookies.Delete(_tokenSettings.AccessTokenName, BuildAccessCookieOptions());
+        HttpContext.Response.Cookies.Delete(_tokenSettings.RefreshTokenName, BuildRefreshCookieOptions());
     }
 
     public string? GetRefreshToken()
     {
-        HttpContext.Request.Cookies.TryGetValue(RefreshTokenCookie, out var token);
+        HttpContext.Request.Cookies.TryGetValue(_tokenSettings.RefreshTokenName, out var token);
         return token;
     }
 
@@ -60,7 +57,7 @@ public class CookieAuthTokenStrategy : IAuthTokenStrategy
         HttpOnly = true,
         Secure = true,
         SameSite = SameSiteMode.None,
-        Path = "/api/Auth",
+        Path = "/api/auth",
         IsEssential = true,
         MaxAge = TimeSpan.FromDays(_tokenSettings.RefreshTokenExpirationDays)
     };

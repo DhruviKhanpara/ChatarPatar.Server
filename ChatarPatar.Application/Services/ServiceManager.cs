@@ -14,6 +14,7 @@ internal sealed class ServiceManager : IServiceManager
 
     private T Get<T>() where T : class => _provider.GetRequiredService<T>();
 
+    public IAuthService AuthService => Get<IAuthService>();
     public IUserService UserService => Get<IUserService>();
     public IOrganizationService OrganizationService => Get<IOrganizationService>();
     public IOrganizationInviteService OrganizationInviteService => Get<IOrganizationInviteService>();

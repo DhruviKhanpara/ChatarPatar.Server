@@ -37,13 +37,13 @@ public class ExceptionHandlingMiddleware
             }
             else
             {
-                _logger.LogError(ex, "An exception was thrown: {ExcetionMessage}", ex.Message);
+                _logger.LogError(ex, "An exception was thrown: {ExceptionMessage}", ex.Message);
             }
 
             var (statusCode, exceptionCode) = MapException(ex);
 
-            string exceptionMessage = !string.IsNullOrEmpty(ex.UserFriendlyMessage) 
-                ? ex.UserFriendlyMessage 
+            string exceptionMessage = !string.IsNullOrEmpty(ex.UserFriendlyMessage)
+                ? ex.UserFriendlyMessage
                 : ex.Message;
 
             await WriteApiResponseAsync(httpContext, statusCode, exceptionCode, exceptionMessage);
@@ -52,20 +52,13 @@ public class ExceptionHandlingMiddleware
         {
             _logger.LogError(
                     ex,
-                    "An exception was thrown: {ExcetionMessage}",
+                    "An exception was thrown: {ExceptionMessage}",
                     ex.Message
             );
 
             string exceptionMessage = "Something went wrong. Please try again later.";
 
-            httpContext.Items["StatusMessage"] = exceptionMessage;
-            httpContext.Items["ExceptionCode"] = ExceptionCodes.UNHANDLED_EXCEPTION;
-
-            httpContext.Response.ContentType = "application/json";
-            httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
-
-            var errorPayload = new { exceptionCode = ExceptionCodes.UNHANDLED_EXCEPTION, message = exceptionMessage };
-            await httpContext.Response.WriteAsJsonAsync(errorPayload);
+            await WriteApiResponseAsync(httpContext, HttpStatusCode.InternalServerError, ExceptionCodes.UNHANDLED_EXCEPTION, exceptionMessage);
         }
     }
 

@@ -1,4 +1,5 @@
-﻿using ChatarPatar.API.Attributes;
+﻿using Asp.Versioning;
+using ChatarPatar.API.Attributes;
 using ChatarPatar.Application.DTOs.OrganizationMember;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Common.Consts;
@@ -9,8 +10,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ChatarPatar.API.Controllers;
 
-[Route("api/orgs/{orgId:guid}/members")]
 [ApiController]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/orgs/{orgId:guid}/members")]
 [Authorize]
 public class OrganizationMemberController : ControllerBase
 {

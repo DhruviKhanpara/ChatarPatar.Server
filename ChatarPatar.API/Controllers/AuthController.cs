@@ -1,4 +1,5 @@
-﻿using ChatarPatar.API.Attributes;
+﻿using Asp.Versioning;
+using ChatarPatar.API.Attributes;
 using ChatarPatar.Application.DTOs.User;
 using ChatarPatar.Application.ServiceContracts;
 using Microsoft.AspNetCore.Authorization;
@@ -7,7 +8,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace ChatarPatar.API.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/[controller]")]
 public class AuthController : ControllerBase
 {
     private readonly IServiceManager _services;
@@ -22,7 +24,7 @@ public class AuthController : ControllerBase
     [SkipPermission]
     public async Task<ActionResult<LoginResponseDto>> Login(UserLoginDto login)
     {
-        var authUser = await _services.UserService.LoginUserAsync(login);
+        var authUser = await _services.AuthService.LoginUserAsync(login);
         return Ok(authUser);
     }
 
@@ -31,16 +33,16 @@ public class AuthController : ControllerBase
     [SkipPermission]
     public async Task<ActionResult<LoginResponseDto>> Register(UserRegisterDto user)
     {
-        var authUser = await _services.UserService.RegisterUserAsync(user);
+        var authUser = await _services.AuthService.RegisterUserAsync(user);
         return Ok(authUser);
     }
 
-    [HttpPost("refresh-token")]
+    [HttpPost("refresh")]
     [AllowAnonymous]
     [SkipPermission]
     public async Task<IActionResult> RefreshToken()
     {
-        var authUser = await _services.UserService.RefreshAuthToken();
+        var authUser = await _services.AuthService.RefreshAuthToken();
         return Ok(authUser);
     }
 
@@ -49,7 +51,7 @@ public class AuthController : ControllerBase
     [SkipPermission]
     public async Task<IActionResult> Logout()
     {
-        await _services.UserService.LogoutUser();
+        await _services.AuthService.LogoutUser();
         return Ok();
     }
 
@@ -58,7 +60,7 @@ public class AuthController : ControllerBase
     [SkipPermission]
     public async Task<IActionResult> LogoutAllSessions()
     {
-        await _services.UserService.LogoutAllUserSessions();
+        await _services.AuthService.LogoutAllUserSessions();
         return Ok("Revoked all session successfully.");
     }
 
@@ -71,7 +73,7 @@ public class AuthController : ControllerBase
     [SkipPermission]
     public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailDto dto)
     {
-        await _services.UserService.VerifyEmailAsync(dto);
+        await _services.AuthService.VerifyEmailAsync(dto);
         return Ok("Email verified successfully.");
     }
 
@@ -83,7 +85,7 @@ public class AuthController : ControllerBase
     [SkipPermission]
     public async Task<IActionResult> ResendVerification()
     {
-        await _services.UserService.ResendVerificationOtpAsync();
+        await _services.AuthService.ResendVerificationOtpAsync();
         return Ok("If your email is unverified, a new OTP has been sent.");
     }
 
@@ -95,7 +97,7 @@ public class AuthController : ControllerBase
     [SkipPermission]
     public async Task<IActionResult> ForgotPassword(ForgotPasswordDto dto)
     {
-        await _services.UserService.ForgotPasswordAsync(dto);
+        await _services.AuthService.ForgotPasswordAsync(dto);
         return Ok("You will receive an OTP shortly on the email.");
     }
 
@@ -107,7 +109,7 @@ public class AuthController : ControllerBase
     [SkipPermission]
     public async Task<IActionResult> ResetPassword(ResetPasswordDto dto)
     {
-        await _services.UserService.ResetPasswordAsync(dto);
+        await _services.AuthService.ResetPasswordAsync(dto);
         return Ok("Password reset successfully. Please login with your new password.");
     }
 }
