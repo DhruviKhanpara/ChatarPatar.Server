@@ -36,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<IValidationService, ValidationService>();
 
         // --- Application services ---
+        services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IOrganizationService, OrganizationService>();
         services.AddScoped<IOrganizationInviteService, OrganizationInviteService>();

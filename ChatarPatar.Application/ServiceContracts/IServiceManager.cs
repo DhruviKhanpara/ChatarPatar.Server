@@ -2,6 +2,7 @@
 
 public interface IServiceManager
 {
+    IAuthService AuthService { get; }
     IUserService UserService { get; }
     IOrganizationService OrganizationService { get; }
     IOrganizationInviteService OrganizationInviteService { get; }

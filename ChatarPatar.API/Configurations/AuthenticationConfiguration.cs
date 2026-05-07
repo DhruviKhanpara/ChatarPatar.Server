@@ -13,6 +13,8 @@ namespace ChatarPatar.API.Configuration
     {
         public static void AddAuthenticationConfiguration(this IServiceCollection services, IConfiguration configuration)
           {
+            var accessTokenName = configuration.GetSection("TokenSettings:AccessTokenName").Value!;
+
             services.AddAuthentication(option =>
             {
                 option.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -42,7 +44,7 @@ namespace ChatarPatar.API.Configuration
                     {
                         if (string.IsNullOrWhiteSpace(context.Token))
                         {
-                            context.Request.Cookies.TryGetValue("AccessToken", out var token);
+                            context.Request.Cookies.TryGetValue(accessTokenName, out var token);
                             context.Token = token;
                         }
 
@@ -56,7 +58,7 @@ namespace ChatarPatar.API.Configuration
                         string exceptionCode;
                         string message;
 
-                        bool hasToken = !string.IsNullOrWhiteSpace(context.Request.Headers["Authorization"]) || context.Request.Cookies.ContainsKey("AccessToken");
+                        bool hasToken = !string.IsNullOrWhiteSpace(context.Request.Headers["Authorization"]) || context.Request.Cookies.ContainsKey(accessTokenName);
 
                         if (!hasToken)
                         {
