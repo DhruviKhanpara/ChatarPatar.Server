@@ -21,16 +21,16 @@
                                  return true;
 
                              // Lovable preview domains
-                             if (origin.EndsWith(".lovable.app",
-                                 StringComparison.OrdinalIgnoreCase))
-                                 return true;
+                             //if (origin.EndsWith(".lovable.app",
+                             //    StringComparison.OrdinalIgnoreCase))
+                             //    return true;
 
                              // ngrok domains
-                             if (origin.Contains("ngrok-free.app",
-                                 StringComparison.OrdinalIgnoreCase) ||
-                                 origin.Contains("ngrok-free.dev",
-                                 StringComparison.OrdinalIgnoreCase))
-                                 return true;
+                             //if (origin.Contains("ngrok-free.app",
+                             //    StringComparison.OrdinalIgnoreCase) ||
+                             //    origin.Contains("ngrok-free.dev",
+                             //    StringComparison.OrdinalIgnoreCase))
+                             //    return true;
 
                              return false;
                          })

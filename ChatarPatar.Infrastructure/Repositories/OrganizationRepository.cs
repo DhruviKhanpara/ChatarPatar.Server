@@ -12,12 +12,12 @@ internal class OrganizationRepository : BaseSoftDeleteRepository<Organization>, 
     public IQueryable<Organization> GetById(Guid id) => 
         FindByCondition(x => x.Id == id);
 
-    public async Task<bool> SlugExistsAsync(string slug, Guid? excludeTeamId = null)
+    public async Task<bool> SlugExistsAsync(string slug, Guid? excludeOrgId = null)
     {
         var query = FindByCondition(x => x.Slug == slug);
 
-        if (excludeTeamId.HasValue)
-            query = query.Where(t => t.Id != excludeTeamId.Value);
+        if (excludeOrgId.HasValue)
+            query = query.Where(t => t.Id != excludeOrgId.Value);
 
         return await query.AnyAsync();
     }
