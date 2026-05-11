@@ -214,6 +214,7 @@ internal class OrganizationMemberService : IOrganizationMemberService
 
     public async Task LeaveOrganizationAsync(Guid orgId)
     {
+        // TODO: Remove Team, Channel membership too
         var authUserId = Guid.Parse(_httpContext.GetUserId());
 
         var membership = await _repositories.OrganizationMemberRepository

@@ -72,7 +72,7 @@ public class UserController : ControllerBase
     [SkipPermission]
     public async Task<IActionResult> UpdateMyAvatar([FromForm] ImageUploadDto dto)
     {
-        await _services.UserService.UpdateAvatarAsync(dto: dto);
+        await _services.UserService.UpdateUserAvatarAsync(dto: dto);
         return Ok("Update avatar successfully.");
     }
 
@@ -85,5 +85,16 @@ public class UserController : ControllerBase
     {
         await _services.UserService.ChangePasswordAsync(dto);
         return Ok("Password change successfully.");
+    }
+
+    /// <summary>
+    /// Remove the user avatar.
+    /// </summary>
+    [HttpDelete("me/avatar")]
+    [SkipPermission]
+    public async Task<IActionResult> RemoveMyAvatar()
+    {
+        await _services.UserService.RemoveUserAvatarAsync();
+        return Ok("User avatar removed successfully");
     }
 }

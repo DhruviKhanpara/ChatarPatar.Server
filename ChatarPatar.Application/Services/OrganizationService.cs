@@ -7,6 +7,7 @@ using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.Enums;
 using ChatarPatar.Common.Helpers;
 using ChatarPatar.Common.HttpUserDetails;
+using ChatarPatar.Common.Models;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.ExternalServiceContracts;
 using ChatarPatar.Infrastructure.RepositoryContracts;
@@ -76,9 +77,9 @@ internal class OrganizationService : IOrganizationService
         await _validationService.ValidateAsync<CreateOrganizationDto>(dto);
 
         var authUserId = Guid.Parse(_httpContext.GetUserId());
-        var slug = dto.Slug.Trim();
+        dto.Slug = dto.Slug.ToLowerInvariant();
 
-        var slugExists = await _repositories.OrganizationRepository.SlugExistsAsync(slug: slug);
+        var slugExists = await _repositories.OrganizationRepository.SlugExistsAsync(slug: dto.Slug);
 
         if (slugExists)
             throw new DuplicateEntryAppException("Organization slug is already taken");
@@ -101,43 +102,62 @@ internal class OrganizationService : IOrganizationService
         await _validationService.ValidateAsync<ImageUploadDto>(dto);
 
         var userId = Guid.Parse(_httpContext.GetUserId());
-
         var fileType = dto.File.ValidateFile(FileUsageContextEnum.Org_Logo);
 
         var org = await _repositories.OrganizationRepository.GetById(orgId).FirstOrDefaultAsync();
-
         if (org == null)
             throw new NotFoundAppException("Organization");
 
-        if (org.LogoFileId != null)
+        FileUploadResult? uploadResult = null;
+        await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
+        try
         {
-            var orgLogoFile = await _repositories.FileRepository.GetByIdAsync((Guid)org.LogoFileId).FirstOrDefaultAsync();
+            if (org.LogoFileId != null)
+            {
+                var orgLogoFile = await _repositories.FileRepository.GetByIdAsync((Guid)org.LogoFileId).FirstOrDefaultAsync();
 
-            if (orgLogoFile != null)
-                orgLogoFile.IsDeleted = true;
+                if (orgLogoFile != null)
+                    orgLogoFile.IsDeleted = true;
+            }
+
+            var publicId = CloudinaryPublicId.OrgLogo(org.Id);
+            uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(dto.File, CloudinaryPath.Organization(orgId).Profile(), publicId);
+
+            org.LogoFile = new FileEntity()
+            {
+                UploadedByUserId = userId,
+                OrgId = org.Id,
+                UsageContext = FileUsageContextEnum.Org_Logo,
+
+                PublicId = uploadResult.PublicId,
+                Url = uploadResult.Url,
+                ThumbnailUrl = uploadResult.ThumbnailUrl,
+
+                SizeInBytes = dto.File.Length,
+                OriginalName = dto.File.FileName,
+                MimeType = dto.File.ContentType,
+                FileType = fileType,
+            };
+
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+            await tx.CommitAsync();
+            _repositories.UnitOfWork.FlushPendingAuditLogs();
         }
-
-        var publicId = CloudinaryPublicId.OrgLogo(org.Id);
-
-        var uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(dto.File, CloudinaryPath.Organization(orgId).Profile(), publicId);
-
-        org.LogoFile = new FileEntity()
+        catch
         {
-            UploadedByUserId = userId,
-            OrgId = org.Id,
-            UsageContext = FileUsageContextEnum.Org_Logo,
+            await tx.RollbackAsync();
 
-            PublicId = uploadResult.PublicId,
-            Url = uploadResult.Url,
-            ThumbnailUrl = uploadResult.ThumbnailUrl,
+            if (uploadResult != null)
+            {
+                try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(uploadResult.PublicId); }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to delete org logo from Cloudinary. PublicId: {PublicId}", uploadResult.PublicId);
+                }
+            }
 
-            SizeInBytes = dto.File.Length,
-            OriginalName = dto.File.FileName,
-            MimeType = dto.File.ContentType,
-            FileType = fileType,
-        };
-
-        await _repositories.UnitOfWork.SaveChangesAsync();
+            throw;
+        }
     }
 
     public async Task UpdateOrganizationAsync(Guid orgId, UpdateOrganizationDto dto)
@@ -176,19 +196,34 @@ internal class OrganizationService : IOrganizationService
         if (org.LogoFileId == null)
             return;
 
-        if (org.LogoFile != null)
-            org.LogoFile.IsDeleted = true;
-
-        org.LogoFileId = null;
-
-        await _repositories.UnitOfWork.SaveChangesAsync();
-
-        if(org.LogoFile != null)
+        string? oldPublicId = null;
+        await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
+        try
         {
-            try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(org.LogoFile.PublicId); }
+            if (org.LogoFile != null)
+            {
+                oldPublicId = org.LogoFile.PublicId;
+                org.LogoFile.IsDeleted = true;
+            }
+
+            org.LogoFileId = null;
+
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+            await tx.CommitAsync();
+            _repositories.UnitOfWork.FlushPendingAuditLogs();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+
+        if(oldPublicId != null)
+        {
+            try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(oldPublicId); }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to delete org logo from Cloudinary. PublicId: {PublicId}", org.LogoFile.PublicId);
+                _logger.LogWarning(ex, "Failed to delete org logo from Cloudinary. PublicId: {PublicId}", oldPublicId);
             }
         }
     }

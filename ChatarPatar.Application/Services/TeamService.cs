@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using ChatarPatar.Application.Common.Extensions;
 using ChatarPatar.Application.DTOs.Common;
 using ChatarPatar.Application.DTOs.Team;
 using ChatarPatar.Application.ServiceContracts;
@@ -108,7 +109,6 @@ internal class TeamService : ITeamService
 
         var query = _repositories.TeamRepository
             .GetByIdInOrg(teamId, orgId)
-            .Where(t => !t.IsPrivate || t.TeamMembers.Any(m => m.UserId == authUserId && !m.IsDeleted))
             .AsNoTracking();
 
         if (!callerIsOrgAdmin)
@@ -170,42 +170,61 @@ internal class TeamService : ITeamService
         var fileType = dto.File.ValidateFile(FileUsageContextEnum.Team_Icon);
 
         var team = await _repositories.TeamRepository.GetByIdInOrg(teamId, orgId).FirstOrDefaultAsync();
-
         if (team is null)
             throw new NotFoundAppException("Team");
 
-        if (team.IsArchived)
-            throw new InvalidDataAppException("Archived teams cannot be modified. Unarchive the team first.");
+        team.EnsureEditable();
 
-        if (team.IconFileId != null)
+        FileUploadResult? uploadResult = null;
+        await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
+        try
         {
-            var existingIcon = await _repositories.FileRepository.GetByIdAsync((Guid)team.IconFileId).FirstOrDefaultAsync();
+            if (team.IconFileId != null)
+            {
+                var existingIcon = await _repositories.FileRepository.GetByIdAsync((Guid)team.IconFileId).FirstOrDefaultAsync();
 
-            if (existingIcon != null)
-                existingIcon.IsDeleted = true;
+                if (existingIcon != null)
+                    existingIcon.IsDeleted = true;
+            }
+
+            var publicId = CloudinaryPublicId.TeamIcon(team.Id);
+            uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(dto.File, CloudinaryPath.Organization(orgId).Team(teamId).Profile(), publicId);
+
+            team.IconFile = new FileEntity
+            {
+                UploadedByUserId = authUserId,
+                TeamId = teamId,
+                UsageContext = FileUsageContextEnum.Team_Icon,
+
+                PublicId = uploadResult.PublicId,
+                Url = uploadResult.Url,
+                ThumbnailUrl = uploadResult.ThumbnailUrl,
+
+                SizeInBytes = dto.File.Length,
+                OriginalName = dto.File.FileName,
+                MimeType = dto.File.ContentType,
+                FileType = fileType,
+            };
+
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+            await tx.CommitAsync();
+            _repositories.UnitOfWork.FlushPendingAuditLogs();
         }
-
-        var publicId = CloudinaryPublicId.TeamIcon(team.Id);
-
-        var uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(dto.File, CloudinaryPath.Organization(orgId).Team(teamId).Profile(), publicId);
-
-        team.IconFile = new FileEntity
+        catch
         {
-            UploadedByUserId = authUserId,
-            TeamId = teamId,
-            UsageContext = FileUsageContextEnum.Team_Icon,
+            await tx.RollbackAsync();
 
-            PublicId = uploadResult.PublicId,
-            Url = uploadResult.Url,
-            ThumbnailUrl = uploadResult.ThumbnailUrl,
+            if (uploadResult != null)
+            {
+                try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(uploadResult.PublicId); }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to delete team icon from Cloudinary. PublicId: {PublicId}", uploadResult.PublicId);
+                }
+            }
 
-            SizeInBytes = dto.File.Length,
-            OriginalName = dto.File.FileName,
-            MimeType = dto.File.ContentType,
-            FileType = fileType,
-        };
-
-        await _repositories.UnitOfWork.SaveChangesAsync();
+            throw;
+        }
     }
 
     public async Task UpdateTeamAsync(Guid orgId, Guid teamId, UpdateTeamDto dto)
@@ -217,8 +236,7 @@ internal class TeamService : ITeamService
         if (team is null)
             throw new NotFoundAppException("Team");
 
-        if (team.IsArchived)
-            throw new InvalidDataAppException("Archived teams cannot be modified. Unarchive the team first.");
+        team.EnsureEditable();
 
         if (!string.Equals(team.Name, dto.Name.Trim(), StringComparison.OrdinalIgnoreCase))
         {
@@ -244,27 +262,40 @@ internal class TeamService : ITeamService
         if (team is null)
             throw new NotFoundAppException("Team");
 
-        if (team.IsArchived)
-            throw new InvalidDataAppException("Archived teams cannot be modified. Unarchive the team first.");
+        team.EnsureEditable();
 
         if (team.IconFileId == null)
             return;
 
-        if (team.IconFile != null)
-            team.IconFile.IsDeleted = true;
-
-        team.IconFileId = null;
-
-        await _repositories.UnitOfWork.SaveChangesAsync();
-
-        if (team.IconFile != null)
+        string? oldPublicId = null;
+        await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
+        try
         {
-            try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(team.IconFile.PublicId); }
+            if (team.IconFile != null)
+            {
+                oldPublicId = team.IconFile.PublicId;
+                team.IconFile.IsDeleted = true;
+            }
+
+            team.IconFileId = null;
+
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+            await tx.CommitAsync();
+            _repositories.UnitOfWork.FlushPendingAuditLogs();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+
+        if (oldPublicId != null)
+        {
+            try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(oldPublicId); }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to delete team icon from Cloudinary. PublicId: {PublicId}", team.IconFile.PublicId);
+                _logger.LogWarning(ex, "Failed to delete team icon from Cloudinary. PublicId: {PublicId}", oldPublicId);
             }
         }
     }
-
 }
