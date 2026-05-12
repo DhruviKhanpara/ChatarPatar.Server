@@ -1,6 +1,8 @@
 ﻿using ChatarPatar.API.Models;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.Consts;
+using ChatarPatar.Infrastructure.Helpers;
+using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using System.Net;
 
@@ -28,7 +30,7 @@ public class ExceptionHandlingMiddleware
             if (ex is ValidationAppException validationEx)
             {
                 _logger.LogWarning(
-                    "Validation failed was thrown — {ErrorCount} error(s): {ValidationErrors}",
+                    "Validation failed was thrown — {ErrorCount} error(s): {@ValidationErrors}",
                     validationEx.Errors.Count,
                     validationEx.GroupedErrors
                 );
@@ -47,6 +49,16 @@ public class ExceptionHandlingMiddleware
                 : ex.Message;
 
             await WriteApiResponseAsync(httpContext, statusCode, exceptionCode, exceptionMessage);
+        }
+        catch (DbUpdateException ex) when (ex.IsUniqueConstraintViolation(out var message))
+        {
+            _logger.LogWarning(
+                    ex,
+                    "Duplicate resource conflict: {ExceptionMessage}",
+                    ex.Message
+            );
+
+            await WriteApiResponseAsync(httpContext, HttpStatusCode.Conflict, ExceptionCodes.DUPLICATE_RESOURCE, message);
         }
         catch (Exception ex)
         {

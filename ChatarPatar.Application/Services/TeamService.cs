@@ -135,6 +135,7 @@ internal class TeamService : ITeamService
         // Verify org exists and caller is a member
         var orgMemberExists = await _repositories.OrganizationMemberRepository
             .GetOrgMemberAsync(userId: authUserId, orgId: orgId)
+            .AsNoTracking()
             .AnyAsync();
 
         if (!orgMemberExists)
@@ -297,5 +298,44 @@ internal class TeamService : ITeamService
                 _logger.LogWarning(ex, "Failed to delete team icon from Cloudinary. PublicId: {PublicId}", oldPublicId);
             }
         }
+    }
+
+    public async Task ArchiveTeamAsync(Guid orgId, Guid teamId)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var team = await _repositories.TeamRepository
+            .GetByIdInOrg(teamId, orgId)
+            .FirstOrDefaultAsync();
+
+        if (team is null)
+            throw new NotFoundAppException("Team");
+
+        team.EnsureEditable();
+
+        team.IsArchived = true;
+        team.ArchivedAt = DateTime.UtcNow;
+        team.ArchivedBy = authUserId;
+
+        await _repositories.UnitOfWork.SaveChangesAsync();
+    }
+
+    public async Task UnarchiveTeamAsync(Guid orgId, Guid teamId)
+    {
+        var team = await _repositories.TeamRepository
+            .GetByIdInOrg(teamId, orgId)
+            .FirstOrDefaultAsync();
+
+        if (team is null)
+            throw new NotFoundAppException("Team");
+
+        if (!team.IsArchived)
+            throw new InvalidDataAppException("Team is not archived.");
+
+        team.IsArchived = false;
+        team.ArchivedAt = null;
+        team.ArchivedBy = null;
+
+        await _repositories.UnitOfWork.SaveChangesAsync();
     }
 }

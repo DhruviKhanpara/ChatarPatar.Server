@@ -57,4 +57,15 @@ public class TeamMemberController : ControllerBase
         await _services.TeamMemberService.RemoveTeamMemberAsync(orgId, teamId, membershipId);
         return Ok("Member removed from team successfully.");
     }
+
+    /// <summary>
+    /// Leave the Team (soft delete).
+    /// </summary>
+    [HttpDelete("me")]
+    [SkipPermission]
+    public async Task<IActionResult> LeaveTeam([FromRoute] Guid orgId, [FromRoute] Guid teamId)
+    {
+        await _services.TeamMemberService.LeaveTeamAsync(orgId, teamId);
+        return Ok("Left the team successfully.");
+    }
 }

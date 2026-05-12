@@ -30,7 +30,7 @@ public class OrganizationController : ControllerBase
     [SkipPermission]
     public async Task<ActionResult<List<OrganizationWithRoleDto>>> GetMyOrganizations()
     {
-        var result = await _services.OrganizationService.GetMyOrganizationsAsync();
+        var result = await _services.OrganizationService.GetOrganizationsAsync();
         return Ok(result);
     }
 
@@ -87,16 +87,5 @@ public class OrganizationController : ControllerBase
     {
         await _services.OrganizationService.RemoveOrganizationLogoAsync(orgId);
         return Ok("Organization logo removed successfully");
-    }
-
-    /// <summary>
-    /// Leave the organization (soft delete). Owners cannot be removed.
-    /// </summary>
-    [HttpDelete("{orgId:guid}/leave")]
-    [SkipPermission]
-    public async Task<IActionResult> LeaveOrganization([FromRoute] Guid orgId)
-    {
-        await _services.OrganizationMemberService.LeaveOrganizationAsync(orgId);
-        return Ok("Member removed from organization successfully");
     }
 }

@@ -80,7 +80,7 @@ public class ChannelConfiguration : IEntityTypeConfiguration<Channel>
         // ----------------------------
 
         builder.HasOne(c => c.Team)
-               .WithMany()
+               .WithMany(t => t.Channels)
                .HasForeignKey(c => c.TeamId)
                .HasConstraintName("FK_Channels_Team")
                .OnDelete(DeleteBehavior.Restrict);

@@ -37,6 +37,17 @@ internal class OrganizationService : IOrganizationService
     }
     private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
 
+    public async Task<List<OrganizationWithRoleDto>> GetOrganizationsAsync()
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        return await _repositories.OrganizationMemberRepository
+            .GetMembershipsByUserId(authUserId)
+            .AsNoTracking()
+            .ProjectTo<OrganizationWithRoleDto>(_mapper.ConfigurationProvider)
+            .ToListAsync();
+    }
+
     public async Task<OrganizationDto> GetOrganizationAsync(Guid orgId)
     {
         var authUserId = Guid.Parse(_httpContext.GetUserId());
@@ -59,17 +70,6 @@ internal class OrganizationService : IOrganizationService
             throw new NotFoundAppException("Organization");
 
         return org;
-    }
-
-    public async Task<List<OrganizationWithRoleDto>> GetMyOrganizationsAsync()
-    {
-        var authUserId = Guid.Parse(_httpContext.GetUserId());
-
-        return await _repositories.OrganizationMemberRepository
-            .GetMembershipsByUserId(authUserId)
-            .AsNoTracking()
-            .ProjectTo<OrganizationWithRoleDto>(_mapper.ConfigurationProvider)
-            .ToListAsync();
     }
 
     public async Task CreateOrganizationAsync(CreateOrganizationDto dto)
@@ -218,7 +218,7 @@ internal class OrganizationService : IOrganizationService
             throw;
         }
 
-        if(oldPublicId != null)
+        if (oldPublicId != null)
         {
             try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(oldPublicId); }
             catch (Exception ex)

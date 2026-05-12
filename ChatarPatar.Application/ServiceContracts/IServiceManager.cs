@@ -11,5 +11,7 @@ public interface IServiceManager
     ITeamService TeamService { get; }
     ITeamMemberService TeamMemberService { get; }
 
+    IChannelService ChannelService { get; }
+    
     IPermissionService PermissionService { get; }
 }

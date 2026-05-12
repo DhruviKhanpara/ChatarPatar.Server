@@ -23,5 +23,7 @@ internal sealed class ServiceManager : IServiceManager
     public ITeamService TeamService => Get<ITeamService>();
     public ITeamMemberService TeamMemberService => Get<ITeamMemberService>();
 
+    public IChannelService ChannelService => Get<IChannelService>();
+    
     public IPermissionService PermissionService => Get<IPermissionService>();
 }

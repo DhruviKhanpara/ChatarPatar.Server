@@ -12,4 +12,6 @@ public interface ITeamService
     Task UpdateTeamIconAsync(Guid orgId, Guid teamId, ImageUploadDto dto);
     Task UpdateTeamAsync(Guid orgId, Guid teamId, UpdateTeamDto dto);
     Task RemoveTeamIconAsync(Guid orgId, Guid teamId);
+    Task ArchiveTeamAsync(Guid orgId, Guid teamId);
+    Task UnarchiveTeamAsync(Guid orgId, Guid teamId);
 }
