@@ -45,6 +45,8 @@ public static class DependencyInjection
         services.AddScoped<ITeamService, TeamService>();
         services.AddScoped<ITeamMemberService, TeamMemberService>();
 
+        services.AddScoped<IChannelService, ChannelService>();
+
         services.AddScoped<IPermissionService, PermissionService>();
 
         // --- Notification ---

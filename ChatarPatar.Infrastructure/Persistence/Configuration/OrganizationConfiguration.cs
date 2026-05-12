@@ -29,10 +29,6 @@ public class OrganizationConfiguration : IEntityTypeConfiguration<Organization>
                .HasMaxLength(ValidationConstants.Organization.Lengths.Slug)
                .IsUnicode(true);
 
-        builder.HasIndex(o => o.Slug)
-               .IsUnique()
-               .HasDatabaseName("UQ_Organizations_Slug");
-
         builder.Property(o => o.IsDeleted)
                .HasDefaultValue(false);
 
@@ -41,6 +37,11 @@ public class OrganizationConfiguration : IEntityTypeConfiguration<Organization>
 
         builder.Property(x => x.RowVersion)
                .IsRowVersion();
+
+        // Unique Constraints
+        builder.HasIndex(o => o.Slug)
+               .IsUnique()
+               .HasDatabaseName("UQ_Organizations_Slug");
 
         // ----------------------------
         // Relationships

@@ -89,4 +89,15 @@ public class OrganizationMemberController : ControllerBase
         await _services.OrganizationMemberService.RemoveMemberAsync(orgId, membershipId);
         return Ok("Member removed from organization successfully");
     }
+
+    /// <summary>
+    /// Leave the organization (soft delete). Owners cannot be removed.
+    /// </summary>
+    [HttpDelete("me")]
+    [SkipPermission]
+    public async Task<IActionResult> LeaveOrganization([FromRoute] Guid orgId)
+    {
+        await _services.OrganizationMemberService.LeaveOrganizationAsync(orgId);
+        return Ok("Left the organization successfully.");
+    }
 }

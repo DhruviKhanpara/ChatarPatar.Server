@@ -92,4 +92,26 @@ public class TeamController : ControllerBase
         await _services.TeamService.RemoveTeamIconAsync(orgId, teamId);
         return Ok("Team icon removed successfully");
     }
+
+    /// <summary>
+    /// Archives the Team. Archived teams are read-only.
+    /// </summary>
+    [HttpPost("{teamId:guid}/archive")]
+    [RequirePermission(PermissionCheckLogicEnum.All, Permissions.TEAM_ARCHIVE)]
+    public async Task<IActionResult> ArchiveChannel([FromRoute] Guid orgId, [FromRoute] Guid teamId)
+    {
+        await _services.TeamService.ArchiveTeamAsync(orgId, teamId);
+        return Ok("Team archived successfully.");
+    }
+
+    /// <summary>
+    /// Unarchives the team, making it active again.
+    /// </summary>
+    [HttpPost("{teamId:guid}/unarchive")]
+    [RequirePermission(PermissionCheckLogicEnum.All, Permissions.TEAM_ARCHIVE)]
+    public async Task<IActionResult> UnarchiveChannel([FromRoute] Guid orgId, [FromRoute] Guid teamId)
+    {
+        await _services.TeamService.UnarchiveTeamAsync(orgId, teamId);
+        return Ok("Team unarchived successfully.");
+    }
 }
