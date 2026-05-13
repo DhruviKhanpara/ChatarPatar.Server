@@ -29,12 +29,13 @@ public class TeamMapperProfile : Profile
             .ForMember(dest => dest.IsMuted, opt => opt.Ignore())
             .ForMember(dest => dest.Role, opt => opt.Ignore());
 
-        CreateMap<Team, TeamDto>()
-            .ForMember(dest => dest.IconUrl, opt => opt.MapFrom(src => src.IconFile != null ? src.IconFile.Url : null))
-            .ForMember(dest => dest.IconThumbnailUrl, opt => opt.MapFrom(src => src.IconFile != null ? src.IconFile.ThumbnailUrl : null))
-            .ForMember(dest => dest.MemberCount, opt => opt.MapFrom(src => src.TeamMembers.Count()));
-
         // Team members
+        CreateMap<TeamMember, TeamMemberDto>()
+            .ForMember(dest => dest.MembershipId, opt => opt.MapFrom(src => src.Id))
+            .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.User.Name))
+            .ForMember(dest => dest.UserName, opt => opt.MapFrom(src => src.User.Username))
+            .ForMember(dest => dest.AvatarThumbnailUrl, opt => opt.MapFrom(src => src.User.AvatarFile != null ? src.User.AvatarFile.ThumbnailUrl : null));
+
         CreateMap<AddTeamMemberDto, TeamMember>(MemberList.Source)
             .ForMember(dest => dest.TeamId, opt => opt.Ignore())
             .ForMember(dest => dest.InvitedByUserId, opt => opt.Ignore())

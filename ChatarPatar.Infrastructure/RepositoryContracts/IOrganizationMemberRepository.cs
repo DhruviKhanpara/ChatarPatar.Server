@@ -25,7 +25,7 @@ public interface IOrganizationMemberRepository : IBaseSoftDeleteRepository<Organ
     /// Optionally filters by name/username search term and/or role.
     /// Caller applies pagination via PaginationExtensions.
     /// </summary>
-    IQueryable<OrganizationMember> GetMembersQuery(Guid orgId, string? search = null, OrganizationRoleEnum? role = null);
+    IQueryable<OrganizationMember> GetOrgMembersQuery(Guid orgId, string? search = null, OrganizationRoleEnum? role = null);
 
     /// <summary>
     /// Returns a single active membership by its Id in particular org, including User and AvatarFile.

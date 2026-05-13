@@ -193,7 +193,6 @@ BEGIN
         DeletedAt         DATETIME2           NULL,
 
         CONSTRAINT PK_OrganizationMembers   PRIMARY KEY (Id),
-        CONSTRAINT UQ_OrgMembers_OrgUser     UNIQUE (OrgId, UserId, IsDeleted),
         CONSTRAINT FK_OrgMembers_Org         FOREIGN KEY (OrgId)            REFERENCES Organizations(Id) ON DELETE NO ACTION,
         CONSTRAINT FK_OrgMembers_User        FOREIGN KEY (UserId)           REFERENCES Users(Id)         ON DELETE NO ACTION,
         CONSTRAINT FK_OrgMembers_InvitedBy   FOREIGN KEY (InvitedByUserId)  REFERENCES Users(Id) ON DELETE NO ACTION,
@@ -705,7 +704,6 @@ BEGIN
         ContentSnapshot   NVARCHAR(500)       NULL,
 
         CONSTRAINT PK_PinnedMessages            PRIMARY KEY (Id),
-        CONSTRAINT UQ_PinnedConversationMessages            UNIQUE (MessageId, ConversationId),   -- a message can only be pinned once in conversation
         CONSTRAINT FK_PinnedMessages_Message    FOREIGN KEY (MessageId)          REFERENCES Messages(Id)      ON DELETE NO ACTION,
         CONSTRAINT FK_PinnedMessages_Channel    FOREIGN KEY (ChannelId)          REFERENCES Channels(Id) ON DELETE NO ACTION,
         CONSTRAINT FK_PinnedMessages_Conv       FOREIGN KEY (ConversationId)     REFERENCES Conversations(Id) ON DELETE NO ACTION,

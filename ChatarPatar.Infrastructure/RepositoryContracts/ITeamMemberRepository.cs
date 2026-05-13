@@ -17,5 +17,5 @@ public interface ITeamMemberRepository : IBaseSoftDeleteRepository<TeamMember>
     /// Optionally filters by name/username search and/or role.
     /// Caller applies pagination.
     /// </summary>
-    IQueryable<TeamMember> GetMembersQuery(Guid teamId, string? search = null, TeamRoleEnum? role = null);
+    IQueryable<TeamMember> GetTeamMembersQuery(Guid teamId, string? search = null, TeamRoleEnum? role = null);
 }

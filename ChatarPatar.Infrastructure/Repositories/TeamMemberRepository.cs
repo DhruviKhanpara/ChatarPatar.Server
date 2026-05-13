@@ -15,7 +15,7 @@ internal class TeamMemberRepository : BaseSoftDeleteRepository<TeamMember>, ITea
             .Include(m => m.User)
                 .ThenInclude(u => u.AvatarFile);
 
-    public IQueryable<TeamMember> GetMembersQuery(Guid teamId, string? search = null, TeamRoleEnum? role = null)
+    public IQueryable<TeamMember> GetTeamMembersQuery(Guid teamId, string? search = null, TeamRoleEnum? role = null)
     {
         var query = FindByCondition(m => m.TeamId == teamId)
             .Include(m => m.User)

@@ -19,7 +19,7 @@ internal class OrganizationMemberRepository : BaseSoftDeleteRepository<Organizat
     public IQueryable<OrganizationMember> GetOrgMemberAsync(Guid userId, Guid orgId) =>
         FindByCondition(x => x.UserId == userId && x.OrgId == orgId);
 
-    public IQueryable<OrganizationMember> GetMembersQuery(Guid orgId, string? search = null, OrganizationRoleEnum? role = null)
+    public IQueryable<OrganizationMember> GetOrgMembersQuery(Guid orgId, string? search = null, OrganizationRoleEnum? role = null)
     {
         var query = FindByCondition(x => x.OrgId == orgId)
             .Include(x => x.User)

@@ -4,6 +4,7 @@ using ChatarPatar.Application.DTOs.TeamMember;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Common.Consts;
 using ChatarPatar.Common.Enums;
+using ChatarPatar.Common.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -20,6 +21,18 @@ public class TeamMemberController : ControllerBase
     public TeamMemberController(IServiceManager services)
     {
         _services = services;
+    }
+
+    /// <summary>
+    /// Returns a paged list of members of the team.
+    /// Caller must be a member of the team.
+    /// </summary>
+    [HttpGet]
+    [SkipPermission]
+    public async Task<ActionResult<PagedResult<TeamMemberDto>>> GetMembers([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromQuery] MemberQueryParams queryParams)
+    {
+        var result = await _services.TeamMemberService.GetMembersAsync(orgId, teamId, queryParams);
+        return Ok(result);
     }
 
     /// <summary>
@@ -47,7 +60,7 @@ public class TeamMemberController : ControllerBase
 
     /// <summary>
     /// Removes a member from the team (soft-delete).
-    /// Cannot remove yourself — use the leave endpoint instead.
+    /// Cannot remove yourself — use the me endpoint instead.
     /// Cannot remove the last admin.
     /// </summary>
     [HttpDelete("{membershipId:guid}")]
