@@ -1,9 +1,12 @@
 ﻿using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using ChatarPatar.Application.DTOs.TeamMember;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.Enums;
+using ChatarPatar.Common.Helpers;
 using ChatarPatar.Common.HttpUserDetails;
+using ChatarPatar.Common.Models;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
@@ -31,6 +34,56 @@ internal class TeamMemberService : ITeamMemberService
         _logger = logger;
     }
     private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
+
+    public async Task<PagedResult<TeamMemberDto>> GetMembersAsync(Guid orgId, Guid teamId, MemberQueryParams queryParams)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        // Resolve caller org/team access
+        var callerContext = await _repositories.TeamRepository
+            .GetByIdInOrg(teamId, orgId)
+            .AsNoTracking()
+            .Select(t => new
+            {
+                CallerTeamRole = t.TeamMembers
+                    .Where(m => m.UserId == authUserId && !m.IsDeleted)
+                    .Select(m => (TeamRoleEnum?)m.Role)
+                    .FirstOrDefault(),
+                CallerOrgRole = t.Organization.OrganizationMembers
+                    .Where(m => m.UserId == authUserId && !m.IsDeleted)
+                    .Select(m => (OrganizationRoleEnum?)m.Role)
+                    .FirstOrDefault(),
+                t.IsPrivate
+            })
+            .FirstOrDefaultAsync();
+
+        if (callerContext is null || callerContext.CallerOrgRole is null)
+            throw new NotFoundAppException("Team");
+
+        var callerHasElevatedAccess =
+            callerContext.CallerOrgRole is OrganizationRoleEnum.OrgOwner or OrganizationRoleEnum.OrgAdmin
+            || callerContext.CallerTeamRole is TeamRoleEnum.TeamAdmin;
+
+        // Private teams require explicit membership unless caller has elevated access
+        if (callerContext.IsPrivate && !callerHasElevatedAccess)
+        {
+            if (callerContext.CallerTeamRole is null)
+                throw new NotFoundAppException("Team");
+        }
+
+        var query = _repositories.TeamMemberRepository
+            .GetTeamMembersQuery(teamId, queryParams.Search, queryParams.Role)
+            .AsNoTracking()
+            .ProjectTo<TeamMemberDto>(_mapper.ConfigurationProvider);
+
+        var totalCount = await query.CountAsync();
+
+        var members = await query
+            .PaginateOffset(queryParams.PageSize, queryParams.PageNumber)
+            .ToListAsync();
+
+        return new PagedResult<TeamMemberDto>(members, totalCount, queryParams.PageNumber, queryParams.PageSize);
+    }
 
     public async Task AddTeamMemberAsync(Guid orgId, Guid teamId, AddTeamMemberDto dto)
     {
@@ -116,7 +169,10 @@ internal class TeamMemberService : ITeamMemberService
 
         if (context.Membership is null)
             throw new NotFoundAppException("Team membership");
-        
+
+        if (context.Membership.Role == dto.Role)
+            return;
+
         if (context.Membership.Role == TeamRoleEnum.TeamAdmin && dto.Role != TeamRoleEnum.TeamAdmin && context.AdminCount <= 1)
             throw new InvalidDataAppException("This user is the only admin of the team. Assign another admin before changing their role.");
 
@@ -218,7 +274,7 @@ internal class TeamMemberService : ITeamMemberService
 
         await _repositories.UnitOfWork.SaveChangesAsync();
 
-        TryInvalidatePermissions(authUserId,"Failed to invalidate permissions for user {UserId} after leaving team");
+        TryInvalidatePermissions(authUserId, "Failed to invalidate permissions for user {UserId} after leaving team");
     }
 
     #region Private Section

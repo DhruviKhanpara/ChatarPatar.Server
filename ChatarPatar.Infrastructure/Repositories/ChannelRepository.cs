@@ -12,7 +12,7 @@ internal class ChannelRepository : BaseSoftDeleteRepository<Channel>, IChannelRe
     public IQueryable<Channel> GetByIdInTeam(Guid channelId, Guid teamId, Guid orgId) =>
         FindByCondition(c => c.Id == channelId && c.TeamId == teamId && c.OrgId == orgId);
 
-    public IQueryable<Channel> GetChannelsQuery(Guid teamId, Guid orgId, Guid callerId, bool callerIsTeamAdmin, string? search = null, bool? isArchived = null, bool includePrivate = true)
+    public IQueryable<Channel> GetChannelsQuery(Guid teamId, Guid orgId, Guid callerId, bool callerHasElevatedAccess, string? search = null, bool? isArchived = null, bool includePrivate = true)
     {
         var query = FindByCondition(c => c.TeamId == teamId && c.OrgId == orgId).AsQueryable();
 
@@ -20,7 +20,7 @@ internal class ChannelRepository : BaseSoftDeleteRepository<Channel>, IChannelRe
         {
             query = query.Where(c => !c.IsPrivate);
         }
-        else if (!callerIsTeamAdmin)
+        else if (!callerHasElevatedAccess)
         {
             // Non-admins see public channels + private channels they are a member of
             query = query.Where(c =>

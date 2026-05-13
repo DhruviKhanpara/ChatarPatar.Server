@@ -47,14 +47,14 @@ internal class OrganizationMemberService : IOrganizationMemberService
             throw new NotFoundAppException("Organization");
 
         var baseQuery = _repositories.OrganizationMemberRepository
-            .GetMembersQuery(orgId, queryParams.Search, queryParams.Role);
+            .GetOrgMembersQuery(orgId, queryParams.Search, queryParams.Role)
+            .AsNoTracking()
+            .ProjectTo<OrganizationMemberDto>(_mapper.ConfigurationProvider);
 
         var totalCount = await baseQuery.CountAsync();
 
         var items = await baseQuery
             .PaginateOffset(queryParams.PageSize, queryParams.PageNumber)
-            .AsNoTracking()
-            .ProjectTo<OrganizationMemberDto>(_mapper.ConfigurationProvider)
             .ToListAsync();
 
         return new PagedResult<OrganizationMemberDto>(items, totalCount, queryParams.PageNumber, queryParams.PageSize);
@@ -125,6 +125,9 @@ internal class OrganizationMemberService : IOrganizationMemberService
 
         if (membership is null)
             throw new NotFoundAppException("Organization membership");
+
+        if (membership.Role == dto.Role)
+            return;
 
         if (membership.Role == OrganizationRoleEnum.OrgOwner)
             throw new InvalidDataAppException("The organization owner role can't change from here");

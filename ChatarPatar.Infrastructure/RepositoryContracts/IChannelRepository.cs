@@ -13,7 +13,7 @@ public interface IChannelRepository : IBaseSoftDeleteRepository<Channel>
     /// Returns a filterable, orderable query of active channels within a team.
     /// Caller controls visibility of private channels.
     /// </summary>
-    IQueryable<Channel> GetChannelsQuery(Guid teamId, Guid orgId, Guid callerId, bool callerIsTeamAdmin, string? search = null, bool? isArchived = null, bool includePrivate = true);
+    IQueryable<Channel> GetChannelsQuery(Guid teamId, Guid orgId, Guid callerId, bool callerHasElevatedAccess, string? search = null, bool? isArchived = null, bool includePrivate = true);
 
     /// <summary>
     /// Returns true if a channel with the given name already exists in the team (case-insensitive).

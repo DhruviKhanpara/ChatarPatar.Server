@@ -64,7 +64,7 @@ internal class ChannelService : IChannelService
             teamId,
             orgId,
             callerId: authUserId,
-            callerIsTeamAdmin: callerIsAdmin,
+            callerHasElevatedAccess: callerIsAdmin,
             search: queryParams.Search,
             isArchived: queryParams.IsArchived,
             includePrivate: queryParams.IncludePrivate);
