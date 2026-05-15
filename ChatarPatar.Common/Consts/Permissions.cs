@@ -9,6 +9,7 @@ public static class Permissions
     public const string ORG_MEMBERS_INVITE = "org:members:invite";
     public const string ORG_MEMBERS_REMOVE = "org:members:remove";
     public const string ORG_MEMBERS_ROLE_CHANGE = "org:members:role:change";
+    public const string ORG_OWNERSHIP_TRANSFER = "org:ownership:transfer";
     public const string ORG_INVITES_MANAGE = "org:invites:manage";
     public const string ORG_TEAMS_CREATE = "org:teams:create";
     public const string ORG_TEAMS_DELETE = "org:teams:delete";

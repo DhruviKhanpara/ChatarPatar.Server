@@ -20,7 +20,7 @@ public class UserStatusConfiguration : IEntityTypeConfiguration<UserStatus>
 
             t.HasCheckConstraint(
                 "CK_UserStatus_Logical",
-                "(Status = 0 AND CustomStatus IS NULL) OR (Status IN (1,2))");
+                "(Status = 0 AND CustomStatus IS NULL) OR (Status = 1 AND CustomStatus IN (1,2,3)) OR (Status = 2 AND CustomStatus IN (4,5))");
         });
 
         builder.HasKey(u => u.UserId);

@@ -47,14 +47,14 @@ internal class OrganizationMemberService : IOrganizationMemberService
             throw new NotFoundAppException("Organization");
 
         var baseQuery = _repositories.OrganizationMemberRepository
-            .GetOrgMembersQuery(orgId, queryParams.Search, queryParams.Role)
-            .AsNoTracking()
-            .ProjectTo<OrganizationMemberDto>(_mapper.ConfigurationProvider);
+            .GetOrgMembersQuery(orgId, queryParams.Search, queryParams.Role);
 
         var totalCount = await baseQuery.CountAsync();
 
         var items = await baseQuery
+            .AsNoTracking()
             .PaginateOffset(queryParams.PageSize, queryParams.PageNumber)
+            .ProjectTo<OrganizationMemberDto>(_mapper.ConfigurationProvider)
             .ToListAsync();
 
         return new PagedResult<OrganizationMemberDto>(items, totalCount, queryParams.PageNumber, queryParams.PageSize);

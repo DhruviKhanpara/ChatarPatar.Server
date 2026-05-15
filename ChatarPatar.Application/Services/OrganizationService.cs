@@ -176,7 +176,7 @@ internal class OrganizationService : IOrganizationService
             .AnyAsync();
 
         if (!isMember)
-            throw new NotFoundAppException("Organization membership");
+            throw new NotFoundAppException("Organization");
 
         _mapper.Map<UpdateOrganizationDto, Organization>(dto, org);
 

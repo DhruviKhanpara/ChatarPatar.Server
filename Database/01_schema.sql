@@ -113,7 +113,7 @@ BEGIN
                 (CASE WHEN TeamId IS NOT NULL THEN 1 ELSE 0 END) +
                 (CASE WHEN ChannelId IS NOT NULL THEN 1 ELSE 0 END) +
                 (CASE WHEN ConversationId IS NOT NULL THEN 1 ELSE 0 END)
-            ) <= 1
+            ) = 1
         )
     );
 
@@ -947,11 +947,14 @@ BEGIN
         -- Prevent impossible combinations
         CONSTRAINT CK_UserStatus_Logical
             CHECK (
-                -- If offline → no custom status
+                -- Offline → no custom status
                 (Status = 0 AND CustomStatus IS NULL)
                 OR
-                -- If online/away → custom allowed
-                (Status IN (1,2))
+                -- Online → only active/busy/dnd
+                (Status = 1 AND CustomStatus IN (1,2,3))
+                OR
+                -- Away → only brb/appear_away
+                (Status = 2 AND CustomStatus IN (4,5))
             )
     );
 

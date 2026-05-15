@@ -59,19 +59,6 @@ public class TeamMemberController : ControllerBase
     }
 
     /// <summary>
-    /// Removes a member from the team (soft-delete).
-    /// Cannot remove yourself — use the me endpoint instead.
-    /// Cannot remove the last admin.
-    /// </summary>
-    [HttpDelete("{membershipId:guid}")]
-    [RequirePermission(PermissionCheckLogicEnum.All, Permissions.TEAM_MEMBERS_KICK)]
-    public async Task<IActionResult> RemoveMember([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid membershipId)
-    {
-        await _services.TeamMemberService.RemoveTeamMemberAsync(orgId, teamId, membershipId);
-        return Ok("Member removed from team successfully.");
-    }
-
-    /// <summary>
     /// Leave the Team (soft delete).
     /// </summary>
     [HttpDelete("me")]
@@ -80,5 +67,19 @@ public class TeamMemberController : ControllerBase
     {
         await _services.TeamMemberService.LeaveTeamAsync(orgId, teamId);
         return Ok("Left the team successfully.");
+    }
+
+    /// <summary>
+    /// Removes a member from the team (soft-delete).
+    /// Cannot remove yourself — use the me endpoint instead.
+    /// IMPORTANT: :guid constraint prevents "/me" from matching this endpoint.
+    /// Cannot remove the last admin.
+    /// </summary>
+    [HttpDelete("{membershipId:guid}")]
+    [RequirePermission(PermissionCheckLogicEnum.All, Permissions.TEAM_MEMBERS_KICK)]
+    public async Task<IActionResult> RemoveMember([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid membershipId)
+    {
+        await _services.TeamMemberService.RemoveTeamMemberAsync(orgId, teamId, membershipId);
+        return Ok("Member removed from team successfully.");
     }
 }

@@ -33,7 +33,7 @@ public class FilesConfiguration : IEntityTypeConfiguration<FileEntity>
                     (CASE WHEN TeamId IS NOT NULL THEN 1 ELSE 0 END) +
                     (CASE WHEN ChannelId IS NOT NULL THEN 1 ELSE 0 END) +
                     (CASE WHEN ConversationId IS NOT NULL THEN 1 ELSE 0 END)
-                ) <= 1
+                ) = 1
                 ");
         });
 

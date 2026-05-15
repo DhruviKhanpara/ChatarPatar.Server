@@ -12,7 +12,6 @@ using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace ChatarPatar.Application.Services;
 
@@ -182,6 +181,8 @@ internal class ChannelService : IChannelService
         channelEntity.TeamId = teamId;
         channelEntity.OrgId = orgId;
 
+        // Only have explicit membership for private channels
+        // Public channel have visibility to team so team membership is use as channel membership and channel's audit field can track the creator of the channel.
         if (channelEntity.IsPrivate)
         {
             // Creator is automatically added as ChannelModerator

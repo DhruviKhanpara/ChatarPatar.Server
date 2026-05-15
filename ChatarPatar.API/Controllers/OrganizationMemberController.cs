@@ -72,22 +72,11 @@ public class OrganizationMemberController : ControllerBase
     /// Transfer ownership to any of one member from organization
     /// </summary>
     [HttpPatch("{membershipId:guid}/transfer-ownership")]
-    [SkipPermission]
+    [RequirePermission(PermissionCheckLogicEnum.All, Permissions.ORG_OWNERSHIP_TRANSFER)]
     public async Task<IActionResult> TransferOwnership([FromRoute] Guid orgId, [FromRoute] Guid membershipId)
     {
         await _services.OrganizationMemberService.TransferOrganizationOwnershipAsync(orgId, membershipId);
         return Ok("Ownership transfer successfully");
-    }
-
-    /// <summary>
-    /// Removes a member from the organization (soft delete). Owners cannot be removed.
-    /// </summary>
-    [HttpDelete("{membershipId:guid}")]
-    [RequirePermission(PermissionCheckLogicEnum.All, Permissions.ORG_MEMBERS_REMOVE)]
-    public async Task<IActionResult> RemoveMember([FromRoute] Guid orgId, [FromRoute] Guid membershipId)
-    {
-        await _services.OrganizationMemberService.RemoveMemberAsync(orgId, membershipId);
-        return Ok("Member removed from organization successfully");
     }
 
     /// <summary>
@@ -99,5 +88,17 @@ public class OrganizationMemberController : ControllerBase
     {
         await _services.OrganizationMemberService.LeaveOrganizationAsync(orgId);
         return Ok("Left the organization successfully.");
+    }
+
+    /// <summary>
+    /// Removes a member from the organization (soft delete). Owners cannot be removed.
+    /// IMPORTANT: :guid constraint prevents "/me" from matching this endpoint.
+    /// </summary>
+    [HttpDelete("{membershipId:guid}")]
+    [RequirePermission(PermissionCheckLogicEnum.All, Permissions.ORG_MEMBERS_REMOVE)]
+    public async Task<IActionResult> RemoveMember([FromRoute] Guid orgId, [FromRoute] Guid membershipId)
+    {
+        await _services.OrganizationMemberService.RemoveMemberAsync(orgId, membershipId);
+        return Ok("Member removed from organization successfully");
     }
 }

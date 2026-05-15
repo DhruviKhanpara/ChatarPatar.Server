@@ -73,23 +73,27 @@ internal class ChannelMemberService : IChannelMemberService
             throw new NotFoundAppException("Channel");
 
         IQueryable<ChannelMemberDto> query;
+        var totalCount = 0;
 
         // Private channels require explicit membership unless caller is an org admin
         if (channel.IsPrivate)
         {
+            var memberQuery = _repositories.ChannelMemberRepository
+                .FindByCondition(m => m.ChannelId == channelId);
+
             // Non-org-admins must be explicit channel members
             if (!callerHasElevatedAccess)
             {
-                var isMember = await _repositories.ChannelMemberRepository
-                    .GetChannelMemberAsync(authUserId, channelId)
-                    .AnyAsync();
+                var isMember = await memberQuery
+                    .AnyAsync(m => m.UserId == authUserId);
 
                 if (!isMember)
                     throw new NotFoundAppException("Channel");
             }
 
-            query = _repositories.ChannelMemberRepository
-                .FindByCondition(m => m.ChannelId == channelId)
+            totalCount = await memberQuery.CountAsync();
+
+            query = memberQuery
                 .AsNoTracking()
                 .ProjectTo<ChannelMemberDto>(_mapper.ConfigurationProvider);
         }
@@ -109,14 +113,15 @@ internal class ChannelMemberService : IChannelMemberService
                     throw new NotFoundAppException("Channel");
             }
 
+            totalCount = await teamMemberQuery.CountAsync();
+
             query = teamMemberQuery
                 .AsNoTracking()
                 .ProjectTo<ChannelMemberDto>(_mapper.ConfigurationProvider);
         }
 
-        var totalCount = await query.CountAsync();
-
         var members = await query
+            .OrderBy(m => m.UserId)
             .PaginateOffset(paginationParams.PageSize, paginationParams.PageNumber)
             .ToListAsync();
 

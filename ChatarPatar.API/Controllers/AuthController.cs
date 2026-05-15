@@ -22,7 +22,7 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     [AllowAnonymous]
     [SkipPermission]
-    public async Task<ActionResult<LoginResponseDto>> Login(UserLoginDto login)
+    public async Task<ActionResult<LoginResponseDto>> Login([FromBody] UserLoginDto login)
     {
         var authUser = await _services.AuthService.LoginUserAsync(login);
         return Ok(authUser);
@@ -31,7 +31,7 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     [AllowAnonymous]
     [SkipPermission]
-    public async Task<ActionResult<LoginResponseDto>> Register(UserRegisterDto user)
+    public async Task<ActionResult<LoginResponseDto>> Register([FromBody] UserRegisterDto user)
     {
         var authUser = await _services.AuthService.RegisterUserAsync(user);
         return Ok(authUser);
@@ -95,7 +95,7 @@ public class AuthController : ControllerBase
     [HttpPost("forgot-password")]
     [AllowAnonymous]
     [SkipPermission]
-    public async Task<IActionResult> ForgotPassword(ForgotPasswordDto dto)
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
     {
         await _services.AuthService.ForgotPasswordAsync(dto);
         return Ok("You will receive an OTP shortly on the email.");
@@ -107,7 +107,7 @@ public class AuthController : ControllerBase
     [HttpPost("reset-password")]
     [AllowAnonymous]
     [SkipPermission]
-    public async Task<IActionResult> ResetPassword(ResetPasswordDto dto)
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
     {
         await _services.AuthService.ResetPasswordAsync(dto);
         return Ok("Password reset successfully. Please login with your new password.");
