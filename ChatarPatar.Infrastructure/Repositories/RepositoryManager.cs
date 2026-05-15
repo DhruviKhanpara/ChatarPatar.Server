@@ -49,6 +49,8 @@ internal sealed class RepositoryManager : IRepositoryManager
     
     private readonly Lazy<IOtpVerificationRepository> _otpVerificationRepository;
 
+    private readonly Lazy<ICascadeCleanupRepository> _cascadeCleanupRepository;
+
     public RepositoryManager(AppDbContext context, IHttpContextAccessor httpContextAccessor, ILoggerFactory loggerFactory)
     {
         _context = context;
@@ -78,6 +80,7 @@ internal sealed class RepositoryManager : IRepositoryManager
         _outboxMessageRepository = new Lazy<IOutboxMessageRepository>(() => new OutboxMessageRepository(_context));
         _notificationTemplateRepository = new Lazy<INotificationTemplateRepository>(() => new NotificationTemplateRepository(_context));
         _otpVerificationRepository = new Lazy<IOtpVerificationRepository>(() => new OtpVerificationRepository(_context));
+        _cascadeCleanupRepository = new Lazy<ICascadeCleanupRepository>(() => new CascadeCleanupRepository(_context));
     }
 
     public IUnitOfWork UnitOfWork => _unitOfWork.Value;
@@ -118,4 +121,6 @@ internal sealed class RepositoryManager : IRepositoryManager
     public INotificationTemplateRepository NotificationTemplateRepository => _notificationTemplateRepository.Value;
     
     public IOtpVerificationRepository OtpVerificationRepository => _otpVerificationRepository.Value;
+
+    public ICascadeCleanupRepository CascadeCleanupRepository => _cascadeCleanupRepository.Value;
 }

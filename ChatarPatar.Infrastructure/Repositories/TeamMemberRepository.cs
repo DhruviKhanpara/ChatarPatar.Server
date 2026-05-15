@@ -1,4 +1,5 @@
 ﻿using ChatarPatar.Common.Enums;
+using ChatarPatar.Common.Models;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.Persistence;
 using ChatarPatar.Infrastructure.RepositoryContracts;
@@ -34,5 +35,40 @@ internal class TeamMemberRepository : BaseSoftDeleteRepository<TeamMember>, ITea
             query = query.Where(m => m.Role == role.Value);
 
         return query.OrderBy(m => m.JoinedAt);
+    }
+
+    public async Task<List<SoleAdminTeamResult>> GetSoleAdminTeamsWithNextSeniorMemberAsync(
+    Guid userId, Guid orgId)
+    {
+        // Step 1: collect TeamIds in this org where the target user IS a TeamAdmin.
+        // Step 2: from those, keep only teams where NO OTHER active TeamAdmin exists.
+        // Step 3: for each qualifying team, left-project the next senior non-admin member.
+
+        return await FindByCondition(m =>
+                m.UserId == userId
+                && m.Role == TeamRoleEnum.TeamAdmin
+                && m.Team.OrgId == orgId
+                // Sole-admin check: no other active admin exists in this team
+                && !m.Team.TeamMembers.Any(other =>
+                    other.UserId != userId
+                    && other.Role == TeamRoleEnum.TeamAdmin
+                    && !other.IsDeleted))
+            .Select(m => new SoleAdminTeamResult(
+                m.TeamId,
+                m.Team.Name,
+                // Next senior member: oldest JoinedAt, excluding the departing user
+                m.Team.TeamMembers
+                    .Where(tm => tm.UserId != userId && !tm.IsDeleted)
+                    .OrderBy(tm => tm.JoinedAt)
+                    .Select(tm => (Guid?)tm.UserId)
+                    .FirstOrDefault(),
+                m.Team.TeamMembers
+                    .Where(tm => tm.UserId != userId && !tm.IsDeleted)
+                    .OrderBy(tm => tm.JoinedAt)
+                    .Select(tm => (Guid?)tm.Id)
+                    .FirstOrDefault()
+            ))
+            .AsNoTracking()
+            .ToListAsync();
     }
 }

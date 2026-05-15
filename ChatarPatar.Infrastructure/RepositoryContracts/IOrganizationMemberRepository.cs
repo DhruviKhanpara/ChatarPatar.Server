@@ -36,4 +36,21 @@ public interface IOrganizationMemberRepository : IBaseSoftDeleteRepository<Organ
     /// Returns all active org memberships for a user, including the Organization and its LogoFile.
     /// </summary>
     IQueryable<OrganizationMember> GetMembershipsByUserId(Guid userId);
+
+    /// <summary>
+    /// Fetches a single active membership row with an UPDLOCK + HOLDLOCK hint.
+    ///
+    /// UPDLOCK: prevents other transactions from acquiring an update lock on the
+    ///          same row — serializes concurrent remove/leave calls for the same member.
+    /// HOLDLOCK: promotes to SERIALIZABLE for this row — prevents phantom reads
+    ///           (a deleted-then-recreated row appearing as active between checks).
+    ///
+    /// Must be called inside an open transaction. The lock is held until the
+    /// transaction commits or rolls back, guaranteeing that exactly one concurrent
+    /// execution proceeds through the cascade phases while others either wait or
+    /// find the row already soft-deleted and bail out.
+    ///
+    /// Returns null when the row does not exist or is already soft-deleted.
+    /// </summary>
+    Task<OrganizationMember?> GetByIdWithUpdateLockAsync(Guid membershipId);
 }

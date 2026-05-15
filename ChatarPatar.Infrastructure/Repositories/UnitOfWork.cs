@@ -82,6 +82,10 @@ internal class UnitOfWork : IUnitOfWork
         return result;
     }
 
+    /// <inheritdoc />
+    public void QueueManualAuditLog(AuditLogRequest logRequest)
+        => _pendingAuditLogs.Add(logRequest);
+
     public void FlushPendingAuditLogs()
     {
         if (_pendingAuditLogs.Count == 0) return;
