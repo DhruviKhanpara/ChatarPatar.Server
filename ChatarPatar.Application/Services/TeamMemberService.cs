@@ -72,14 +72,14 @@ internal class TeamMemberService : ITeamMemberService
         }
 
         var query = _repositories.TeamMemberRepository
-            .GetTeamMembersQuery(teamId, queryParams.Search, queryParams.Role)
-            .AsNoTracking()
-            .ProjectTo<TeamMemberDto>(_mapper.ConfigurationProvider);
+            .GetTeamMembersQuery(teamId, queryParams.Search, queryParams.Role);
 
         var totalCount = await query.CountAsync();
 
         var members = await query
+            .AsNoTracking()
             .PaginateOffset(queryParams.PageSize, queryParams.PageNumber)
+            .ProjectTo<TeamMemberDto>(_mapper.ConfigurationProvider)
             .ToListAsync();
 
         return new PagedResult<TeamMemberDto>(members, totalCount, queryParams.PageNumber, queryParams.PageSize);
@@ -100,7 +100,7 @@ internal class TeamMemberService : ITeamMemberService
                 TargetIsOrgMember = t.Organization.OrganizationMembers
                     .Any(m => m.UserId == dto.UserId && !m.IsDeleted),
                 AlreadyTeamMember = t.TeamMembers
-                    .Any(m => m.UserId == dto.UserId),
+                    .Any(m => m.UserId == dto.UserId && !m.IsDeleted),
                 CallerTeamRole = t.TeamMembers
                     .Where(m => m.UserId == authUserId && !m.IsDeleted)
                     .Select(m => (TeamRoleEnum?)m.Role)

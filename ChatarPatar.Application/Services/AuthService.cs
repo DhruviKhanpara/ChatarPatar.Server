@@ -10,12 +10,10 @@ using ChatarPatar.Common.Models;
 using ChatarPatar.Common.Security;
 using ChatarPatar.Common.Security.SecurityContracts;
 using ChatarPatar.Infrastructure.Entities;
-using ChatarPatar.Infrastructure.ExternalServiceContracts;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using System.Net.Http;
 
 namespace ChatarPatar.Application.Services;
 
@@ -48,7 +46,7 @@ internal class AuthService : IAuthService
     {
         await _validationService.ValidateAsync<UserLoginDto>(user);
 
-        var identifier = user.Identifier.Trim().ToLower();
+        var identifier = user.Identifier.Trim().ToLowerInvariant();
 
         var existUser = await _repositories.UserRepository.GetUserByIdentifierAsync(email: identifier, username: identifier);
 
@@ -63,8 +61,8 @@ internal class AuthService : IAuthService
     {
         await _validationService.ValidateAsync<UserRegisterDto>(user);
 
-        var username = user.Username.Trim().ToLower();
-        var email = user.Email.Trim().ToLower();
+        var username = user.Username.Trim().ToLowerInvariant();
+        var email = user.Email.Trim().ToLowerInvariant();
 
         var existingUser = await _repositories.UserRepository.GetUserByIdentifierAsync(email: email, username: username);
 
@@ -83,8 +81,6 @@ internal class AuthService : IAuthService
             Status = PresenceStatusEnum.Online
         };
 
-        await _repositories.UserRepository.AddAsync(userEntity);
-
         if (!string.IsNullOrWhiteSpace(user.InviteToken))
         {
             // ── INVITE TOKEN PATH ──────────────────────────────────────────────
@@ -102,27 +98,16 @@ internal class AuthService : IAuthService
                     .FirstOrDefaultAsync();
 
                 if (inviteByEmail is not null)
-                {
-                    inviteByEmail.FailedAttempts++;
-                    inviteByEmail.UpdatedAt = DateTime.UtcNow;
-
-                    if (inviteByEmail.FailedAttempts >= _tokenSettings.InviteMaxFailedAttempts)
-                    {
-                        // Void the invite — the sender will need to issue a new one
-                        inviteByEmail.IsUsed = true;
-                        inviteByEmail.UsedAt = DateTime.UtcNow;
-                        await _repositories.UnitOfWork.SaveChangesAsync();
-                        throw new InvalidDataAppException("Invite token is invalid or has expired");
-                    }
-
-                    await _repositories.UnitOfWork.SaveChangesAsync();
-                }
+                    await HandleInvalidInviteAttemptAsync(inviteByEmail);
 
                 throw new InvalidDataAppException("Invite token is invalid or has expired");
             }
 
             if (invite.Email != email)
-                throw new ForbiddenAppException("The Invite was sent to other email.");
+            {
+                await HandleInvalidInviteAttemptAsync(invite);
+                throw new InvalidDataAppException("Invite token is invalid or has expired");
+            }
 
             var membershipEntity = new OrganizationMember
             {
@@ -142,11 +127,14 @@ internal class AuthService : IAuthService
             await _repositories.OrganizationMemberRepository.AddAsync(membershipEntity);
         }
 
+        await _repositories.UserRepository.AddAsync(userEntity);
         await _repositories.UserStatusRepository.AddAsync(userStatusEntity);
 
-        // NOTE: The user, membership, and invite.IsUsed=true are all written in a single
-        // SaveChangesAsync call. If it fails, EF rolls back the entire unit of work —
-        // the invite is NOT consumed and the user can retry with the same token.
+        // NOTE:
+        // Successful registration persists the user, membership, and invite
+        // consumption in a single SaveChangesAsync call.
+        // Invalid invite attempts may trigger an earlier SaveChangesAsync
+        // to persist failed-attempt counters and invite invalidation.
         await _repositories.UnitOfWork.SaveChangesAsync();
 
         // ── SEND VERIFICATION OTP ──────────────────────────────────────────────
@@ -271,7 +259,7 @@ internal class AuthService : IAuthService
 
         await _repositories.UnitOfWork.SaveChangesAsync();
 
-        await _emailNotificationService.SendEmailVerificationOtpAsync(
+        _ = await _emailNotificationService.SendEmailVerificationOtpAsync(
             toEmail: user.Email,
             userName: user.Name,
             otp: plainOtp,
@@ -384,7 +372,7 @@ internal class AuthService : IAuthService
             var tokensToRevoke = await _repositories.RefreshTokenRepository
             .FindByCondition(x => x.UserId == user.Id && !x.IsRevoked && x.ExpiresAt > DateTime.UtcNow)
             .OrderByDescending(x => x.CreatedAt)
-            .Skip(_tokenSettings.MaxSessions - 1)
+            .Skip(_tokenSettings.MaxSessions - 1) // Skip the (MaxSessions-1) newest to keep, revoke the rest — the new token being issued will fill the last slot
             .ToListAsync();
 
             foreach (var token in tokensToRevoke)
@@ -460,6 +448,9 @@ internal class AuthService : IAuthService
         return plainOtp;
     }
 
+    /// <summary>
+    /// Caller must call SaveChangesAsync to persist the IsUsed flag
+    /// </summary>
     private async Task<OtpVerification> VerifyOtpAsync(Guid userId, OtpPurposeEnum purpose, string otp)
     {
         var otpEntity = await _repositories.OtpVerificationRepository
@@ -497,6 +488,22 @@ internal class AuthService : IAuthService
     }
 
     private IAuthTokenStrategy GetTokenStrategy() => _tokenStrategyFactory.Resolve();
+
+    private async Task HandleInvalidInviteAttemptAsync(OrganizationInvite invite)
+    {
+        invite.FailedAttempts++;
+        invite.UpdatedAt = DateTime.UtcNow;
+
+        if (invite.FailedAttempts >= _tokenSettings.InviteMaxFailedAttempts)
+        {
+            // Void the invite — the sender will need to issue a new one
+            invite.IsUsed = true;
+            invite.UsedAt = DateTime.UtcNow;
+        }
+
+        // Persist the incremented FailedAttempts before throwing
+        await _repositories.UnitOfWork.SaveChangesAsync();
+    }
 
     #endregion
 }

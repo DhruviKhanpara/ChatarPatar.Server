@@ -60,18 +60,6 @@ public class ChannelMemberController : ControllerBase
     }
 
     /// <summary>
-    /// Removes a member from the channel.
-    /// Cannot remove yourself — use the me endpoint instead.
-    /// </summary>
-    [HttpDelete("{membershipId:guid}")]
-    [RequirePermission(PermissionCheckLogicEnum.All, Permissions.CHANNEL_MEMBERS_REMOVE)]
-    public async Task<IActionResult> RemoveChannelMember([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid channelId, [FromRoute] Guid membershipId)
-    {
-        await _services.ChannelMemberService.RemoveChannelMemberAsync(orgId, teamId, channelId, membershipId);
-        return Ok("Member removed from channel successfully.");
-    }
-
-    /// <summary>
     /// Leave the channel (soft delete own membership).
     /// </summary>
     [HttpDelete("me")]
@@ -80,5 +68,18 @@ public class ChannelMemberController : ControllerBase
     {
         await _services.ChannelMemberService.LeaveChannelAsync(orgId, teamId, channelId);
         return Ok("Left channel successfully.");
+    }
+
+    /// <summary>
+    /// Removes a member from the channel.
+    /// Cannot remove yourself — use the me endpoint instead.
+    /// IMPORTANT: :guid constraint prevents "/me" from matching this endpoint.
+    /// </summary>
+    [HttpDelete("{membershipId:guid}")]
+    [RequirePermission(PermissionCheckLogicEnum.All, Permissions.CHANNEL_MEMBERS_REMOVE)]
+    public async Task<IActionResult> RemoveChannelMember([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid channelId, [FromRoute] Guid membershipId)
+    {
+        await _services.ChannelMemberService.RemoveChannelMemberAsync(orgId, teamId, channelId, membershipId);
+        return Ok("Member removed from channel successfully.");
     }
 }

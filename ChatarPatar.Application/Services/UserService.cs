@@ -155,6 +155,8 @@ internal class UserService : IUserService
 
     public async Task ChangePasswordAsync(ChangePasswordDto dto)
     {
+        await _validationService.ValidateAsync<ChangePasswordDto>(dto);
+
         var userId = Guid.Parse(_httpContext.GetUserId());
 
         var user = await _repositories.UserRepository

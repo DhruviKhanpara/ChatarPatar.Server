@@ -98,7 +98,7 @@ public class TeamController : ControllerBase
     /// </summary>
     [HttpPost("{teamId:guid}/archive")]
     [RequirePermission(PermissionCheckLogicEnum.All, Permissions.TEAM_ARCHIVE)]
-    public async Task<IActionResult> ArchiveChannel([FromRoute] Guid orgId, [FromRoute] Guid teamId)
+    public async Task<IActionResult> ArchiveTeam([FromRoute] Guid orgId, [FromRoute] Guid teamId)
     {
         await _services.TeamService.ArchiveTeamAsync(orgId, teamId);
         return Ok("Team archived successfully.");
@@ -109,7 +109,7 @@ public class TeamController : ControllerBase
     /// </summary>
     [HttpPost("{teamId:guid}/unarchive")]
     [RequirePermission(PermissionCheckLogicEnum.All, Permissions.TEAM_ARCHIVE)]
-    public async Task<IActionResult> UnarchiveChannel([FromRoute] Guid orgId, [FromRoute] Guid teamId)
+    public async Task<IActionResult> UnarchiveTeam([FromRoute] Guid orgId, [FromRoute] Guid teamId)
     {
         await _services.TeamService.UnarchiveTeamAsync(orgId, teamId);
         return Ok("Team unarchived successfully.");

@@ -21,6 +21,9 @@ internal class ValidationService : IValidationService
         _logger = logger;
     }
 
+    /// <summary>
+    /// Per-request only. Does not affect other concurrent requests.
+    /// </summary>
     public void SetGlobalValidation(bool isEnabled)
     {
         _isValidationDisabledGlobally = !isEnabled;
