@@ -79,7 +79,7 @@ internal class PermissionService : IPermissionService
             if (orgRole == null) return false;
 
             // 2. Add org-level permissions
-            if (RolePermissions.OrganizationRolePermissions.TryGetValue((OrganizationRoleEnum)orgRole, out var orgPerms))
+            if (RolePermissions.OrganizationRolePermissions.TryGetValue(orgRole.Value, out var orgPerms))
                 combined.UnionWith(orgPerms);
 
             if (combined.Contains("*"))
@@ -103,7 +103,7 @@ internal class PermissionService : IPermissionService
 
                 if (teamBelongsToOrg == null) return false;
 
-                if (teamBelongsToOrg.Role != null && RolePermissions.TeamRolePermissions.TryGetValue((TeamRoleEnum)teamBelongsToOrg.Role, out var teamPerms))
+                if (teamBelongsToOrg.Role != null && RolePermissions.TeamRolePermissions.TryGetValue(teamBelongsToOrg.Role.Value, out var teamPerms))
                     combined.UnionWith(teamPerms);
             }
 
@@ -150,12 +150,15 @@ internal class PermissionService : IPermissionService
         // 5. Add conversation-level permissions
         if (ctx.ConversationId is not null)
         {
-            // Verify the conversation actually belongs to the claimed org
-            var convBelongsToOrg = await _repositories.ConversationRepository
+            // Resolve conversation permissions for current user
+            var conv = await _repositories.ConversationRepository
                 .FindByCondition(x => x.Id == ctx.ConversationId)
                 .AsNoTracking()
                 .Select(x => new
                 {
+                    x.Type,
+                    x.DirectParticipantAId,
+                    x.DirectParticipantBId,
                     Role = x.ConversationParticipants
                     .Where(m => !m.HasLeft && m.UserId == ctx.UserId)
                     .Select(m => (ConversationParticipantRoleEnum?)m.Role)
@@ -163,10 +166,27 @@ internal class PermissionService : IPermissionService
                 })
                 .FirstOrDefaultAsync();
 
-            if (convBelongsToOrg == null) return false;
+            if (conv == null) return false;
 
-            if (convBelongsToOrg.Role != null && RolePermissions.ConversationRolePermissions.TryGetValue((ConversationParticipantRoleEnum)convBelongsToOrg.Role, out var convPerms))
-                combined.UnionWith(convPerms);
+            if (conv.Type == ConversationTypeEnum.Direct)
+            {
+                var isParticipant = conv.DirectParticipantAId == ctx.UserId || conv.DirectParticipantBId == ctx.UserId;
+
+                if (!isParticipant)
+                    return false;
+
+                combined.UnionWith(RolePermissions.DirectConversationPermissions);
+            }
+            else
+            {
+                if (conv.Role == null)
+                    return false;
+
+                if (RolePermissions.ConversationRolePermissions.TryGetValue(conv.Role.Value, out var convPerms))
+                {
+                    combined.UnionWith(convPerms);
+                }
+            }
         }
 
         return logic switch

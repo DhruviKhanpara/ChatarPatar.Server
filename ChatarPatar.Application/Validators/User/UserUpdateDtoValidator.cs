@@ -9,7 +9,7 @@ public class UserUpdateDtoValidator : AbstractValidator<UserUpdateDto>
     public UserUpdateDtoValidator()
     {
         RuleFor(x => x.Name)
-            .NotEmpty()
+            .Must(name => !string.IsNullOrWhiteSpace(name))
                 .WithMessage("Name is required.")
             .MaximumLength(ValidationConstants.User.Lengths.Name)
                 .WithMessage($"Name must not exceed {ValidationConstants.User.Lengths.Name} characters.");

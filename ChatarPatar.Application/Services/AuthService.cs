@@ -259,7 +259,7 @@ internal class AuthService : IAuthService
 
         await _repositories.UnitOfWork.SaveChangesAsync();
 
-        _ = await _emailNotificationService.SendEmailVerificationOtpAsync(
+        _ = _emailNotificationService.SendEmailVerificationOtpAsync(
             toEmail: user.Email,
             userName: user.Name,
             otp: plainOtp,

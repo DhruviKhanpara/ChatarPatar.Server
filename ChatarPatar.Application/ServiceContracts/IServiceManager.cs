@@ -14,5 +14,7 @@ public interface IServiceManager
     IChannelService ChannelService { get; }
     IChannelMemberService ChannelMemberService { get; }
 
+    IConversationService ConversationService { get; }
+
     IPermissionService PermissionService { get; }
 }
