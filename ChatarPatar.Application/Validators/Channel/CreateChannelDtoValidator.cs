@@ -9,7 +9,7 @@ public class CreateChannelDtoValidator : AbstractValidator<CreateChannelDto>
     public CreateChannelDtoValidator()
     {
         RuleFor(x => x.Name)
-            .NotEmpty()
+            .Must(name => !string.IsNullOrWhiteSpace(name))
                 .WithMessage("Channel name is required.")
             .MaximumLength(ValidationConstants.Channel.Lengths.Name)
                 .WithMessage("Channel name must not exceed 100 characters.");

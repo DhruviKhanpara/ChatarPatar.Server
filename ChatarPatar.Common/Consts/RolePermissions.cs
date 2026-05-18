@@ -162,4 +162,14 @@ public static class RolePermissions
     public static readonly IReadOnlyDictionary<TeamRoleEnum, HashSet<string>> TeamRolePermissions = Team;
     public static readonly IReadOnlyDictionary<ChannelRoleEnum, HashSet<string>> ChannelRolePermissions = Channel;
     public static readonly IReadOnlyDictionary<ConversationParticipantRoleEnum, HashSet<string>> ConversationRolePermissions = Conversation;
+
+    public static readonly HashSet<string> DirectConversationPermissions = new()
+    {
+        Permissions.MESSAGE_SEND,
+        Permissions.MESSAGE_PIN,
+        Permissions.MESSAGE_EDIT_OWN,
+        Permissions.MESSAGE_DELETE_OWN,
+        Permissions.MESSAGE_REACT,
+        Permissions.MESSAGE_THREAD_REPLY,
+    };
 }

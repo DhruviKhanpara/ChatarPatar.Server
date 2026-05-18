@@ -12,7 +12,7 @@ public class CreateOrganizationDtoValidator : AbstractValidator<CreateOrganizati
 
         RuleFor(x => x.Name)
             .Cascade(CascadeMode.Stop)
-            .NotEmpty()
+            .Must(name => !string.IsNullOrWhiteSpace(name))
                 .WithMessage("Name is required.")
             .MaximumLength(ValidationConstants.Organization.Lengths.Name)
                 .WithMessage($"Name must not exceed {ValidationConstants.Organization.Lengths.Name} characters.")
