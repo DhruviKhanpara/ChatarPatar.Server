@@ -13,7 +13,7 @@ public class OrganizationMemberConfiguration : IEntityTypeConfiguration<Organiza
         builder.ToTable("OrganizationMembers", t =>
         {
             t.HasCheckConstraint(
-                "CK_OrgMembers_Role",
+                DbConstraints.OrganizationMembers.CKRole,
                 "Role IN ('OrgOwner','OrgAdmin','OrgMember','OrgGuest')");
         });
 
@@ -45,14 +45,14 @@ public class OrganizationMemberConfiguration : IEntityTypeConfiguration<Organiza
         // ----------------------------
 
         builder.HasIndex(m => m.OrgId)
-               .HasDatabaseName("IX_OrgMembers_OrgId");
+               .HasDatabaseName(DbConstraints.OrganizationMembers.IXOrgId);
 
         builder.HasIndex(m => m.UserId)
-               .HasDatabaseName("IX_OrgMembers_UserId");
+               .HasDatabaseName(DbConstraints.OrganizationMembers.IXUserId);
         
         builder.HasIndex(m => new { m.OrgId, m.UserId })
                 .IsUnique()
-                .HasDatabaseName("UX_OrgMembers_Active")
+                .HasDatabaseName(DbConstraints.OrganizationMembers.UniqueActiveOrgMembers)
                 .HasFilter("[IsDeleted] = 0");
 
         // ----------------------------
@@ -62,37 +62,37 @@ public class OrganizationMemberConfiguration : IEntityTypeConfiguration<Organiza
         builder.HasOne(m => m.Organization)
                .WithMany(o => o.OrganizationMembers)
                .HasForeignKey(m => m.OrgId)
-               .HasConstraintName("FK_OrgMembers_Org")
+               .HasConstraintName(DbConstraints.OrganizationMembers.FKOrg)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(m => m.User)
                .WithMany()
                .HasForeignKey(m => m.UserId)
-               .HasConstraintName("FK_OrgMembers_User")
+               .HasConstraintName(DbConstraints.OrganizationMembers.FKUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(m => m.InvitedByUser)
                .WithMany()
                .HasForeignKey(m => m.InvitedByUserId)
-               .HasConstraintName("FK_OrgMembers_InvitedBy")
+               .HasConstraintName(DbConstraints.OrganizationMembers.FKInviter)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(m => m.CreatedByUser)
                .WithMany()
                .HasForeignKey(m => m.CreatedBy)
-               .HasConstraintName("FK_OrgMembers_CreatedBy")
+               .HasConstraintName(DbConstraints.OrganizationMembers.FKCreatedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(m => m.UpdatedByUser)
                .WithMany()
                .HasForeignKey(m => m.UpdatedBy)
-               .HasConstraintName("FK_OrgMembers_UpdatedBy")
+               .HasConstraintName(DbConstraints.OrganizationMembers.FKUpdatedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(m => m.DeletedByUser)
                .WithMany()
                .HasForeignKey(m => m.DeletedBy)
-               .HasConstraintName("FK_OrgMembers_DeletedBy")
+               .HasConstraintName(DbConstraints.OrganizationMembers.FKDeletedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         // ----------------------------

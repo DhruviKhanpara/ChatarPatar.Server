@@ -1,4 +1,5 @@
-﻿using Microsoft.Data.SqlClient;
+﻿using ChatarPatar.Common.Consts;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using System.Text.RegularExpressions;
 
@@ -13,7 +14,7 @@ public static class SqlExceptionHelper
             // 2601 = duplicate key
             // 2627 = unique constraint violation
             return sqlEx.Number is 2601 or 2627
-                && sqlEx.Message.Contains("UX_Conversations_Direct");
+                && sqlEx.Message.Contains(DbConstraints.Conversations.UniqueDirectConversationParticipants);
         }
 
         return false;
@@ -33,6 +34,8 @@ public static class SqlExceptionHelper
         return true;
     }
 
+    #region Private Section
+
     private static string? ExtractConstraintName(string message)
     {
         var match = Regex.Match(message, @"(?:constraint|index) '([^']+)'", RegexOptions.IgnoreCase);
@@ -44,14 +47,16 @@ public static class SqlExceptionHelper
 
     private static readonly Dictionary<string, string> ConstraintMessages = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["UQ_Users_Email"] = "Email already exists.",
-        ["UQ_Users_Username"] = "Username already exists.",
-        ["UQ_Organizations_Slug"] = "Organization slug already exists.",
-        ["UX_OrgMembers_Active"] = "User is already a member of the organization.",
-        ["UX_Teams_Name"] = "Team name already exists in Organization.",
-        ["UX_TeamMembers_Active"] = "User is already a member of the team.",
-        ["UX_Channels_Name"] = "Channel name already exists in this team.",
-        ["UX_ChannelMembers_Active"] = "User is already a member of the channel.",
-        ["UX_ConvParticipants_Active"] = "User is already a participant in the conversation.",
+        [DbConstraints.Users.UniqueEmail] = "Email already exists.",
+        [DbConstraints.Users.UniqueUsername] = "Username already exists.",
+        [DbConstraints.Organizations.UniqueSlug] = "Organization slug already exists.",
+        [DbConstraints.OrganizationMembers.UniqueActiveOrgMembers] = "User is already a member of the organization.",
+        [DbConstraints.Teams.UniqueNamePerOrg] = "Team name already exists in Organization.",
+        [DbConstraints.TeamMembers.UniqueActiveTeamMembers] = "User is already a member of the team.",
+        [DbConstraints.Channels.UniqueNamePerTeam] = "Channel name already exists in this team.",
+        [DbConstraints.ChannelMembers.UniqueActiveChannelMembers] = "User is already a member of the channel.",
+        [DbConstraints.ConversationParticipants.UniqueConversationUser] = "User is already a participant in the conversation.",
     };
+
+    #endregion
 }

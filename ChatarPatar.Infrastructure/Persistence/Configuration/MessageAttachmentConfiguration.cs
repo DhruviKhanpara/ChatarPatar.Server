@@ -1,4 +1,5 @@
-﻿using ChatarPatar.Infrastructure.Entities;
+﻿using ChatarPatar.Common.Consts;
+using ChatarPatar.Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -28,18 +29,18 @@ public class MessageAttachmentConfiguration : IEntityTypeConfiguration<MessageAt
 
         builder.HasIndex(a => new { a.MessageId, a.FileId })
                .IsUnique()
-               .HasDatabaseName("UQ_MessageAttachments_File");
+               .HasDatabaseName(DbConstraints.MessageAttachments.UniqueFilePerMessage);
 
         builder.HasIndex(a => new { a.MessageId, a.DisplayOrder })
                .IsUnique()
-               .HasDatabaseName("UQ_MessageAttachments_Order");
+               .HasDatabaseName(DbConstraints.MessageAttachments.UniqueDisplayOrderInMessage);
 
         // ----------------------------
         // Indexes
         // ----------------------------
 
         builder.HasIndex(a => a.MessageId)
-               .HasDatabaseName("IX_MessageAttachments_MessageId");
+               .HasDatabaseName(DbConstraints.MessageAttachments.IXMessageId);
 
         // ----------------------------
         // Relationships
@@ -48,13 +49,13 @@ public class MessageAttachmentConfiguration : IEntityTypeConfiguration<MessageAt
         builder.HasOne(a => a.Message)
                .WithMany()
                .HasForeignKey(a => a.MessageId)
-               .HasConstraintName("FK_MessageAttachments_Message")
+               .HasConstraintName(DbConstraints.MessageAttachments.FKMessage)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(a => a.File)
                .WithMany()
                .HasForeignKey(a => a.FileId)
-               .HasConstraintName("FK_MessageAttachments_File")
+               .HasConstraintName(DbConstraints.MessageAttachments.FKFile)
                .OnDelete(DeleteBehavior.Restrict);
     }
 }

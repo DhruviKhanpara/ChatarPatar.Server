@@ -117,8 +117,8 @@ BEGIN
         )
     );
 
-    CREATE INDEX IX_Files_UploadedBy   ON Files(UploadedByUserId);
-    CREATE INDEX IX_Files_UsageContext ON Files(UsageContext);
+    CREATE NONCLUSTERED INDEX IX_Files_UploadedBy   ON Files(UploadedByUserId);
+    CREATE NONCLUSTERED INDEX IX_Files_UsageContext ON Files(UsageContext);
 END
 GO
 
@@ -202,8 +202,8 @@ BEGIN
         CONSTRAINT CK_OrgMembers_Role        CHECK (Role IN ('OrgOwner','OrgAdmin','OrgMember','OrgGuest'))
     );
 
-    CREATE INDEX IX_OrgMembers_OrgId  ON OrganizationMembers(OrgId);
-    CREATE INDEX IX_OrgMembers_UserId ON OrganizationMembers(UserId);
+    CREATE NONCLUSTERED INDEX IX_OrgMembers_OrgId  ON OrganizationMembers(OrgId);
+    CREATE NONCLUSTERED INDEX IX_OrgMembers_UserId ON OrganizationMembers(UserId);
     CREATE UNIQUE INDEX UX_OrgMembers_Active ON OrganizationMembers (OrgId, UserId) WHERE IsDeleted = 0;
 END
 GO
@@ -253,8 +253,8 @@ BEGIN
         )
     );
 
-    CREATE INDEX IX_Teams_OrgId ON Teams(OrgId);
-    CREATE INDEX IX_Teams_Archived ON Teams(OrgId, IsArchived);
+    CREATE NONCLUSTERED INDEX IX_Teams_OrgId ON Teams(OrgId);
+    CREATE NONCLUSTERED INDEX IX_Teams_Archived ON Teams(OrgId, IsArchived);
     CREATE UNIQUE INDEX UX_Teams_Name ON Teams (OrgId, Name) WHERE IsDeleted = 0;
 END
 GO
@@ -293,8 +293,8 @@ BEGIN
         CONSTRAINT CK_TeamMembers_Role  CHECK (Role IN ('TeamAdmin','TeamMember','TeamGuest'))
     );
 
-    CREATE INDEX IX_TeamMembers_TeamId ON TeamMembers(TeamId);
-    CREATE INDEX IX_TeamMembers_UserId ON TeamMembers(UserId);
+    CREATE NONCLUSTERED INDEX IX_TeamMembers_TeamId ON TeamMembers(TeamId);
+    CREATE NONCLUSTERED INDEX IX_TeamMembers_UserId ON TeamMembers(UserId);
     CREATE UNIQUE INDEX UX_TeamMembers_Active ON TeamMembers (TeamId, UserId) WHERE IsDeleted = 0;
 END
 GO
@@ -345,8 +345,8 @@ BEGIN
         )
     );
 
-    CREATE INDEX IX_Channels_TeamId ON Channels(TeamId);
-    CREATE INDEX IX_Channels_Archived ON Channels(TeamId, IsArchived);
+    CREATE NONCLUSTERED INDEX IX_Channels_TeamId ON Channels(TeamId);
+    CREATE NONCLUSTERED INDEX IX_Channels_Archived ON Channels(TeamId, IsArchived);
     CREATE UNIQUE INDEX UX_Channels_Name ON Channels (TeamId, Name) WHERE IsDeleted = 0;
 END
 GO
@@ -387,8 +387,8 @@ BEGIN
         CONSTRAINT CK_ChannelMembers_Role   CHECK (Role IN ('ChannelModerator','ChannelMember','ChannelReadOnly'))
     );
 
-    CREATE INDEX IX_ChannelMembers_ChannelId ON ChannelMembers(ChannelId);
-    CREATE INDEX IX_ChannelMembers_UserId    ON ChannelMembers(UserId);
+    CREATE NONCLUSTERED INDEX IX_ChannelMembers_ChannelId ON ChannelMembers(ChannelId);
+    CREATE NONCLUSTERED INDEX IX_ChannelMembers_UserId    ON ChannelMembers(UserId);
     CREATE UNIQUE INDEX UX_ChannelMembers_Active ON ChannelMembers(ChannelId, UserId) WHERE IsDeleted = 0;
 END
 GO
@@ -466,21 +466,29 @@ BEGIN
         Role              NVARCHAR(50)        NOT NULL DEFAULT 'GroupMember',
         -- 'GroupAdmin' | 'GroupMember'
         -- Soft-left: user left group DM but history preserved
-        AddedBy            UNIQUEIDENTIFIER    NOT NULL,
+        
+        -- Original membership info
+        AddedBy            UNIQUEIDENTIFIER   NOT NULL,
+        JoinedAt          DATETIME2           NOT NULL DEFAULT SYSUTCDATETIME(),
+        -- Current membership state
         HasLeft           BIT                 NOT NULL DEFAULT 0,
         LeftAt            DATETIME2           NULL,
-        JoinedAt          DATETIME2           NOT NULL DEFAULT SYSUTCDATETIME(),
+        -- Latest rejoin info
+        RejoinedAt        DATETIME2(7)        NULL,
+        RejoinedBy        UNIQUEIDENTIFIER    NULL,
 
         CONSTRAINT PK_ConversationParticipants       PRIMARY KEY (Id),
         CONSTRAINT FK_ConvParticipants_Conversation  FOREIGN KEY (ConversationId) REFERENCES Conversations(Id),
         CONSTRAINT FK_ConvParticipants_User          FOREIGN KEY (UserId)         REFERENCES Users(Id),
-        CONSTRAINT FK_ConvParticipants_AddedBy       FOREIGN KEY (AddedBy)         REFERENCES Users(Id),
-        CONSTRAINT CK_ConvParticipants_Role   CHECK (Role IN ('GroupAdmin','GroupMember'))
+        CONSTRAINT FK_ConvParticipants_AddedBy       FOREIGN KEY (AddedBy)        REFERENCES Users(Id),
+        CONSTRAINT FK_ConvParticipants_RejoinedBy    FOREIGN KEY (RejoinedBy)     REFERENCES Users(Id),
+        CONSTRAINT CK_ConvParticipants_Role   CHECK (Role IN ('GroupAdmin','GroupMember')),
+        CONSTRAINT UQ_ConvParticipants UNIQUE NONCLUSTERED ([ConversationId] ASC, [UserId] ASC)
     );
 
-    CREATE INDEX IX_ConvParticipants_ConvId ON ConversationParticipants(ConversationId);
-    CREATE INDEX IX_ConvParticipants_UserId ON ConversationParticipants(UserId);
-    CREATE UNIQUE INDEX UX_ConvParticipants_Name ON ConversationParticipants(ConversationId, UserId) WHERE HasLeft = 0;
+    CREATE NONCLUSTERED INDEX IX_ConvParticipants_ConvId ON ConversationParticipants(ConversationId);
+    CREATE NONCLUSTERED INDEX IX_ConvParticipants_UserId ON ConversationParticipants(UserId);
+    CREATE NONCLUSTERED INDEX IX_ConvParticipants_ActiveConversation ON ConversationParticipants(ConversationId, HasLeft);
 END
 GO
 
@@ -555,15 +563,15 @@ BEGIN
         )
     );
 
-    CREATE INDEX IX_Messages_ThreadRootMessageId 
+    CREATE NONCLUSTERED INDEX IX_Messages_ThreadRootMessageId 
     ON Messages(ThreadRootMessageId, CreatedAt)
     WHERE IsDeleted = 0 AND ThreadRootMessageId IS NOT NULL;
 
-    CREATE INDEX IX_Messages_Channel_Active
+    CREATE NONCLUSTERED INDEX IX_Messages_Channel_Active
     ON Messages(ChannelId, SequenceNumber)
     WHERE IsDeleted = 0 AND ChannelId IS NOT NULL;
 
-    CREATE INDEX IX_Messages_Conversation_Active
+    CREATE NONCLUSTERED INDEX IX_Messages_Conversation_Active
     ON Messages(ConversationId, SequenceNumber)
     WHERE IsDeleted = 0 AND ConversationId IS NOT NULL;
 
@@ -575,7 +583,7 @@ BEGIN
     ON Messages(ConversationId, SenderId, ClientMessageId)
     WHERE ConversationId IS NOT NULL;
 
-    CREATE INDEX IX_Messages_SenderId_CreatedAt
+    CREATE NONCLUSTERED INDEX IX_Messages_SenderId_CreatedAt
     ON Messages (SenderId, CreatedAt)
     WHERE IsDeleted = 0;
 END
@@ -605,7 +613,7 @@ BEGIN
         CONSTRAINT FK_MessageReactions_User     FOREIGN KEY (UserId)    REFERENCES Users(Id)
     );
 
-    CREATE INDEX IX_MessageReactions_MessageId ON MessageReactions(MessageId);
+    CREATE NONCLUSTERED INDEX IX_MessageReactions_MessageId ON MessageReactions(MessageId);
 END
 GO
 
@@ -635,7 +643,7 @@ BEGIN
         CONSTRAINT FK_MessageAttachments_File       FOREIGN KEY (FileId)    REFERENCES Files(Id)
     );
 
-    CREATE INDEX IX_MessageAttachments_MessageId ON MessageAttachments(MessageId);
+    CREATE NONCLUSTERED INDEX IX_MessageAttachments_MessageId ON MessageAttachments(MessageId);
 END
 GO
 
@@ -685,8 +693,8 @@ BEGIN
         )
     );
 
-    CREATE INDEX IX_MessageReceipts_Message ON MessageReceipts(UserId, MessageId);
-    CREATE INDEX IX_MessageReceipts_User_Seen ON MessageReceipts(UserId, SeenAt);
+    CREATE NONCLUSTERED INDEX IX_MessageReceipts_Message ON MessageReceipts(UserId, MessageId);
+    CREATE NONCLUSTERED INDEX IX_MessageReceipts_User_Seen ON MessageReceipts(UserId, SeenAt);
 END
 GO
 
@@ -746,11 +754,11 @@ BEGIN
     WHERE ConversationId IS NOT NULL
     AND UnPinnedAt IS NULL;
 
-    CREATE INDEX IX_Pinned_Channel_Active
+    CREATE NONCLUSTERED INDEX IX_Pinned_Channel_Active
     ON PinnedMessages (ChannelId, PinnedAt)
     WHERE UnPinnedAt IS NULL;
 
-    CREATE INDEX IX_Pinned_Conversation_Active
+    CREATE NONCLUSTERED INDEX IX_Pinned_Conversation_Active
     ON PinnedMessages (ConversationId, PinnedAt)
     WHERE UnPinnedAt IS NULL;
 END
@@ -790,8 +798,8 @@ BEGIN
     );
 
     -- Most common query: "show all messages that mention me in this channel"
-    CREATE INDEX IX_MessageMentions_UserChannel  ON MessageMentions(MentionedUserId, ChannelId, CreatedAt);
-    CREATE INDEX IX_MessageMentions_UserConv     ON MessageMentions(MentionedUserId, ConversationId, CreatedAt);
+    CREATE NONCLUSTERED INDEX IX_MessageMentions_UserChannel  ON MessageMentions(MentionedUserId, ChannelId, CreatedAt);
+    CREATE NONCLUSTERED INDEX IX_MessageMentions_UserConv     ON MessageMentions(MentionedUserId, ConversationId, CreatedAt);
 END
 GO
 
@@ -838,7 +846,7 @@ BEGIN
         CONSTRAINT CK_ReadStates_Mention_NonNegative CHECK (MentionCount >= 0)
     );
 
-    CREATE INDEX IX_ReadStates_User ON ReadStates(UserId);  -- load full sidebar state
+    CREATE NONCLUSTERED INDEX IX_ReadStates_User ON ReadStates(UserId);  -- load full sidebar state
 
     CREATE UNIQUE INDEX UX_ReadStates_User_Channel
     ON ReadStates (UserId, ChannelId)
@@ -905,7 +913,7 @@ BEGIN
         )
     );
 
-    CREATE INDEX IX_Notifications_UserId ON Notifications(RecipientId, IsRead, CreatedAt);
+    CREATE NONCLUSTERED INDEX IX_Notifications_UserId ON Notifications(RecipientId, IsRead, CreatedAt);
 END
 GO
 
@@ -974,7 +982,7 @@ BEGIN
             )
     );
 
-    CREATE INDEX IX_UserStatus_Status ON UserStatus (Status);
+    CREATE NONCLUSTERED INDEX IX_UserStatus_Status ON UserStatus (Status);
 END
 GO
 
@@ -1016,7 +1024,7 @@ BEGIN
     ON RefreshTokens (Token)
     WHERE IsRevoked = 0;
 
-    CREATE INDEX IX_RefreshToken_ActiveToken ON RefreshTokens (UserId, IsRevoked, ExpiresAt);
+    CREATE NONCLUSTERED INDEX IX_RefreshToken_ActiveToken ON RefreshTokens (UserId, IsRevoked, ExpiresAt);
 END
 GO
 
@@ -1078,11 +1086,11 @@ BEGIN
             CHECK ([FailedAttempts] >= 0)
     );
 
-    CREATE INDEX IX_OrgInvites_OrgId
+    CREATE NONCLUSTERED INDEX IX_OrgInvites_OrgId
         ON OrganizationInvites (OrganizationId)
         WHERE IsUsed = 0;
 
-    CREATE INDEX IX_OrgInvites_Email
+    CREATE NONCLUSTERED INDEX IX_OrgInvites_Email
         ON OrganizationInvites (Email)
         WHERE IsUsed = 0;
 
@@ -1090,7 +1098,7 @@ BEGIN
     -- Schedule a nightly SQL Agent job:
     -- DELETE FROM OrganizationInvites
     -- WHERE ExpiresAt < SYSUTCDATETIME() AND IsUsed = 0;
-    CREATE INDEX IX_OrgInvites_ExpiresAt
+    CREATE NONCLUSTERED INDEX IX_OrgInvites_ExpiresAt
         ON OrganizationInvites (ExpiresAt)
         WHERE IsUsed = 0;
 END

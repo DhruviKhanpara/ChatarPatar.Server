@@ -12,12 +12,12 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         builder.ToTable("Notifications", t =>
         {
             t.HasCheckConstraint(
-                "CK_Notifications_ReadConsistency",
+                DbConstraints.Notifications.CKReadConsistency,
                 "(IsRead = 0 AND ReadAt IS NULL) OR " +
                 "(IsRead = 1 AND ReadAt IS NOT NULL)");
 
             t.HasCheckConstraint(
-                "CK_Notifications_Type",
+                DbConstraints.Notifications.CKType,
                 "Type BETWEEN 1 AND 8");
         });
 
@@ -41,7 +41,7 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         // ----------------------------
 
         builder.HasIndex(n => new { n.RecipientId, n.IsRead, n.CreatedAt })
-               .HasDatabaseName("IX_Notifications_UserId");
+               .HasDatabaseName(DbConstraints.Notifications.IXRecipientReadCreated);
 
         // ----------------------------
         // Relationships

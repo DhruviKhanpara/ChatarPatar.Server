@@ -13,7 +13,7 @@ public class ConversationParticipantConfiguration : IEntityTypeConfiguration<Con
         builder.ToTable("ConversationParticipants", t =>
         {
             t.HasCheckConstraint(
-                "CK_ConvParticipants_Role",
+                DbConstraints.ConversationParticipants.CKRole,
                 "Role IN ('GroupAdmin','GroupMember')");
         });
 
@@ -38,19 +38,25 @@ public class ConversationParticipantConfiguration : IEntityTypeConfiguration<Con
                .HasDefaultValue(false);
 
         // ----------------------------
+        // Unique Constraints
+        // ----------------------------
+
+        builder.HasIndex(a => new { a.ConversationId, a.UserId })
+               .IsUnique()
+               .HasDatabaseName(DbConstraints.ConversationParticipants.UniqueConversationUser);
+
+        // ----------------------------
         // Indexes
         // ----------------------------
 
         builder.HasIndex(p => p.ConversationId)
-               .HasDatabaseName("IX_ConvParticipants_ConvId");
+               .HasDatabaseName(DbConstraints.ConversationParticipants.IXConversationId);
 
         builder.HasIndex(p => p.UserId)
-               .HasDatabaseName("IX_ConvParticipants_UserId");
+               .HasDatabaseName(DbConstraints.ConversationParticipants.IXUserId);
 
-        builder.HasIndex(p => new { p.ConversationId, p.UserId })
-               .IsUnique()
-               .HasDatabaseName("UX_ConvParticipants_Active")
-               .HasFilter("[HasLeft] = 0");
+        builder.HasIndex(p => new{ p.ConversationId, p.HasLeft })
+               .HasDatabaseName(DbConstraints.ConversationParticipants.IXActiveConversation);
 
         // ----------------------------
         // Relationships
@@ -59,19 +65,25 @@ public class ConversationParticipantConfiguration : IEntityTypeConfiguration<Con
         builder.HasOne(p => p.Conversation)
                .WithMany(c => c.ConversationParticipants)
                .HasForeignKey(p => p.ConversationId)
-               .HasConstraintName("FK_ConvParticipants_Conversation")
+               .HasConstraintName(DbConstraints.ConversationParticipants.FKConversation)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(p => p.User)
                .WithMany()
                .HasForeignKey(p => p.UserId)
-               .HasConstraintName("FK_ConvParticipants_User")
+               .HasConstraintName(DbConstraints.ConversationParticipants.FKUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(p => p.AddedByUser)
                .WithMany()
                .HasForeignKey(p => p.AddedBy)
-               .HasConstraintName("FK_ConvParticipants_AddedBy")
+               .HasConstraintName(DbConstraints.ConversationParticipants.FKAddedByUser)
+               .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(p => p.RejoinedByUser)
+               .WithMany()
+               .HasForeignKey(p => p.RejoinedBy)
+               .HasConstraintName(DbConstraints.ConversationParticipants.FKRejoinedByUser)
                .OnDelete(DeleteBehavior.Restrict);
     }
 }

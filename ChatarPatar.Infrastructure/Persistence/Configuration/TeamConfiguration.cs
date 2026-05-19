@@ -12,7 +12,7 @@ public class TeamConfiguration : IEntityTypeConfiguration<Team>
         builder.ToTable("Teams", t =>
         {
             t.HasCheckConstraint(
-                "CK_Teams_ArchiveState",
+                DbConstraints.Teams.CKArchiveState,
                 "(IsArchived = 0 AND ArchivedAt IS NULL AND ArchivedBy IS NULL) OR (IsArchived = 1 AND ArchivedAt IS NOT NULL)"
             );
         });
@@ -51,14 +51,14 @@ public class TeamConfiguration : IEntityTypeConfiguration<Team>
         // ----------------------------
 
         builder.HasIndex(t => t.OrgId)
-               .HasDatabaseName("IX_Teams_OrgId");
+               .HasDatabaseName(DbConstraints.Teams.IXOrgId);
 
         builder.HasIndex(t => new { t.OrgId, t.IsArchived })
-               .HasDatabaseName("IX_Teams_Archived");
+               .HasDatabaseName(DbConstraints.Teams.IXTeamArchivedInOrg);
 
         builder.HasIndex(m => new { m.OrgId, m.Name })
                 .IsUnique()
-                .HasDatabaseName("UX_Teams_Name")
+                .HasDatabaseName(DbConstraints.Teams.UniqueNamePerOrg)
                 .HasFilter("[IsDeleted] = 0");
 
         // ----------------------------
@@ -68,37 +68,37 @@ public class TeamConfiguration : IEntityTypeConfiguration<Team>
         builder.HasOne(t => t.Organization)
                .WithMany(t => t.Teams)
                .HasForeignKey(t => t.OrgId)
-               .HasConstraintName("FK_Teams_Org")
+               .HasConstraintName(DbConstraints.Teams.FKOrg)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(t => t.IconFile)
                .WithMany()
                .HasForeignKey(t => t.IconFileId)
-               .HasConstraintName("FK_Teams_Icon")
+               .HasConstraintName(DbConstraints.Teams.FKIconFile)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(t => t.ArchivedByUser)
                .WithMany()
                .HasForeignKey(t => t.ArchivedBy)
-               .HasConstraintName("FK_Teams_Archiver")
+               .HasConstraintName(DbConstraints.Teams.FKArchiver)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(t => t.CreatedByUser)
                .WithMany()
                .HasForeignKey(t => t.CreatedBy)
-               .HasConstraintName("FK_Teams_CreatedBy")
+               .HasConstraintName(DbConstraints.Teams.FKCreatedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(t => t.UpdatedByUser)
                .WithMany()
                .HasForeignKey(t => t.UpdatedBy)
-               .HasConstraintName("FK_Teams_UpdatedBy")
+               .HasConstraintName(DbConstraints.Teams.FKUpdatedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(t => t.DeletedByUser)
                .WithMany()
                .HasForeignKey(t => t.DeletedBy)
-               .HasConstraintName("FK_Teams_DeletedBy")
+               .HasConstraintName(DbConstraints.Teams.FKDeletedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         // ----------------------------

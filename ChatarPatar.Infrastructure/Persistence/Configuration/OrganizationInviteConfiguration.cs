@@ -13,16 +13,16 @@ public class OrganizationInviteConfiguration : IEntityTypeConfiguration<Organiza
         builder.ToTable("OrganizationInvites", t =>
         {
             t.HasCheckConstraint(
-                "CK_OrgInvites_Role",
+                DbConstraints.OrganizationInvites.CKRole,
                 "Role IN ('OrgOwner','OrgAdmin','OrgMember','OrgGuest')");
 
             t.HasCheckConstraint(
-                "CK_OrgInvites_UsedConsistency",
+                DbConstraints.OrganizationInvites.CKUsedConsistency,
                 @"(IsUsed = 0 AND UsedAt IS NULL AND UsedBy IS NULL) OR
                   (IsUsed = 1 AND UsedAt IS NOT NULL AND UsedBy IS NOT NULL)");
 
             t.HasCheckConstraint(
-                "CK_OrgInvites_FailedAttempts",
+                DbConstraints.OrganizationInvites.CKFailedAttempts,
                 "[FailedAttempts] >= 0");
         });
 
@@ -73,22 +73,22 @@ public class OrganizationInviteConfiguration : IEntityTypeConfiguration<Organiza
 
         builder.HasIndex(x => x.Token)
                .IsUnique()
-               .HasDatabaseName("UQ_OrgInvites_Token");
+               .HasDatabaseName(DbConstraints.OrganizationInvites.UniqueToken);
 
         // ----------------------------
         // Indexes
         // ----------------------------
 
         builder.HasIndex(x => x.OrganizationId)
-               .HasDatabaseName("IX_OrgInvites_OrgId")
+               .HasDatabaseName(DbConstraints.OrganizationInvites.IXOrgId)
                .HasFilter("[IsUsed] = 0");
 
         builder.HasIndex(x => x.Email)
-               .HasDatabaseName("IX_OrgInvites_Email")
+               .HasDatabaseName(DbConstraints.OrganizationInvites.IXEmail)
                .HasFilter("[IsUsed] = 0");
 
         builder.HasIndex(x => x.ExpiresAt)
-               .HasDatabaseName("IX_OrgInvites_ExpiresAt")
+               .HasDatabaseName(DbConstraints.OrganizationInvites.IXExpiresAt)
                .HasFilter("[IsUsed] = 0");
 
         // ----------------------------
@@ -99,18 +99,18 @@ public class OrganizationInviteConfiguration : IEntityTypeConfiguration<Organiza
                .WithMany()
                .HasForeignKey(x => x.OrganizationId)
                .OnDelete(DeleteBehavior.Restrict)
-               .HasConstraintName("FK_OrgInvites_Org");
+               .HasConstraintName(DbConstraints.OrganizationInvites.FKOrg);
 
         builder.HasOne(x => x.CreatedByUser)
                .WithMany()
                .HasForeignKey(x => x.CreatedBy)
                .OnDelete(DeleteBehavior.Restrict)
-               .HasConstraintName("FK_OrgInvites_CreatedBy");
+               .HasConstraintName(DbConstraints.OrganizationInvites.FKCreatedByUser);
 
         builder.HasOne(x => x.UsedByUser)
                .WithMany()
                .HasForeignKey(x => x.UsedBy)
                .OnDelete(DeleteBehavior.SetNull)
-               .HasConstraintName("FK_OrgInvites_UsedBy");
+               .HasConstraintName(DbConstraints.OrganizationInvites.FKUsedByUser);
     }
 }

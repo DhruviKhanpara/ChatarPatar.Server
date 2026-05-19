@@ -41,7 +41,7 @@ public class OrganizationConfiguration : IEntityTypeConfiguration<Organization>
         // Unique Constraints
         builder.HasIndex(o => o.Slug)
                .IsUnique()
-               .HasDatabaseName("UQ_Organizations_Slug");
+               .HasDatabaseName(DbConstraints.Organizations.UniqueSlug);
 
         // ----------------------------
         // Relationships
@@ -50,25 +50,25 @@ public class OrganizationConfiguration : IEntityTypeConfiguration<Organization>
         builder.HasOne(o => o.LogoFile)
                .WithMany()
                .HasForeignKey(o => o.LogoFileId)
-               .HasConstraintName("FK_Organizations_Logo")
+               .HasConstraintName(DbConstraints.Organizations.FKLogoFile)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(o => o.CreatedByUser)
                .WithMany()
                .HasForeignKey(o => o.CreatedBy)
-               .HasConstraintName("FK_Organizations_CreatedBy")
+               .HasConstraintName(DbConstraints.Organizations.FKCreatedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(o => o.UpdatedByUser)
                .WithMany()
                .HasForeignKey(o => o.UpdatedBy)
-               .HasConstraintName("FK_Organizations_UpdatedBy")
+               .HasConstraintName(DbConstraints.Organizations.FKUpdatedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(o => o.DeletedByUser)
                .WithMany()
                .HasForeignKey(o => o.DeletedBy)
-               .HasConstraintName("FK_Organizations_DeletedBy")
+               .HasConstraintName(DbConstraints.Organizations.FKDeletedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         // ----------------------------

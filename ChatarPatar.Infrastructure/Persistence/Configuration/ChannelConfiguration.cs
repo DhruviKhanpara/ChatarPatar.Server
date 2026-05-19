@@ -13,11 +13,11 @@ public class ChannelConfiguration : IEntityTypeConfiguration<Channel>
         builder.ToTable("Channels", t =>
         {
             t.HasCheckConstraint(
-                "CK_Channels_Type",
+                DbConstraints.Channels.CKType,
                 "Type IN ('Text','Announcement')");
 
             t.HasCheckConstraint(
-                "CK_Channels_ArchiveState",
+                DbConstraints.Channels.CKArchiveState,
                 "(IsArchived = 0 AND ArchivedAt IS NULL AND ArchivedBy IS NULL) OR (IsArchived = 1 AND ArchivedAt IS NOT NULL)"
     );
         });
@@ -65,14 +65,14 @@ public class ChannelConfiguration : IEntityTypeConfiguration<Channel>
         // ----------------------------
 
         builder.HasIndex(c => c.TeamId)
-               .HasDatabaseName("IX_Channels_TeamId");
+               .HasDatabaseName(DbConstraints.Channels.IXTeamId);
 
         builder.HasIndex(c => new { c.TeamId, c.IsArchived })
-               .HasDatabaseName("IX_Channels_Archived");
+               .HasDatabaseName(DbConstraints.Channels.IXArchivedInTeam);
 
         builder.HasIndex(c => new { c.TeamId, c.Name })
                 .IsUnique()
-                .HasDatabaseName("UX_Channels_Name")
+                .HasDatabaseName(DbConstraints.Channels.UniqueNamePerTeam)
                 .HasFilter("[IsDeleted] = 0");
 
         // ----------------------------
@@ -82,37 +82,37 @@ public class ChannelConfiguration : IEntityTypeConfiguration<Channel>
         builder.HasOne(c => c.Team)
                .WithMany(t => t.Channels)
                .HasForeignKey(c => c.TeamId)
-               .HasConstraintName("FK_Channels_Team")
+               .HasConstraintName(DbConstraints.Channels.FKTeam)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(c => c.Organization)
                .WithMany()
                .HasForeignKey(c => c.OrgId)
-               .HasConstraintName("FK_Channels_Org")
+               .HasConstraintName(DbConstraints.Channels.FKOrg)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(c => c.ArchivedByUser)
                .WithMany()
                .HasForeignKey(c => c.ArchivedBy)
-               .HasConstraintName("FK_Channels_Archiver")
+               .HasConstraintName(DbConstraints.Channels.FKArchiver)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(c => c.CreatedByUser)
                .WithMany()
                .HasForeignKey(c => c.CreatedBy)
-               .HasConstraintName("FK_Channels_CreatedBy")
+               .HasConstraintName(DbConstraints.Channels.FKCreatedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(c => c.UpdatedByUser)
                .WithMany()
                .HasForeignKey(c => c.UpdatedBy)
-               .HasConstraintName("FK_Channels_UpdatedBy")
+               .HasConstraintName(DbConstraints.Channels.FKUpdatedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(c => c.DeletedByUser)
                .WithMany()
                .HasForeignKey(c => c.DeletedBy)
-               .HasConstraintName("FK_Channels_DeletedBy")
+               .HasConstraintName(DbConstraints.Channels.FKDeletedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         // ----------------------------

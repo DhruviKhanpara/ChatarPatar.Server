@@ -13,15 +13,15 @@ public class OtpVerificationConfiguration : IEntityTypeConfiguration<OtpVerifica
         builder.ToTable("OtpVerifications", t =>
         {
             t.HasCheckConstraint(
-                "CK_OtpVerifications_Purpose",
+                DbConstraints.OtpVerifications.CKPurpose,
                 "[Purpose] = 'PasswordReset' OR [Purpose] = 'EmailVerification'");
 
             t.HasCheckConstraint(
-                "CK_OtpVerifications_UsedConsistency",
+                DbConstraints.OtpVerifications.CKUsedConsistency,
                 "(IsUsed = 0 AND UsedAt IS NULL) OR (IsUsed = 1 AND UsedAt IS NOT NULL)");
 
             t.HasCheckConstraint(
-               "CK_OtpVerifications_FailedAttempts",
+               DbConstraints.OtpVerifications.CKFailedAttempts,
                "[FailedAttempts] >= 0");
         });
 
@@ -64,16 +64,16 @@ public class OtpVerificationConfiguration : IEntityTypeConfiguration<OtpVerifica
 
         // Fast lookup: find active OTP for a user + purpose
         builder.HasIndex(x => new { x.UserId, x.Purpose })
-               .HasDatabaseName("IX_OtpVerifications_UserId_Purpose")
+               .HasDatabaseName(DbConstraints.OtpVerifications.IXUserPurposeUnused)
                .HasFilter("[IsUsed] = 0");
 
         // Cooldown check: find the latest OTP per user + purpose (all rows, not filtered)
         builder.HasIndex(x => new { x.UserId, x.Purpose, x.CreatedAt })
-               .HasDatabaseName("IX_OtpVerifications_UserId_Purpose_CreatedAt");
+               .HasDatabaseName(DbConstraints.OtpVerifications.IXUserPurposeCreatedAt);
 
         // Cleanup job: find all expired rows
         builder.HasIndex(x => x.ExpiresAt)
-               .HasDatabaseName("IX_OtpVerifications_ExpiresAt")
+               .HasDatabaseName(DbConstraints.OtpVerifications.IXUnusedExpiredAt)
                .HasFilter("[IsUsed] = 0");
 
         // ----------------------------
@@ -84,6 +84,6 @@ public class OtpVerificationConfiguration : IEntityTypeConfiguration<OtpVerifica
                .WithMany()
                .HasForeignKey(x => x.UserId)
                .OnDelete(DeleteBehavior.Restrict)
-               .HasConstraintName("FK_OtpVerifications_User");
+               .HasConstraintName(DbConstraints.OtpVerifications.FKUser);
     }
 }

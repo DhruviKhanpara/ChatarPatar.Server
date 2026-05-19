@@ -30,10 +30,10 @@ public class MessageReactionConfiguration : IEntityTypeConfiguration<MessageReac
 
         builder.HasIndex(r => new { r.MessageId, r.UserId, r.Emoji })
                .IsUnique()
-               .HasDatabaseName("UQ_MessageReactions");
+               .HasDatabaseName(DbConstraints.MessageReactions.UniqueMessageReactionPerMessage);
 
         builder.HasIndex(r => r.MessageId)
-               .HasDatabaseName("IX_MessageReactions_MessageId");
+               .HasDatabaseName(DbConstraints.MessageReactions.IXMessageId);
 
         // ----------------------------
         // Relationships
@@ -42,13 +42,13 @@ public class MessageReactionConfiguration : IEntityTypeConfiguration<MessageReac
         builder.HasOne(r => r.Message)
                .WithMany()
                .HasForeignKey(r => r.MessageId)
-               .HasConstraintName("FK_MessageReactions_Message")
+               .HasConstraintName(DbConstraints.MessageReactions.FKMessage)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(r => r.User)
                .WithMany()
                .HasForeignKey(r => r.UserId)
-               .HasConstraintName("FK_MessageReactions_User")
+               .HasConstraintName(DbConstraints.MessageReactions.FKUser)
                .OnDelete(DeleteBehavior.Restrict);
     }
 }

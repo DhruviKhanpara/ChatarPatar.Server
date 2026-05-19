@@ -13,13 +13,13 @@ public class PinnedMessageConfiguration : IEntityTypeConfiguration<PinnedMessage
         {
             // XOR rule: exactly one scope
             t.HasCheckConstraint(
-                "CK_PinnedMessages_Source",
+                DbConstraints.PinnedMessages.CKMessageSource,
                 "(ChannelId IS NOT NULL AND ConversationId IS NULL) OR " +
                 "(ChannelId IS NULL AND ConversationId IS NOT NULL)");
 
             // Unpin consistency
             t.HasCheckConstraint(
-                "CK_PinnedMessages_UnpinConsistency",
+                DbConstraints.PinnedMessages.CKUnpinConsistency,
                 "(UnPinnedAt IS NULL AND UnPinnedByUserId IS NULL) OR " +
                 "(UnPinnedAt IS NOT NULL AND UnPinnedByUserId IS NOT NULL)");
         });
@@ -46,31 +46,31 @@ public class PinnedMessageConfiguration : IEntityTypeConfiguration<PinnedMessage
         builder.HasOne(p => p.Message)
                .WithMany()
                .HasForeignKey(p => p.MessageId)
-               .HasConstraintName("FK_PinnedMessages_Message")
+               .HasConstraintName(DbConstraints.PinnedMessages.FKMessage)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(p => p.Channel)
                .WithMany()
                .HasForeignKey(p => p.ChannelId)
-               .HasConstraintName("FK_PinnedMessages_Channel")
+               .HasConstraintName(DbConstraints.PinnedMessages.FKChannel)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(p => p.Conversation)
                .WithMany()
                .HasForeignKey(p => p.ConversationId)
-               .HasConstraintName("FK_PinnedMessages_Conv")
+               .HasConstraintName(DbConstraints.PinnedMessages.FKConversation)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(p => p.PinnedByUser)
                .WithMany()
                .HasForeignKey(p => p.PinnedByUserId)
-               .HasConstraintName("FK_PinnedMessages_PinnedBy")
+               .HasConstraintName(DbConstraints.PinnedMessages.FKPinnedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(p => p.UnPinnedByUser)
                .WithMany()
                .HasForeignKey(p => p.UnPinnedByUserId)
-               .HasConstraintName("FK_PinnedMessages_UnPinnedBy")
+               .HasConstraintName(DbConstraints.PinnedMessages.FKUnPinnedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         // ----------------------------
@@ -79,20 +79,20 @@ public class PinnedMessageConfiguration : IEntityTypeConfiguration<PinnedMessage
 
         builder.HasIndex(p => new { p.MessageId, p.ChannelId })
                .IsUnique()
-               .HasDatabaseName("UX_Pinned_Channel_Active")
+               .HasDatabaseName(DbConstraints.PinnedMessages.UniquePinnedMessagePerChannel)
                .HasFilter("[ChannelId] IS NOT NULL AND [UnPinnedAt] IS NULL");
 
         builder.HasIndex(p => new { p.MessageId, p.ConversationId })
                .IsUnique()
-               .HasDatabaseName("UX_Pinned_Conversation_Active")
+               .HasDatabaseName(DbConstraints.PinnedMessages.UniquePinnedMessagePerConversation)
                .HasFilter("[ConversationId] IS NOT NULL AND [UnPinnedAt] IS NULL");
 
         builder.HasIndex(p => new { p.ChannelId, p.PinnedAt })
-               .HasDatabaseName("IX_Pinned_Channel_Active")
+               .HasDatabaseName(DbConstraints.PinnedMessages.IXChannelMessagePinnedAt)
                .HasFilter("[UnPinnedAt] IS NULL");
 
         builder.HasIndex(p => new { p.ConversationId, p.PinnedAt })
-               .HasDatabaseName("IX_Pinned_Conversation_Active")
+               .HasDatabaseName(DbConstraints.PinnedMessages.IXConversationMessagePinnedAt)
                .HasFilter("[UnPinnedAt] IS NULL");
     }
 }
