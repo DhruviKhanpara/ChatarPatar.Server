@@ -13,11 +13,11 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
         builder.ToTable("Conversations", t =>
         {
             t.HasCheckConstraint(
-                "CK_Conversations_Type",
+                DbConstraints.Conversations.CKType,
                 "Type IN ('Direct','Group')");
 
             t.HasCheckConstraint(
-                "CK_Conversations_DirectRule",
+                DbConstraints.Conversations.CKDirectRule,
                 @"(
                     (Type = 'Direct'
                         AND Name IS NULL
@@ -61,7 +61,7 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
         // ----------------------------
         builder.HasIndex(c => new { c.DirectParticipantAId, c.DirectParticipantBId })
                .IsUnique()
-               .HasDatabaseName("UX_Conversations_Direct")
+               .HasDatabaseName(DbConstraints.Conversations.UniqueDirectConversationParticipants)
                .HasFilter("[Type] = 'Direct'");
 
         // ----------------------------
@@ -71,37 +71,37 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
         builder.HasOne(c => c.LogoFile)
                .WithMany()
                .HasForeignKey(c => c.LogoFileId)
-               .HasConstraintName("FK_Conversations_Logo")
+               .HasConstraintName(DbConstraints.Conversations.FKLogoFile)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(c => c.DirectParticipantA)
                .WithMany()
                .HasForeignKey(c => c.DirectParticipantAId)
-               .HasConstraintName("FK_Conversations_DirectParticipantAId")
+               .HasConstraintName(DbConstraints.Conversations.FKDirectParticipantA)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(c => c.DirectParticipantB)
                .WithMany()
                .HasForeignKey(c => c.DirectParticipantBId)
-               .HasConstraintName("FK_Conversations_DirectParticipantBId")
+               .HasConstraintName(DbConstraints.Conversations.FKDirectParticipantB)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(c => c.CreatedByUser)
                .WithMany()
                .HasForeignKey(c => c.CreatedBy)
-               .HasConstraintName("FK_Conversations_CreatedBy")
+               .HasConstraintName(DbConstraints.Conversations.FKCreatedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(c => c.UpdatedByUser)
                .WithMany()
                .HasForeignKey(c => c.UpdatedBy)
-               .HasConstraintName("FK_Conversations_UpdatedBy")
+               .HasConstraintName(DbConstraints.Conversations.FKUpdatedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(c => c.DeletedByUser)
                .WithMany()
                .HasForeignKey(c => c.DeletedBy)
-               .HasConstraintName("FK_Conversations_DeletedBy")
+               .HasConstraintName(DbConstraints.Conversations.FKDeletedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         // ----------------------------

@@ -12,7 +12,7 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
         builder.ToTable("RefreshTokens", t =>
         {
             t.HasCheckConstraint(
-                "CK_RefreshTokens_RevokeConsistency",
+                DbConstraints.RefreshTokens.CKRevokeConsistency,
                 "(IsRevoked = 0 AND RevokedAt IS NULL) OR " +
                 "(IsRevoked = 1 AND RevokedAt IS NOT NULL)");
         });
@@ -58,11 +58,11 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
 
         builder.HasIndex(r => r.Token)
                .IsUnique()
-               .HasDatabaseName("UX_RefreshTokens_Token")
+               .HasDatabaseName(DbConstraints.RefreshTokens.UniqueActiveToken)
                .HasFilter("IsRevoked = 0");
 
         builder.HasIndex(r => new { r.UserId, r.IsRevoked, r.ExpiresAt })
-               .HasDatabaseName("IX_RefreshToken_ActiveToken");
+               .HasDatabaseName(DbConstraints.RefreshTokens.IXUserActiveExpiration);
 
         // ----------------------------
         // Relationships

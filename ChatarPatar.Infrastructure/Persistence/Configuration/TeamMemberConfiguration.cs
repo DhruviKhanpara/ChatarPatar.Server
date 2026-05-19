@@ -13,7 +13,7 @@ public class TeamMemberConfiguration : IEntityTypeConfiguration<TeamMember>
         builder.ToTable("TeamMembers", t =>
         {
             t.HasCheckConstraint(
-                "CK_TeamMembers_Role",
+                DbConstraints.TeamMembers.CKRole,
                 "Role IN ('TeamAdmin','TeamMember','TeamGuest')");
         });
 
@@ -48,14 +48,14 @@ public class TeamMemberConfiguration : IEntityTypeConfiguration<TeamMember>
         // ----------------------------
 
         builder.HasIndex(m => m.TeamId)
-               .HasDatabaseName("IX_TeamMembers_TeamId");
+               .HasDatabaseName(DbConstraints.TeamMembers.IXTeamId);
 
         builder.HasIndex(m => m.UserId)
-               .HasDatabaseName("IX_TeamMembers_UserId");
+               .HasDatabaseName(DbConstraints.TeamMembers.IXUserId);
 
         builder.HasIndex(m => new { m.TeamId, m.UserId })
                .IsUnique()
-               .HasDatabaseName("UX_TeamMembers_Active")
+               .HasDatabaseName(DbConstraints.TeamMembers.UniqueActiveTeamMembers)
                .HasFilter("[IsDeleted] = 0");
 
         // ----------------------------
@@ -65,37 +65,37 @@ public class TeamMemberConfiguration : IEntityTypeConfiguration<TeamMember>
         builder.HasOne(m => m.Team)
                .WithMany(t => t.TeamMembers)
                .HasForeignKey(m => m.TeamId)
-               .HasConstraintName("FK_TeamMembers_Team")
+               .HasConstraintName(DbConstraints.TeamMembers.FKTeam)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(m => m.User)
                .WithMany()
                .HasForeignKey(m => m.UserId)
-               .HasConstraintName("FK_TeamMembers_User")
+               .HasConstraintName(DbConstraints.TeamMembers.FKUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(m => m.InvitedByUser)
                .WithMany()
                .HasForeignKey(m => m.InvitedByUserId)
-               .HasConstraintName("FK_TeamMembers_Inviter")
+               .HasConstraintName(DbConstraints.TeamMembers.FKInviter)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(m => m.CreatedByUser)
                .WithMany()
                .HasForeignKey(m => m.CreatedBy)
-               .HasConstraintName("FK_TeamMembers_CreatedBy")
+               .HasConstraintName(DbConstraints.TeamMembers.FKCreatedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(m => m.UpdatedByUser)
                .WithMany()
                .HasForeignKey(m => m.UpdatedBy)
-               .HasConstraintName("FK_TeamMembers_UpdatedBy")
+               .HasConstraintName(DbConstraints.TeamMembers.FKUpdatedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(m => m.DeletedByUser)
                .WithMany()
                .HasForeignKey(m => m.DeletedBy)
-               .HasConstraintName("FK_TeamMembers_DeletedBy")
+               .HasConstraintName(DbConstraints.TeamMembers.FKDeletedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         // ----------------------------

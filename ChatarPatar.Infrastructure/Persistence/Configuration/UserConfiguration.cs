@@ -59,17 +59,17 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         // Unique Constraints
         builder.HasIndex(u => u.Email)
                .IsUnique()
-               .HasDatabaseName("UQ_Users_Email");
+               .HasDatabaseName(DbConstraints.Users.UniqueEmail);
 
         builder.HasIndex(u => u.Username)
                .IsUnique()
-               .HasDatabaseName("UQ_Users_Username");
+               .HasDatabaseName(DbConstraints.Users.UniqueUsername);
 
         // Foreign Key: AvatarFile
         builder.HasOne(u => u.AvatarFile)
                .WithMany()
                .HasForeignKey(u => u.AvatarFileId)
-               .HasConstraintName("FK_Users_AvatarFile")
+               .HasConstraintName(DbConstraints.Users.FKAvatarFile)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(u => u.DeletedByUser)

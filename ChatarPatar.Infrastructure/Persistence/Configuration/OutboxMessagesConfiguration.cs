@@ -35,7 +35,7 @@ public class OutboxMessagesConfiguration : IEntityTypeConfiguration<OutboxMessag
         // ----------------------------
 
         builder.HasIndex(t => new { t.IsProcessed, t.NextAttemptAt })
-               .HasDatabaseName("IX_OutboxMessages_Processing")
+               .HasDatabaseName(DbConstraints.OutboxMessages.IXProcessedNextAttempt)
                .HasFilter("[IsDeleted] = 0");
 
         // ----------------------------
@@ -45,7 +45,7 @@ public class OutboxMessagesConfiguration : IEntityTypeConfiguration<OutboxMessag
         builder.HasOne(c => c.CreatedByUser)
                .WithMany()
                .HasForeignKey(c => c.CreatedBy)
-               .HasConstraintName("FK_OutboxMessages_CreatedBy")
+               .HasConstraintName(DbConstraints.OutboxMessages.FKCreatedByUser)
                .OnDelete(DeleteBehavior.SetNull);
 
         // ----------------------------

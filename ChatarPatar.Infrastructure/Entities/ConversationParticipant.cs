@@ -13,17 +13,21 @@ public class ConversationParticipant : BaseEntity
     public User User { get; set; } = null!;
     [ForeignKey(nameof(AddedBy))]
     public User AddedByUser { get; set; } = null!;
+    [ForeignKey(nameof(RejoinedBy))]
+    public User? RejoinedByUser { get; set; }
     #endregion
 
     public Guid ConversationId { get; set; }
     public Guid UserId { get; set; }
 
     public ConversationParticipantRoleEnum Role { get; set; } = ConversationParticipantRoleEnum.GroupMember;
+    
     public Guid AddedBy { get; set; }
-
+    public DateTime JoinedAt { get; set; }
 
     public bool HasLeft { get; set; }
     public DateTime? LeftAt { get; set; }
 
-    public DateTime JoinedAt { get; set; }
+    public Guid? RejoinedBy { get; set; }
+    public DateTime? RejoinedAt { get; set; }
 }

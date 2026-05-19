@@ -13,20 +13,20 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.ToTable("Messages", t =>
         {
             t.HasCheckConstraint(
-                "CK_Messages_Source",
+                DbConstraints.Messages.CKMessageSource,
                 "(ChannelId IS NOT NULL AND ConversationId IS NULL) OR " +
                 "(ChannelId IS NULL AND ConversationId IS NOT NULL)");
 
             t.HasCheckConstraint(
-                "CK_Messages_DmStatus",
+                DbConstraints.Messages.CKDmStatus,
                 "DmStatus IS NULL OR DmStatus IN ('Sending','Sent','Delivered','Seen')");
 
             t.HasCheckConstraint(
-                "CK_Messages_ThreadReplyRule",
+                DbConstraints.Messages.CKThreadReplyRule,
                 "(ThreadRootMessageId IS NULL) OR (ReplyCount = 0)");
 
             t.HasCheckConstraint(
-                "CK_Messages_MessageType",
+                DbConstraints.Messages.CKType,
                 "MessageType BETWEEN 1 AND 4");
         });
 
@@ -82,31 +82,31 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.HasOne(m => m.Channel)
                .WithMany()
                .HasForeignKey(m => m.ChannelId)
-               .HasConstraintName("FK_Messages_Channel")
+               .HasConstraintName(DbConstraints.Messages.FKChannel)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(m => m.Conversation)
                .WithMany()
                .HasForeignKey(m => m.ConversationId)
-               .HasConstraintName("FK_Messages_Conversation")
+               .HasConstraintName(DbConstraints.Messages.FKConversation)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(m => m.Sender)
                .WithMany()
                .HasForeignKey(m => m.SenderId)
-               .HasConstraintName("FK_Messages_Sender")
+               .HasConstraintName(DbConstraints.Messages.FKSender)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(m => m.Thread)
                .WithMany()
                .HasForeignKey(m => m.ThreadRootMessageId)
-               .HasConstraintName("FK_Messages_Thread")
+               .HasConstraintName(DbConstraints.Messages.FKThreadMessage)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(m => m.DeletedByUser)
                .WithMany()
                .HasForeignKey(m => m.DeletedBy)
-               .HasConstraintName("FK_Messages_DeletedBy")
+               .HasConstraintName(DbConstraints.Messages.FKDeletedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         // ----------------------------
@@ -115,28 +115,28 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
 
         builder.HasIndex(m => new { m.ChannelId, m.SenderId, m.ClientMessageId })
                 .IsUnique()
-                .HasDatabaseName("UX_Messages_Channel_ClientMessage")
+                .HasDatabaseName(DbConstraints.Messages.UniqueChannelClientMessage)
                 .HasFilter("[ChannelId] IS NOT NULL");
 
         builder.HasIndex(m => new { m.ConversationId, m.SenderId, m.ClientMessageId })
                 .IsUnique()
-                .HasDatabaseName("UX_Messages_Conversation_ClientMessage")
+                .HasDatabaseName(DbConstraints.Messages.UniqueConversationClientMessage)
                 .HasFilter("[ConversationId] IS NOT NULL");
 
         builder.HasIndex(m => new { m.ThreadRootMessageId, m.CreatedAt })
-               .HasDatabaseName("IX_Messages_ThreadRootMessageId")
+               .HasDatabaseName(DbConstraints.Messages.IXThreadRootMessageId)
                .HasFilter("[IsDeleted] = 0 AND [ThreadRootMessageId] IS NOT NULL");
 
         builder.HasIndex(m => new { m.ChannelId, m.SequenceNumber })
-               .HasDatabaseName("IX_Messages_Channel_Active")
+               .HasDatabaseName(DbConstraints.Messages.IXActiveChannelMessage)
                .HasFilter("[IsDeleted] = 0 AND [ChannelId] IS NOT NULL");
 
         builder.HasIndex(m => new { m.ConversationId, m.SequenceNumber })
-               .HasDatabaseName("IX_Messages_Conversation_Active")
+               .HasDatabaseName(DbConstraints.Messages.IXActiveConversationMessage)
                .HasFilter("[IsDeleted] = 0 AND [ConversationId] IS NOT NULL");
 
         builder.HasIndex(m => new { m.SenderId, m.CreatedAt})
-               .HasDatabaseName("IX_Messages_SenderId_CreatedAt")
+               .HasDatabaseName(DbConstraints.Messages.IXSenderId)
                .HasFilter("[IsDeleted] = 0");
 
         // ----------------------------

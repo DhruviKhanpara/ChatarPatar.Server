@@ -49,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<IChannelMemberService, ChannelMemberService>();
 
         services.AddScoped<IConversationService, ConversationService>();
+        services.AddScoped<IConversationParticipantService, ConversationParticipantService>();
 
         services.AddScoped<IPermissionService, PermissionService>();
 

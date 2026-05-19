@@ -12,7 +12,7 @@ public class NotificationTemplateConfiguration : IEntityTypeConfiguration<Notifi
         builder.ToTable("NotificationTemplates", t =>
         {
             t.HasCheckConstraint(
-                "CK_NotificationTemplates_TemplateType",
+                DbConstraints.NotificationTemplates.CKType,
                 "TemplateType IN ('Email', 'Sms')");
         });
 
@@ -52,11 +52,11 @@ public class NotificationTemplateConfiguration : IEntityTypeConfiguration<Notifi
         // Unique per (Name, TemplateType) — OrgInvite+Email and OrgInvite+Sms are both valid
         builder.HasIndex(t => new { t.Name, t.TemplateType })
                .IsUnique()
-               .HasDatabaseName("UQ_NotificationTemplates_Name_Type");
+               .HasDatabaseName(DbConstraints.NotificationTemplates.UniqueNamePerTemplateType);
 
         // Fast lookup by type — used when listing all email templates, etc.
         builder.HasIndex(t => t.TemplateType)
-               .HasDatabaseName("IX_NotificationTemplates_TemplateType");
+               .HasDatabaseName(DbConstraints.NotificationTemplates.IXType);
 
         // ----------------------------
         // Active-only query filter

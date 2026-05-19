@@ -17,15 +17,15 @@ public class FilesConfiguration : IEntityTypeConfiguration<FileEntity>
             // ----------------------------
 
             t.HasCheckConstraint(
-                "CK_Files_FileType",
+                DbConstraints.Files.CKType,
                 "FileType IN ('image','video','audio','document','code','archive','other')");
 
             t.HasCheckConstraint(
-                "CK_Files_UsageContext",
+                DbConstraints.Files.CKUsageContext,
                 "UsageContext IN ('avatar','attachment','org_logo','team_icon', 'conversation_logo')");
 
             t.HasCheckConstraint(
-                "CK_Files_OnlyOneScope",
+                DbConstraints.Files.CKScope,
                 @"
                 (
                     (CASE WHEN UserId IS NOT NULL THEN 1 ELSE 0 END) +
@@ -98,10 +98,10 @@ public class FilesConfiguration : IEntityTypeConfiguration<FileEntity>
         // ----------------------------
 
         builder.HasIndex(f => f.UploadedByUserId)
-               .HasDatabaseName("IX_Files_UploadedBy");
+               .HasDatabaseName(DbConstraints.Files.IXUploadedByUserId);
 
         builder.HasIndex(f => f.UsageContext)
-               .HasDatabaseName("IX_Files_UsageContext");
+               .HasDatabaseName(DbConstraints.Files.IXUsageContext);
 
         // ----------------------------
         // Relationships
@@ -135,25 +135,25 @@ public class FilesConfiguration : IEntityTypeConfiguration<FileEntity>
         builder.HasOne(f => f.UploadedByUser)
                .WithMany()
                .HasForeignKey(f => f.UploadedByUserId)
-               .HasConstraintName("FK_Files_UploadedBy")
+               .HasConstraintName(DbConstraints.Files.FKUploadedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(f => f.CreatedByUser)
                .WithMany()
                .HasForeignKey(f => f.CreatedBy)
-               .HasConstraintName("FK_Files_CreatedBy")
+               .HasConstraintName(DbConstraints.Files.FKCreatedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(f => f.UpdatedByUser)
                .WithMany()
                .HasForeignKey(f => f.UpdatedBy)
-               .HasConstraintName("FK_Files_UpdatedBy")
+               .HasConstraintName(DbConstraints.Files.FKUpdatedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(f => f.DeletedByUser)
                .WithMany()
                .HasForeignKey(f => f.DeletedBy)
-               .HasConstraintName("FK_Files_DeletedBy")
+               .HasConstraintName(DbConstraints.Files.FKDeletedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         // ----------------------------

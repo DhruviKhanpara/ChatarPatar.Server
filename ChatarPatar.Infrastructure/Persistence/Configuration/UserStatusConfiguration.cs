@@ -1,4 +1,5 @@
-﻿using ChatarPatar.Infrastructure.Entities;
+﻿using ChatarPatar.Common.Consts;
+using ChatarPatar.Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -11,15 +12,15 @@ public class UserStatusConfiguration : IEntityTypeConfiguration<UserStatus>
         builder.ToTable("UserStatus", t =>
         {
             t.HasCheckConstraint(
-                "CK_UserStatus_Status",
+                DbConstraints.UserStatuses.CKStatus,
                 "Status BETWEEN 0 AND 2");
 
             t.HasCheckConstraint(
-                "CK_UserStatus_CustomStatus",
+                DbConstraints.UserStatuses.CKCustomStatus,
                 "CustomStatus IS NULL OR CustomStatus BETWEEN 1 AND 6");
 
             t.HasCheckConstraint(
-                "CK_UserStatus_Logical",
+                DbConstraints.UserStatuses.CKLogical,
                 "(Status = 0 AND CustomStatus IS NULL) OR (Status = 1 AND CustomStatus IN (1,2,3)) OR (Status = 2 AND CustomStatus IN (4,5))");
         });
 
@@ -45,7 +46,7 @@ public class UserStatusConfiguration : IEntityTypeConfiguration<UserStatus>
         // ----------------------------
 
         builder.HasIndex(u => u.Status)
-               .HasDatabaseName("IX_UserStatus_Status");
+               .HasDatabaseName(DbConstraints.UserStatuses.IXStatus);
 
         // ----------------------------
         // Relationships

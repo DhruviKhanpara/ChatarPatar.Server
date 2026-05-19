@@ -1,4 +1,5 @@
-﻿using ChatarPatar.Infrastructure.Entities;
+﻿using ChatarPatar.Common.Consts;
+using ChatarPatar.Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -11,7 +12,7 @@ public class MessageReceiptConfiguration : IEntityTypeConfiguration<MessageRecei
         builder.ToTable("MessageReceipts", t =>
         {
             t.HasCheckConstraint(
-                "CK_MessageReceipts_SeenAfterDelivered",
+                DbConstraints.MessageReceipts.CKSeenAfterDelivered,
                 "SeenAt IS NULL OR DeliveredAt IS NULL OR SeenAt >= DeliveredAt");
         });
 
@@ -32,13 +33,13 @@ public class MessageReceiptConfiguration : IEntityTypeConfiguration<MessageRecei
 
         builder.HasIndex(r => new { r.MessageId, r.UserId })
                .IsUnique()
-               .HasDatabaseName("UQ_MessageReceipts");
+               .HasDatabaseName(DbConstraints.MessageReceipts.UniqueReceiptPerMessage);
 
         builder.HasIndex(r => new { r.UserId, r.MessageId })
-               .HasDatabaseName("IX_MessageReceipts_Message");
+               .HasDatabaseName(DbConstraints.MessageReceipts.IXUserMessage);
 
         builder.HasIndex(r => new { r.UserId, r.SeenAt })
-               .HasDatabaseName("IX_MessageReceipts_User_Seen");
+               .HasDatabaseName(DbConstraints.MessageReceipts.IXUserSeenAt);
 
         // ----------------------------
         // Relationships
@@ -47,13 +48,13 @@ public class MessageReceiptConfiguration : IEntityTypeConfiguration<MessageRecei
         builder.HasOne(r => r.Message)
                .WithMany()
                .HasForeignKey(r => r.MessageId)
-               .HasConstraintName("FK_MessageReceipts_Message")
+               .HasConstraintName(DbConstraints.MessageReceipts.FKMessage)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(r => r.User)
                .WithMany()
                .HasForeignKey(r => r.UserId)
-               .HasConstraintName("FK_MessageReceipts_User")
+               .HasConstraintName(DbConstraints.MessageReceipts.FKUser)
                .OnDelete(DeleteBehavior.Restrict);
     }
 }

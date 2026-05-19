@@ -1,4 +1,5 @@
-﻿using ChatarPatar.Infrastructure.Entities;
+﻿using ChatarPatar.Common.Consts;
+using ChatarPatar.Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -11,7 +12,7 @@ public class MessageMentionConfiguration : IEntityTypeConfiguration<MessageMenti
         builder.ToTable("MessageMentions", t =>
         {
             t.HasCheckConstraint(
-                "CK_MessageMentions_Source",
+                DbConstraints.MessageMentions.CKMessageSource,
                 "(ChannelId IS NOT NULL AND ConversationId IS NULL) OR " +
                 "(ChannelId IS NULL AND ConversationId IS NOT NULL)");
         });
@@ -30,7 +31,7 @@ public class MessageMentionConfiguration : IEntityTypeConfiguration<MessageMenti
 
         builder.HasIndex(m => new { m.MessageId, m.MentionedUserId })
                .IsUnique()
-               .HasDatabaseName("UQ_MessageMentions");
+               .HasDatabaseName(DbConstraints.MessageMentions.UniqueMentionUserPerMessage);
 
         // ----------------------------
         // Relationships
@@ -39,25 +40,25 @@ public class MessageMentionConfiguration : IEntityTypeConfiguration<MessageMenti
         builder.HasOne(m => m.Message)
                .WithMany()
                .HasForeignKey(m => m.MessageId)
-               .HasConstraintName("FK_MessageMentions_Message")
+               .HasConstraintName(DbConstraints.MessageMentions.FKMessage)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(m => m.MentionedUser)
                .WithMany()
                .HasForeignKey(m => m.MentionedUserId)
-               .HasConstraintName("FK_MessageMentions_User")
+               .HasConstraintName(DbConstraints.MessageMentions.FKMentionedUser)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(m => m.Channel)
                .WithMany()
                .HasForeignKey(m => m.ChannelId)
-               .HasConstraintName("FK_MessageMentions_Channel")
+               .HasConstraintName(DbConstraints.MessageMentions.FKChannel)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(m => m.Conversation)
                .WithMany()
                .HasForeignKey(m => m.ConversationId)
-               .HasConstraintName("FK_MessageMentions_Conv")
+               .HasConstraintName(DbConstraints.MessageMentions.FKConversation)
                .OnDelete(DeleteBehavior.Restrict);
 
         // ----------------------------
@@ -65,9 +66,9 @@ public class MessageMentionConfiguration : IEntityTypeConfiguration<MessageMenti
         // ----------------------------
 
         builder.HasIndex(m => new { m.MentionedUserId, m.ChannelId, m.CreatedAt })
-               .HasDatabaseName("IX_MessageMentions_UserChannel");
+               .HasDatabaseName(DbConstraints.MessageMentions.IXMentionUserInChannel);
 
         builder.HasIndex(m => new { m.MentionedUserId, m.ConversationId, m.CreatedAt })
-               .HasDatabaseName("IX_MessageMentions_UserConv");
+               .HasDatabaseName(DbConstraints.MessageMentions.IXMentionUserInConversation);
     }
 }

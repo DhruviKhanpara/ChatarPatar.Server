@@ -1,4 +1,5 @@
-﻿using ChatarPatar.Infrastructure.Entities;
+﻿using ChatarPatar.Common.Consts;
+using ChatarPatar.Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -11,16 +12,16 @@ public class ReadStateConfiguration : IEntityTypeConfiguration<ReadState>
         builder.ToTable("ReadStates", t =>
         {
             t.HasCheckConstraint(
-                "CK_ReadStates_Source",
+                DbConstraints.ReadStates.CKMessageSource,
                 "(ChannelId IS NOT NULL AND ConversationId IS NULL) OR " +
                 "(ChannelId IS NULL AND ConversationId IS NOT NULL)");
 
             t.HasCheckConstraint(
-                "CK_ReadStates_Unread_NonNegative",
+                DbConstraints.ReadStates.CKNonNegativeUnreadCount,
                 "UnreadCount >= 0");
 
             t.HasCheckConstraint(
-                "CK_ReadStates_Mention_NonNegative",
+                DbConstraints.ReadStates.CKNonNegativeMentionCount,
                 "MentionCount >= 0");
         });
 
@@ -44,16 +45,16 @@ public class ReadStateConfiguration : IEntityTypeConfiguration<ReadState>
 
         builder.HasIndex(r => new { r.UserId, r.ChannelId })
                .IsUnique()
-               .HasDatabaseName("UX_ReadStates_User_Channel")
+               .HasDatabaseName(DbConstraints.ReadStates.UniqueReadStatePerChannel)
                .HasFilter("[ChannelId] IS NOT NULL");
 
         builder.HasIndex(r => new { r.UserId, r.ConversationId })
                .IsUnique()
-               .HasDatabaseName("UX_ReadStates_User_Conversation")
+               .HasDatabaseName(DbConstraints.ReadStates.UniqueReadStatePerConversation)
                .HasFilter("[ConversationId] IS NOT NULL");
 
         builder.HasIndex(r => r.UserId)
-               .HasDatabaseName("IX_ReadStates_User");
+               .HasDatabaseName(DbConstraints.ReadStates.IXUserId);
 
         // ----------------------------
         // Relationships
