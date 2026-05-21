@@ -90,6 +90,7 @@ public static class RolePermissions
 
         [TeamRoleEnum.TeamGuest] = new()
         {
+            Permissions.MESSAGE_SEND,
             Permissions.MESSAGE_EDIT_OWN,
             Permissions.MESSAGE_THREAD_REPLY,
         }

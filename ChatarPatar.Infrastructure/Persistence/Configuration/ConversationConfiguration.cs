@@ -67,6 +67,9 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
         // ----------------------------
         // Relationships
         // ----------------------------
+        builder.HasMany(c => c.Messages)
+               .WithOne(m => m.Conversation)
+               .HasForeignKey(m => m.ConversationId);
 
         builder.HasOne(c => c.LogoFile)
                .WithMany()

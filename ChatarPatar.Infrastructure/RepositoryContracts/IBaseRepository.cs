@@ -8,6 +8,7 @@ public interface IBaseRepository<T> where T : class
     IQueryable<T> FindByCondition(Expression<Func<T, bool>> expression);
     Task<bool> AnyAsync(Expression<Func<T, bool>> expression);
     Task AddAsync(T entity);
+    Task AddRangeAsync(List<T> entities);
     void Update(T existingEntity, T entity);
     void Remove(T entity);
     void RemoveRange(List<T> entities);

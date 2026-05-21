@@ -189,6 +189,11 @@ internal class ChannelMemberService : IChannelMemberService
         memberEntity.IsMuted = false;
 
         await _repositories.ChannelMemberRepository.AddAsync(memberEntity);
+
+        // Seed a ReadState row so the new member's unread cursor starts at the
+        // current channel high-water mark — no historical messages shown as unread.
+        await _repositories.ReadStateRepository.SeedForChannelAsync(dto.UserId, channelId);
+
         await _repositories.UnitOfWork.SaveChangesAsync();
     }
 

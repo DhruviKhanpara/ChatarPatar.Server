@@ -23,9 +23,9 @@ internal class ConversationParticipantService : IConversationParticipantService
     private readonly IValidationService _validationService;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IPermissionService _permissionService;
-    private readonly ILogger<ChannelMemberService> _logger;
+    private readonly ILogger<ConversationParticipantService> _logger;
 
-    public ConversationParticipantService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IPermissionService permissionService, ILogger<ChannelMemberService> logger)
+    public ConversationParticipantService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IPermissionService permissionService, ILogger<ConversationParticipantService> logger)
     {
         _repositories = repositories;
         _mapper = mapper;
@@ -38,9 +38,23 @@ internal class ConversationParticipantService : IConversationParticipantService
 
     public async Task<PagedResult<ConversationParticipantDto>> GetParticipantsAsync(Guid conversationId, PaginationParams paginationParams)
     {
+        var userId = Guid.Parse(_httpContext.GetUserId());
+
+        // Verify it's a Group the caller belongs to
+        var conversation = await _repositories.ConversationRepository
+            .GetByIdForUser(conversationId, userId)
+            .FirstOrDefaultAsync();
+
+        if (conversation is null)
+            throw new NotFoundAppException("Conversation");
+
+        if (conversation.Type != ConversationTypeEnum.Group)
+            throw new InvalidDataAppException("This operation is only allowed for Group conversations.");
+
         var baseQuery = _repositories.ConversationParticipantRepository
             .GetActiveParticipantsQuery(conversationId)
-            .OrderBy(p => p.JoinedAt);
+            .OrderBy(p => p.JoinedAt)
+                .ThenBy(p => p.Id);
 
         var totalCount = await baseQuery.CountAsync();
 
@@ -77,6 +91,11 @@ internal class ConversationParticipantService : IConversationParticipantService
             existingParticipant.RejoinedBy = userId;
             existingParticipant.RejoinedAt = DateTime.UtcNow;
             existingParticipant.Role = ConversationParticipantRoleEnum.GroupMember;
+
+            // Reset cursor to the current message high-water mark so messages
+            // sent while they were away don't appear as unread, and the
+            // sequence number stays consistent with the zero unread count.
+            await _repositories.ReadStateRepository.ResetForConversationRejoinAsync(dto.UserId, conversationId);
         }
         else
         {
@@ -94,6 +113,9 @@ internal class ConversationParticipantService : IConversationParticipantService
                 Role = ConversationParticipantRoleEnum.GroupMember,
                 JoinedAt = DateTime.UtcNow
             });
+
+            // First time joining — seed a ReadState row.
+            await _repositories.ReadStateRepository.SeedForConversationAsync(dto.UserId, conversationId);
         }
 
         await _repositories.UnitOfWork.SaveChangesAsync();

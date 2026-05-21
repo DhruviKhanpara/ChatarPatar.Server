@@ -133,7 +133,7 @@ internal class TeamMemberService : ITeamMemberService
                 context.CallerTeamRole is TeamRoleEnum.TeamAdmin;
 
             if (!callerIsOrgAdmin && !callerIsTeamAdmin)
-                throw new AppException("Only a team admin or org admin can add a member with the TeamAdmin role.");
+                throw new ForbiddenAppException("Only a team admin or org admin can add a member with the TeamAdmin role.");
         }
 
         var memberEntity = _mapper.Map<TeamMember>(dto);
@@ -143,6 +143,18 @@ internal class TeamMemberService : ITeamMemberService
         memberEntity.JoinedAt = DateTime.UtcNow;
 
         await _repositories.TeamMemberRepository.AddAsync(memberEntity);
+
+        // Seed a ReadState row for every public channel in this team so the new
+        // member's unread cursor starts at the current high-water mark for each.
+        // Private channels only get a ReadState when explicitly added (see ChannelMemberService).
+        var publicChannelIds = await _repositories.ChannelRepository
+            .FindByCondition(c => c.TeamId == teamId && !c.IsPrivate && !c.IsDeleted)
+            .Select(c => c.Id)
+            .ToListAsync();
+
+        if (publicChannelIds.Any())
+            await _repositories.ReadStateRepository.SeedForChannelsAsync([dto.UserId], publicChannelIds);
+
         await _repositories.UnitOfWork.SaveChangesAsync();
     }
 

@@ -148,7 +148,7 @@ internal class PermissionService : IPermissionService
         }
 
         // 5. Add conversation-level permissions
-        if (ctx.ConversationId is not null)
+        if (ctx.ConversationId.HasValue)
         {
             // Resolve conversation permissions for current user
             var conv = await _repositories.ConversationRepository
