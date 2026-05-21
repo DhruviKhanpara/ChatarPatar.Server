@@ -499,6 +499,7 @@ internal class AuthService : IAuthService
             // Void the invite — the sender will need to issue a new one
             invite.IsUsed = true;
             invite.UsedAt = DateTime.UtcNow;
+            invite.UsedBy = invite.CreatedBy; // use the inviter as sentinel
         }
 
         // Persist the incremented FailedAttempts before throwing

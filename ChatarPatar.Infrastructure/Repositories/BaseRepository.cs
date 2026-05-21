@@ -23,6 +23,8 @@ internal class BaseRepository<T> : IBaseRepository<T> where T : class
     public Task<bool> AnyAsync(Expression<Func<T, bool>> expression) => _dbSet.AnyAsync(expression);
 
     public async Task AddAsync(T entity) => await _dbSet.AddAsync(entity);
+    
+    public async Task AddRangeAsync(List<T> entities) => await _dbSet.AddRangeAsync(entities);
 
     public void Update(T existingEntity, T entity) => _context.Entry(existingEntity).CurrentValues.SetValues(entity);
     //public void Update(T existingEntity, T entity) => _dbSet.Update(entity);

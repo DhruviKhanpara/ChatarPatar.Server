@@ -1,5 +1,4 @@
 ﻿using AutoMapper;
-using ChatarPatar.Application.DTOs.Conversation;
 using ChatarPatar.Application.DTOs.ConversationParticipant;
 using ChatarPatar.Infrastructure.Entities;
 
@@ -10,11 +9,6 @@ public class ConversationMapperProfile : Profile
     public ConversationMapperProfile()
     {
         // Conversation
-        CreateMap<Conversation, ConversationDto>()
-            .ForMember(dest => dest.LogoThumbnailUrl, opt => opt.MapFrom(src => src.LogoFile != null ? src.LogoFile.ThumbnailUrl : null))
-            .ForMember(dest => dest.ParticipantCount, opt => opt.Ignore())
-            .ForMember(dest => dest.Peer, opt => opt.Ignore())
-            .ForMember(dest => dest.Role, opt => opt.Ignore());
 
         // ConversationParticipant
         CreateMap<ConversationParticipant, ConversationParticipantDto>()

@@ -162,7 +162,11 @@ internal class ChannelService : IChannelService
             {
                 t.IsArchived,
                 IsOrgMember = t.Organization.OrganizationMembers
-                    .Any(m => m.UserId == authUserId && !m.IsDeleted)
+                    .Any(m => m.UserId == authUserId && !m.IsDeleted),
+                MemberIds = t.TeamMembers
+                    .Where(tm => !tm.IsDeleted)
+                    .Select(tm => tm.UserId)
+                    .ToList()
             })
             .FirstOrDefaultAsync();
 
@@ -195,8 +199,28 @@ internal class ChannelService : IChannelService
             });
         }
 
-        await _repositories.ChannelRepository.AddAsync(channelEntity);
-        await _repositories.UnitOfWork.SaveChangesAsync();
+        await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
+        try
+        {
+            await _repositories.ChannelRepository.AddAsync(channelEntity);
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+
+            // Seed read states
+            if (channelEntity.IsPrivate)
+                await _repositories.ReadStateRepository.SeedForChannelAsync(authUserId, channelEntity.Id, true);
+            else
+                await _repositories.ReadStateRepository.SeedForChannelsAsync(teamExists.MemberIds, [channelEntity.Id], true);
+
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+
+            await tx.CommitAsync();
+            _repositories.UnitOfWork.FlushPendingAuditLogs();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task UpdateChannelAsync(Guid orgId, Guid teamId, Guid channelId, UpdateChannelDto dto)

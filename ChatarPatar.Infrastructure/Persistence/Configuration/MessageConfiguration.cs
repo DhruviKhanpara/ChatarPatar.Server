@@ -86,7 +86,7 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(m => m.Conversation)
-               .WithMany()
+               .WithMany(m => m.Messages)
                .HasForeignKey(m => m.ConversationId)
                .HasConstraintName(DbConstraints.Messages.FKConversation)
                .OnDelete(DeleteBehavior.Restrict);

@@ -15,6 +15,7 @@ public class Conversation : AuditableEntity
     public User? DirectParticipantB { get; set; }
 
     public virtual List<ConversationParticipant> ConversationParticipants { get; set; } = new List<ConversationParticipant>();
+    public virtual List<Message> Messages { get; set; } = new List<Message>();
     #endregion
 
     public ConversationTypeEnum Type { get; set; }
