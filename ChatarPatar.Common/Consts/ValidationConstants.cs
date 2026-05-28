@@ -35,6 +35,7 @@ public static class ValidationConstants
             public const int ThumbnailUrl = 1024;
             public const int FileType = 50;
             public const int UsageContext = 50;
+            public const int Status = 20;
             public const int MimeType = 100;
             public const int OriginalName = 255;
         }

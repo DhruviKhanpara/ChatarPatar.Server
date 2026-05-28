@@ -25,16 +25,40 @@ public class FilesConfiguration : IEntityTypeConfiguration<FileEntity>
                 "UsageContext IN ('avatar','attachment','org_logo','team_icon', 'conversation_logo')");
 
             t.HasCheckConstraint(
-                DbConstraints.Files.CKScope,
-                @"
-                (
-                    (CASE WHEN UserId IS NOT NULL THEN 1 ELSE 0 END) +
-                    (CASE WHEN OrgId IS NOT NULL THEN 1 ELSE 0 END) +
-                    (CASE WHEN TeamId IS NOT NULL THEN 1 ELSE 0 END) +
-                    (CASE WHEN ChannelId IS NOT NULL THEN 1 ELSE 0 END) +
-                    (CASE WHEN ConversationId IS NOT NULL THEN 1 ELSE 0 END)
-                ) = 1
-                ");
+                DbConstraints.Files.CKStatus,
+                "Status IN ('pending','attached')");
+
+            // pending → no scope, ExpiresAt required
+            // attached → exactly one scope, ExpiresAt NULL
+            t.HasCheckConstraint(
+                DbConstraints.Files.CKScopeRule,
+                @"(
+                    UsageContext = 'attachment'
+                    AND Status   = 'pending'
+                    AND UserId         IS NULL
+                    AND OrgId          IS NULL
+                    AND TeamId         IS NULL
+                    AND ChannelId      IS NULL
+                    AND ConversationId IS NULL
+                  )
+                  OR
+                  (
+                    Status = 'attached'
+                    AND (
+                        (CASE WHEN UserId         IS NOT NULL THEN 1 ELSE 0 END) +
+                        (CASE WHEN OrgId          IS NOT NULL THEN 1 ELSE 0 END) +
+                        (CASE WHEN TeamId         IS NOT NULL THEN 1 ELSE 0 END) +
+                        (CASE WHEN ChannelId      IS NOT NULL THEN 1 ELSE 0 END) +
+                        (CASE WHEN ConversationId IS NOT NULL THEN 1 ELSE 0 END)
+                    ) = 1
+                  )");
+
+            // pending → ExpiresAt must be set; attached → must be NULL
+            t.HasCheckConstraint(
+                DbConstraints.Files.CKExpiresAtRule,
+                @"(Status = 'pending'  AND ExpiresAt IS NOT NULL)
+                  OR
+                  (Status = 'attached' AND ExpiresAt IS NULL)");
         });
 
         builder.HasKey(f => f.Id);
@@ -84,8 +108,20 @@ public class FilesConfiguration : IEntityTypeConfiguration<FileEntity>
                .HasMaxLength(ValidationConstants.File.Lengths.UsageContext)
                .IsUnicode(true);
 
+        builder.Property(f => f.Status)
+               .HasConversion(
+                   v => v.ToString().ToLower(),
+                   v => Enum.Parse<FileStatusEnum>(v, true))
+               .IsRequired()
+               .HasMaxLength(ValidationConstants.File.Lengths.Status)
+               .HasDefaultValue(FileStatusEnum.Attached)
+               .IsUnicode(true);
+
         builder.Property(f => f.SizeInBytes)
                .IsRequired();
+
+        builder.Property(f => f.ExpiresAt)
+               .IsRequired(false);
 
         builder.Property(f => f.IsDeleted)
                .HasDefaultValue(false);
@@ -102,6 +138,11 @@ public class FilesConfiguration : IEntityTypeConfiguration<FileEntity>
 
         builder.HasIndex(f => f.UsageContext)
                .HasDatabaseName(DbConstraints.Files.IXUsageContext);
+
+        // Filtered index: cleanup job hits this for expired pending files
+        builder.HasIndex(f => f.ExpiresAt)
+               .HasFilter($"Status = 'pending' AND IsDeleted = 0")
+               .HasDatabaseName(DbConstraints.Files.IXPendingExpiry);
 
         // ----------------------------
         // Relationships

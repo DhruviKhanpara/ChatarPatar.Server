@@ -172,10 +172,13 @@ public static class DbConstraints
 
         public const string CKType = "CK_Files_FileType";
         public const string CKUsageContext = "CK_Files_UsageContext";
-        public const string CKScope = "CK_Files_OnlyOneScope";
+        public const string CKScopeRule = "CK_Files_ScopeRule";
+        public const string CKExpiresAtRule = "CK_Files_ExpiresAtRule";
+        public const string CKStatus = "CK_Files_Status";
 
         public const string IXUploadedByUserId = "IX_Files_UploadedBy";
         public const string IXUsageContext = "IX_Files_UsageContext";
+        public const string IXPendingExpiry = "IX_Files_PendingExpiry";
     }
 
     public static class Messages

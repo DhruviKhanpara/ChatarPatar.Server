@@ -90,6 +90,10 @@ BEGIN
         TeamId            UNIQUEIDENTIFIER    NULL,
         ChannelId         UNIQUEIDENTIFIER    NULL, -- attachment in channel
         ConversationId    UNIQUEIDENTIFIER    NULL, -- attachment in conversation
+
+        Status           NVARCHAR (20)    DEFAULT 'attached' NOT NULL,
+        ExpiresAt        DATETIME2 (7)    NULL,
+
         -- Soft delete
         IsDeleted         BIT                 NOT NULL DEFAULT 0,
     	CreatedBy		  UNIQUEIDENTIFIER	  NULL,
@@ -106,19 +110,42 @@ BEGIN
     	CONSTRAINT FK_Files_DeletedBy FOREIGN KEY (DeletedBy) REFERENCES Users(Id),
         CONSTRAINT CK_Files_FileType  CHECK (FileType IN ('image','video','audio','document', 'code', 'archive', 'other')),
         CONSTRAINT CK_Files_UsageContext CHECK (UsageContext IN ('avatar','attachment','org_logo','team_icon', 'conversation_logo')),
-        CONSTRAINT CK_Files_OnlyOneScope CHECK (
+        CONSTRAINT CK_Files_Status CHECK (Status IN ('pending', 'attached')),
+        CONSTRAINT CK_Files_ScopeRule CHECK (
             (
-                (CASE WHEN UserId IS NOT NULL THEN 1 ELSE 0 END) +
-                (CASE WHEN OrgId IS NOT NULL THEN 1 ELSE 0 END) +
-                (CASE WHEN TeamId IS NOT NULL THEN 1 ELSE 0 END) +
-                (CASE WHEN ChannelId IS NOT NULL THEN 1 ELSE 0 END) +
-                (CASE WHEN ConversationId IS NOT NULL THEN 1 ELSE 0 END)
-            ) = 1
-        )
+                -- Pending attachment uploads must NOT have scope
+                UsageContext = 'attachment'
+                AND Status = 'pending'
+                AND UserId IS NULL
+                AND OrgId IS NULL
+                AND TeamId IS NULL
+                AND ChannelId IS NULL
+                AND ConversationId IS NULL
+            )
+            OR
+            (
+                -- Everything else must have exactly one scope
+                (
+                Status = 'attached'
+                AND (
+                    (CASE WHEN UserId IS NOT NULL THEN 1 ELSE 0 END) +
+                    (CASE WHEN OrgId IS NOT NULL THEN 1 ELSE 0 END) +
+                    (CASE WHEN TeamId IS NOT NULL THEN 1 ELSE 0 END) +
+                    (CASE WHEN ChannelId IS NOT NULL THEN 1 ELSE 0 END) +
+                    (CASE WHEN ConversationId IS NOT NULL THEN 1 ELSE 0 END)
+                ) = 1)
+            )
+        ),
+        CONSTRAINT CK_Files_ExpiresAtRule CHECK (
+            (Status = 'pending'   AND ExpiresAt IS NOT NULL)
+            OR
+            (Status = 'attached'  AND ExpiresAt IS NULL)
+        ),
     );
 
     CREATE NONCLUSTERED INDEX IX_Files_UploadedBy   ON Files(UploadedByUserId);
     CREATE NONCLUSTERED INDEX IX_Files_UsageContext ON Files(UsageContext);
+    CREATE NONCLUSTERED INDEX IX_Files_PendingExpiry ON Files(ExpiresAt) WHERE Status = 'pending' AND IsDeleted = 0;
 END
 GO
 

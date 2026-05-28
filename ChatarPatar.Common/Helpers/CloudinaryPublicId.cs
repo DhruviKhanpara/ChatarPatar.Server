@@ -1,5 +1,12 @@
 ﻿namespace ChatarPatar.Common.Helpers;
 
+/// <summary>
+/// Generates deterministic Cloudinary publicId values for assets that are
+/// overwritten in-place (profile photos, logos, icons).
+///
+/// Attachments do NOT use a fixed publicId.
+/// Only assets uploaded with UploadProfileAssetAsync need a publicId here.
+/// </summary>
 public static class CloudinaryPublicId
 {
     public static string UserAvatar(Guid userId)
