@@ -119,12 +119,33 @@ public class PermissionFilter : IAsyncActionFilter
 
     private Guid? GetGuid(ActionExecutingContext context, string key)
     {
+        // Direct argument (route or primitive)
         if (context.ActionArguments.TryGetValue(key, out var val))
         {
             if (val is Guid g) return g;
             if (val is string s && Guid.TryParse(s, out var parsed)) return parsed;
         }
 
+        // Complex object case
+        foreach (var arg in context.ActionArguments.Values)
+        {
+            if (arg == null) continue;
+
+            var prop = arg.GetType().GetProperty(
+                key,
+                System.Reflection.BindingFlags.IgnoreCase |
+                System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.Instance);
+
+            if (prop != null)
+            {
+                var propVal = prop.GetValue(arg);
+                if (propVal is Guid g2) return g2;
+                if (propVal is string s2 && Guid.TryParse(s2, out var parsed2)) return parsed2;
+            }
+        }
+
+        // Route data
         if (context.RouteData.Values.TryGetValue(key, out var routeVal))
         {
             if (routeVal is string s && Guid.TryParse(s, out var parsed)) return parsed;

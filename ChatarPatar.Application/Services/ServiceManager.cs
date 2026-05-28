@@ -29,5 +29,7 @@ internal sealed class ServiceManager : IServiceManager
     public IConversationService ConversationService => Get<IConversationService>();
     public IConversationParticipantService ConversationParticipantService => Get<IConversationParticipantService>();
 
+    public IFileService FileService => Get<IFileService>();
+
     public IPermissionService PermissionService => Get<IPermissionService>();
 }

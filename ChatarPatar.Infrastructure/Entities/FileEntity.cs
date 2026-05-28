@@ -34,10 +34,19 @@ public class FileEntity : AuditableEntity
     public long SizeInBytes { get; set; }
     public string OriginalName { get; set; } = null!;
 
-    // Ownership scope
+    // Ownership scope - exactly one set when Attached; all NULL when Pending
     public Guid? UserId { get; set; }
     public Guid? OrgId { get; set; }
     public Guid? TeamId { get; set; }
     public Guid? ChannelId { get; set; }
     public Guid? ConversationId { get; set; }
+
+    /// <summary>
+    /// Only meaningful for UsageContext = Attachment.
+    /// Pending  → uploaded but not yet linked to a message; has ExpiresAt set.
+    /// Attached → linked to a message (scope is set, ExpiresAt is NULL).
+    /// All other UsageContexts are always Attached.
+    /// </summary>
+    public FileStatusEnum Status { get; set; } = FileStatusEnum.Attached;
+    public DateTime? ExpiresAt { get; set; }
 }

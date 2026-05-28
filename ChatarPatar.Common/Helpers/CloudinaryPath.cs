@@ -1,5 +1,8 @@
 ﻿namespace ChatarPatar.Common.Helpers;
 
+/// <summary>
+/// Fluent builder for Cloudinary folder paths.
+/// </summary>
 public sealed class CloudinaryPath
 {
     private readonly List<string> _segments = new();
@@ -12,95 +15,102 @@ public sealed class CloudinaryPath
         return this;
     }
 
-    private static string DatePath()
-    {
-        return DateTime.UtcNow.ToString("yyyy/MM");
-    }
+    private static string DatePath() =>
+        DateTime.UtcNow.ToString("yyyy/MM");
 
-    public override string ToString()
-    {
-        return string.Join("/", _segments);
-    }
+    public override string ToString() =>
+        string.Join("/", _segments);
 
     #region Root Builders
 
-    public static CloudinaryPath Organization(Guid orgId)
-    {
-        return new CloudinaryPath()
+    /// <summary>
+    /// app/organizations/org_{orgId}
+    /// </summary>
+    public static CloudinaryPath Organization(Guid orgId) =>
+        new CloudinaryPath()
             .Add("app")
-            .Add($"organizations/org_{orgId}");
-    }
+            .Add($"organizations")
+            .Add($"org_{orgId}");
 
-    public static CloudinaryPath Users()
-    {
-        return new CloudinaryPath()
+    /// <summary>
+    /// app/users
+    /// </summary>
+    public static CloudinaryPath Users() =>
+        new CloudinaryPath()
             .Add("app")
             .Add("users");
-    }
 
-    public static CloudinaryPath Conversation(Guid conversationId)
-    {
-        return new CloudinaryPath()
+    /// <summary>
+    /// app/conversations/conv_{conversationId}
+    /// </summary>
+    public static CloudinaryPath Conversation(Guid conversationId) =>
+        new CloudinaryPath()
             .Add("app")
-            .Add($"conversations/conv_{conversationId}");
-    }
+            .Add($"conversations")
+            .Add($"conv_{conversationId}");
 
     #endregion
 
-    #region Entity Builders
+    #region Child Entity Builders
 
-    public CloudinaryPath Team(Guid teamId)
-    {
-        return Add($"teams/team_{teamId}");
-    }
+    /// <summary>
+    /// .../teams/team_{teamId}
+    /// </summary>
+    public CloudinaryPath Team(Guid teamId) =>
+        Add($"teams").Add($"team_{teamId}");
 
-    public CloudinaryPath Channel(Guid channelId)
-    {
-        return Add($"channels/channel_{channelId}");
-    }
+    /// <summary>
+    /// .../channels/channel_{channelId}
+    /// </summary>
+    public CloudinaryPath Channel(Guid channelId) =>
+        Add("channels").Add($"channel_{channelId}");
 
-    #endregion
-
-    #region Static Folders
-
-    public string Profile()
-    {
-        return $"{this}/profile";
-    }
-
-    public string Avatars()
-    {
-        return $"{this}/avatars";
-    }
+    /// <summary>
+    /// .../messages
+    /// </summary>
+    public CloudinaryPath Messages() =>
+        Add("messages");
 
     #endregion
 
-    #region Messages
+    #region Terminal Folders
+    // These return string (not CloudinaryPath) because nothing chains after them.
 
-    public CloudinaryPath Messages()
-    {
-        return Add("messages");
-    }
+    /// <summary>
+    /// .../profile
+    /// Used for: org logo, team icon, conversation logo.
+    /// </summary>
+    public string Profile() => $"{this}/profile";
 
-    public string Images()
-    {
-        return $"{this}/images/{DatePath()}";
-    }
+    /// <summary>
+    /// .../avatars
+    /// Used for: user avatar uploads
+    /// </summary>
+    public string Avatars() => $"{this}/avatars";
 
-    public string Videos()
-    {
-        return $"{this}/videos/{DatePath()}";
-    }
+    /// <summary>
+    /// .../images/yyyy/MM
+    /// Used for: image message attachments.
+    /// </summary>
+    public string Images() => $"{this}/images/{DatePath()}";
 
-    public string Audio()
-    {
-        return $"{this}/audio/{DatePath()}";
-    }
+    /// <summary>
+    /// .../videos/yyyy/MM
+    /// Used for: video message attachments.
+    /// </summary>
+    public string Videos() => $"{this}/videos/{DatePath()}";
 
-    public string Files()
-    {
-        return $"{this}/files/{DatePath()}";
-    }
+    /// <summary>
+    /// .../audio/yyyy/MM
+    /// Used for: audio message attachments.
+    /// </summary>
+    public string Audio() => $"{this}/audio/{DatePath()}";
+
+    /// <summary>
+    /// .../files/yyyy/MM
+    /// Used for: document, code, archive message attachments.
+    /// </summary>
+    public string Files() => $"{this}/files/{DatePath()}";
 
     #endregion
 }
