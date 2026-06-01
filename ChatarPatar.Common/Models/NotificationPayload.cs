@@ -7,7 +7,7 @@ public abstract class NotificationPayload
     public string? InitiatedBy { get; set; }
 }
 
-public class EmailPayload : NotificationPayload
+public sealed class EmailPayload : NotificationPayload
 {
     public EmailPayload() { }
 

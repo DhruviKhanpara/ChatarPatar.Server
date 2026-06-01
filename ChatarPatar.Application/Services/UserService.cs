@@ -142,7 +142,7 @@ internal class UserService : IUserService
 
             if (uploadResult != null)
             {
-                try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(uploadResult.PublicId); }
+                try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(uploadResult.PublicId, FileTypeEnum.Image); }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Failed to delete user avatar from Cloudinary. PublicId: {PublicId}", uploadResult.PublicId);
@@ -231,7 +231,7 @@ internal class UserService : IUserService
 
         if (oldPublicId != null)
         {
-            try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(oldPublicId); }
+            try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(oldPublicId, FileTypeEnum.Image); }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to delete user avatar from Cloudinary. PublicId: {PublicId}", oldPublicId);

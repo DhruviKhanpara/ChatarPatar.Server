@@ -9,13 +9,13 @@ using Newtonsoft.Json;
 
 namespace ChatarPatar.Application.Services.Notification.Dispatcher;
 
-internal class OutboxEmailDispatcher : INotificationDispatcher
+internal class OutboxNotificationDispatcher : INotificationDispatcher
 {
     private readonly IRepositoryManager _repositoryManager;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IOutboxBackgroundQueue _queue;
 
-    public OutboxEmailDispatcher(IRepositoryManager repositoryManager, IHttpContextAccessor httpContextAccessor, IOutboxBackgroundQueue queue)
+    public OutboxNotificationDispatcher(IRepositoryManager repositoryManager, IHttpContextAccessor httpContextAccessor, IOutboxBackgroundQueue queue)
     {
         _repositoryManager = repositoryManager;
         _httpContextAccessor = httpContextAccessor;

@@ -80,9 +80,18 @@ internal class CloudinaryService : ICloudinaryService
         };
     }
 
-    public async Task<bool> DeleteFileAsync(string publicId)
+    public async Task<bool> DeleteFileAsync(string publicId, FileTypeEnum fileType)
     {
-        var deletionParams = new DeletionParams(publicId);
+        var deletionParams = new DeletionParams(publicId)
+        {
+            ResourceType = fileType switch
+            {
+                FileTypeEnum.Image => ResourceType.Image,
+                FileTypeEnum.Video => ResourceType.Video,
+                _ => ResourceType.Raw
+            }
+        };
+
         var result = await _cloudinary.DestroyAsync(deletionParams);
 
         if (result.Error != null)

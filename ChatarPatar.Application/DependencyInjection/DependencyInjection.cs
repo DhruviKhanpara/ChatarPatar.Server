@@ -56,7 +56,7 @@ public static class DependencyInjection
         services.AddScoped<IPermissionService, PermissionService>();
 
         // --- Notification ---
-        services.AddScoped<INotificationDispatcher, OutboxEmailDispatcher>();
+        services.AddScoped<INotificationDispatcher, OutboxNotificationDispatcher>();
         services.AddScoped<IEmailNotificationService, EmailNotificationService>();
 
         services.AddScoped<IServiceManager, ServiceManager>();
