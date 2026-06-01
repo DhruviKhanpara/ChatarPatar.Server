@@ -4,6 +4,7 @@ using ChatarPatar.Application.DTOs.Common;
 using ChatarPatar.Application.DTOs.ConversationParticipant;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
+using ChatarPatar.Common.Consts;
 using ChatarPatar.Common.Enums;
 using ChatarPatar.Common.Helpers;
 using ChatarPatar.Common.HttpUserDetails;
@@ -75,6 +76,14 @@ internal class ConversationParticipantService : IConversationParticipantService
 
         if (dto.UserId == userId)
             throw new InvalidDataAppException("You cannot add yourself to the conversation.");
+
+        // Enforce max participant cap before adding
+        var currentCount = await _repositories.ConversationParticipantRepository
+            .GetActiveParticipantsQuery(conversationId)
+            .CountAsync();
+
+        if (currentCount >= ValidationConstants.Conversation.MaxGroupParticipantsCount)
+            throw new InvalidDataAppException($"Group has reached the maximum limit of {ValidationConstants.Conversation.MaxGroupParticipantsCount} participants.");
 
         var existingParticipant = await _repositories.ConversationParticipantRepository
             .FindByCondition(p => p.ConversationId == conversationId && p.UserId == dto.UserId)
@@ -171,6 +180,9 @@ internal class ConversationParticipantService : IConversationParticipantService
                 throw new InvalidDataAppException("You are the only Group Admin. Promote another participant before leaving.");
         }
 
+        // Enforce min participant cap — group must stay at MinGroupParticipantsCount or above
+        await EnsureParticipantCanBeRemoved(conversationId);
+
         participant.HasLeft = true;
         participant.LeftAt = DateTime.UtcNow;
 
@@ -192,6 +204,9 @@ internal class ConversationParticipantService : IConversationParticipantService
         if (participant.UserId == userId)
             throw new InvalidDataAppException("Use the leave endpoint to remove yourself.");
 
+        // Enforce min participant cap — group must stay at MinGroupParticipantsCount or above
+        await EnsureParticipantCanBeRemoved(conversationId);
+
         participant.HasLeft = true;
         participant.LeftAt = DateTime.UtcNow;
 
@@ -211,6 +226,18 @@ internal class ConversationParticipantService : IConversationParticipantService
         catch (Exception ex)
         {
             _logger.LogError(ex, errorTemplate, userId);
+        }
+    }
+
+    private async Task EnsureParticipantCanBeRemoved(Guid conversationId)
+    {
+        var currentCount = await _repositories.ConversationParticipantRepository
+            .GetActiveParticipantsQuery(conversationId)
+            .CountAsync();
+
+        if (currentCount <= ValidationConstants.Conversation.MinGroupParticipantsCount)
+        {
+            throw new InvalidDataAppException($"Group must have at least {ValidationConstants.Conversation.MinGroupParticipantsCount} participants.");
         }
     }
 

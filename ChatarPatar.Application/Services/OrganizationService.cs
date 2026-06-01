@@ -149,7 +149,7 @@ internal class OrganizationService : IOrganizationService
 
             if (uploadResult != null)
             {
-                try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(uploadResult.PublicId); }
+                try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(uploadResult.PublicId, FileTypeEnum.Image); }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Failed to delete org logo from Cloudinary. PublicId: {PublicId}", uploadResult.PublicId);
@@ -220,7 +220,7 @@ internal class OrganizationService : IOrganizationService
 
         if (oldPublicId != null)
         {
-            try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(oldPublicId); }
+            try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(oldPublicId, FileTypeEnum.Image); }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to delete org logo from Cloudinary. PublicId: {PublicId}", oldPublicId);

@@ -217,7 +217,7 @@ internal class TeamService : ITeamService
 
             if (uploadResult != null)
             {
-                try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(uploadResult.PublicId); }
+                try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(uploadResult.PublicId, FileTypeEnum.Image); }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Failed to delete team icon from Cloudinary. PublicId: {PublicId}", uploadResult.PublicId);
@@ -292,7 +292,7 @@ internal class TeamService : ITeamService
 
         if (oldPublicId != null)
         {
-            try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(oldPublicId); }
+            try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(oldPublicId, FileTypeEnum.Image); }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to delete team icon from Cloudinary. PublicId: {PublicId}", oldPublicId);

@@ -12,12 +12,13 @@ public class MessageMention : BaseEntity
     public Channel? Channel { get; set; }
     [ForeignKey(nameof(ConversationId))]
     public Conversation? Conversation { get; set; }
+    [ForeignKey(nameof(MentionedUserId))]
+    public User MentionedUser { get; set; } = null!;
     #endregion
 
     public Guid MessageId { get; set; }
 
     public Guid MentionedUserId { get; set; }
-    public User MentionedUser { get; set; } = null!;
 
     public Guid? ChannelId { get; set; }
     public Guid? ConversationId { get; set; }

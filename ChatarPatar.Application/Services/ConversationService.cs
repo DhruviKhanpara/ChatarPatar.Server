@@ -160,7 +160,7 @@ internal class ConversationService : IConversationService
             .GetDirectConversationAsync(userId, dto.TargetUserId);
 
         if (existing is not null)
-            return await LoadAndMapConversationAsync(existing.Id, userId);
+            return await LoadAndMapConversationAsync(existing.Id, userId) ?? new ConversationDto();
 
         // Verify target user exists
         var targetExists = await _repositories.UserRepository
@@ -211,7 +211,7 @@ internal class ConversationService : IConversationService
         }
 
         var conversationId = existingConversation?.Id ?? conversation.Id;
-        return await LoadAndMapConversationAsync(conversationId, userId);
+        return await LoadAndMapConversationAsync(conversationId, userId) ?? new ConversationDto();
     }
 
     public async Task<ConversationDto> CreateGroupConversationAsync(CreateGroupConversationDto dto)
@@ -276,7 +276,7 @@ internal class ConversationService : IConversationService
             throw;
         }
 
-        return await LoadAndMapConversationAsync(conversation.Id, userId);
+        return await LoadAndMapConversationAsync(conversation.Id, userId) ?? new ConversationDto();
     }
 
     public async Task UpdateGroupConversationLogoAsync(Guid conversationId, ImageUploadDto dto)
@@ -334,7 +334,7 @@ internal class ConversationService : IConversationService
 
             if (uploadResult != null)
             {
-                try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(uploadResult.PublicId); }
+                try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(uploadResult.PublicId, FileTypeEnum.Image); }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Failed to delete conversation logo from Cloudinary. PublicId: {PublicId}", uploadResult.PublicId);
@@ -405,7 +405,7 @@ internal class ConversationService : IConversationService
 
         if (oldPublicId != null)
         {
-            try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(oldPublicId); }
+            try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(oldPublicId, FileTypeEnum.Image); }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to delete conversation logo from Cloudinary. PublicId: {PublicId}", oldPublicId);
@@ -415,7 +415,7 @@ internal class ConversationService : IConversationService
 
     #region Private section
 
-    private async Task<ConversationDto> LoadAndMapConversationAsync(Guid conversationId, Guid userId)
+    private async Task<ConversationDto?> LoadAndMapConversationAsync(Guid conversationId, Guid userId)
     {
         var baseQuery = _repositories.ConversationRepository
             .GetByIdForUser(conversationId, userId);
@@ -470,7 +470,7 @@ internal class ConversationService : IConversationService
             })
             .FirstOrDefaultAsync();
 
-        return conversation ?? new ConversationDto();
+        return conversation;
     }
 
     #endregion

@@ -101,6 +101,8 @@ public class Program
                         $"/swagger/{description.GroupName}/swagger.json",
                         $"ChatarPatar API {description.GroupName.ToUpperInvariant()}");
                 }
+
+                options.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.None);
             });
         }
 

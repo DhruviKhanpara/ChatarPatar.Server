@@ -88,6 +88,14 @@ public static class ValidationConstants
             public const int Type = 20;
             public const int Role = 50;
         }
+        public const int MinGroupParticipantsCount = 3;   // includes the creator
+        public const int MaxGroupParticipantsCount = 200;  // includes the creator
+
+        /// <summary>
+        /// Groups at or below this participant count use per-user MessageReceipts for individual delivery/seen tracking.
+        /// Groups above this threshold use DmStatus on the Message row itself (a single shared status for all participants) to avoid receipt table bloat.
+        /// </summary>
+        public const int GroupReceiptThreshold = 20;
     }
 
     public static class Message

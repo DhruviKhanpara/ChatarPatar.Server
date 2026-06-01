@@ -19,23 +19,6 @@ public class UploadAttachmentDtoValidator : AbstractValidator<UploadAttachmentDt
                 .WithMessage($"File exceeds the maximum allowed size of {MaxSize / (1024 * 1024)} MB.")
             .Must(f => AllowedMimes.Contains(f.ContentType))
                 .WithMessage("File type is not allowed.");
-
-        // Exactly one scope
-        RuleFor(x => x)
-            .Must(x => (x.ChannelId.HasValue) != (x.ConversationId.HasValue))
-                .WithMessage("Exactly one of ChannelId or ConversationId must be provided.");
-
-        // Channel upload requires OrgId + TeamId
-        When(x => x.ChannelId.HasValue, () =>
-        {
-            RuleFor(x => x.OrgId)
-                .NotEmpty()
-                    .WithMessage("OrgId is required for channel attachments.");
-
-            RuleFor(x => x.TeamId)
-                .NotEmpty()
-                    .WithMessage("TeamId is required for channel attachments.");
-        });
     }
 
     private static readonly HashSet<string> AllowedMimes =

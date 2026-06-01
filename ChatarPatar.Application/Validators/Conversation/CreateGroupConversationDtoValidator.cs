@@ -18,8 +18,10 @@ public class CreateGroupConversationDtoValidator : AbstractValidator<CreateGroup
             .Cascade(CascadeMode.Stop)
             .NotNull()
                 .WithMessage("Participant users are required.")
-            .Must(ids => ids.Count >= 2)
-                .WithMessage("A group conversation requires at least 2 other participants.")
+            .Must(ids => ids.Count >= ValidationConstants.Conversation.MinGroupParticipantsCount - 1)
+                .WithMessage($"minimum group size is {ValidationConstants.Conversation.MinGroupParticipantsCount} including you.")
+            .Must(ids => ids.Count <= ValidationConstants.Conversation.MaxGroupParticipantsCount - 1)
+                .WithMessage($"maximum group size is {ValidationConstants.Conversation.MaxGroupParticipantsCount} including you.")
             .Must(ids => ids.Distinct().Count() == ids.Count)
                 .WithMessage("Duplicate participant users are not allowed.");
     }
