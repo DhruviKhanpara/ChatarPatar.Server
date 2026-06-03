@@ -82,9 +82,6 @@ internal class PermissionService : IPermissionService
             if (RolePermissions.OrganizationRolePermissions.TryGetValue(orgRole.Value, out var orgPerms))
                 combined.UnionWith(orgPerms);
 
-            if (combined.Contains("*"))
-                return true; // wildcard short-circuit for org only
-
             // 3. Add team-level permissions (scoped to THIS team only)
             if (ctx.TeamId != null)
             {
@@ -188,6 +185,9 @@ internal class PermissionService : IPermissionService
                 }
             }
         }
+
+        if (combined.Contains("*"))
+            return true; // wildcard short-circuit for org only
 
         return logic switch
         {

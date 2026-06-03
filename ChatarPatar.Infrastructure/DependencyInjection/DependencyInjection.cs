@@ -20,6 +20,7 @@ public static class DependencyInjection
 
         services.AddScoped<ICloudinaryService, CloudinaryService>();
         services.AddScoped<IOutboxMessageHandler, EmailOutboxMessageHandler>();
+        services.AddScoped<IOutboxMessageHandler, MessageSentChannelOutboxHandler>();
         services.AddScoped<IOutboxProcessor, GenericOutboxProcessor>();
 
         services.AddScoped<IRepositoryManager, RepositoryManager>();

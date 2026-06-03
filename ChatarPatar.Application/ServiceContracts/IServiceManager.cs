@@ -17,6 +17,8 @@ public interface IServiceManager
     IConversationService ConversationService { get; }
     IConversationParticipantService ConversationParticipantService { get; }
 
+    IMessageService MessageService { get; }
+
     IFileService FileService { get; }
 
     IPermissionService PermissionService { get; }

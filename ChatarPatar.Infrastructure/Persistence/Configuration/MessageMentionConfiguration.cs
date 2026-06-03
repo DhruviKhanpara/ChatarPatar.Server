@@ -38,7 +38,7 @@ public class MessageMentionConfiguration : IEntityTypeConfiguration<MessageMenti
         // ----------------------------
 
         builder.HasOne(m => m.Message)
-               .WithMany()
+               .WithMany(m => m.MessageMentions)
                .HasForeignKey(m => m.MessageId)
                .HasConstraintName(DbConstraints.MessageMentions.FKMessage)
                .OnDelete(DeleteBehavior.Restrict);

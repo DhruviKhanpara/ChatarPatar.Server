@@ -145,7 +145,7 @@ internal class AuthService : IAuthService
         if (plainOtp is not null)
         {
             await _repositories.UnitOfWork.SaveChangesAsync();
-            _ = _emailNotificationService.SendEmailVerificationOtpAsync(
+            await _emailNotificationService.SendEmailVerificationOtpAsync(
                 toEmail: userEntity.Email,
                 userName: userEntity.Name,
                 otp: plainOtp,
@@ -259,7 +259,7 @@ internal class AuthService : IAuthService
 
         await _repositories.UnitOfWork.SaveChangesAsync();
 
-        _ = _emailNotificationService.SendEmailVerificationOtpAsync(
+        await _emailNotificationService.SendEmailVerificationOtpAsync(
             toEmail: user.Email,
             userName: user.Name,
             otp: plainOtp,
