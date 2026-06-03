@@ -18,6 +18,9 @@ public class Message : BaseEntity
     public Message? Thread { get; set; }
     [ForeignKey(nameof(DeletedBy))]
     public User? DeletedByUser { get; set; }
+
+    public virtual List<MessageAttachment> MessageAttachments { get; set; } = new List<MessageAttachment>();
+    public virtual List<MessageMention> MessageMentions { get; set; } = new List<MessageMention>();
     #endregion
 
     public long SequenceNumber { get; set; }

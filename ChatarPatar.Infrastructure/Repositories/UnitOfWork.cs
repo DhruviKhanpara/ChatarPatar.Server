@@ -93,6 +93,9 @@ internal class UnitOfWork : IUnitOfWork
     public Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
         => _context.Database.BeginTransactionAsync(cancellationToken);
 
+    public void DetachEntity<T>(T entity) where T : class
+        => _context.Entry(entity).State = EntityState.Detached;
+
     #region Private Section
 
     private void UpdateAuditInEntityBeforeSave()

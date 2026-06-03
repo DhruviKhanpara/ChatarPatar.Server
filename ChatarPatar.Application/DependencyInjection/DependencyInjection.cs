@@ -51,6 +51,8 @@ public static class DependencyInjection
         services.AddScoped<IConversationService, ConversationService>();
         services.AddScoped<IConversationParticipantService, ConversationParticipantService>();
 
+        services.AddScoped<IMessageService, MessageService>();
+
         services.AddScoped<IFileService, FileService>();
 
         services.AddScoped<IPermissionService, PermissionService>();

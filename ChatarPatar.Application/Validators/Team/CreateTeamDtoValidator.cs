@@ -10,7 +10,7 @@ public class CreateTeamDtoValidator : AbstractValidator<CreateTeamDto>
     {
         RuleFor(x => x.Name)
             .Cascade(CascadeMode.Stop)
-            .Must(name => !string.IsNullOrWhiteSpace(name))
+            .NotEmpty()
                 .WithMessage("Team name is required.")
             .MaximumLength(ValidationConstants.Team.Lengths.Name)
                 .WithMessage($"Team name must not exceed {ValidationConstants.Team.Lengths.Name} characters.");

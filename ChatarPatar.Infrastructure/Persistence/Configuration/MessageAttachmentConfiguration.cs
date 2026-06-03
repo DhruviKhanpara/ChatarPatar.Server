@@ -47,7 +47,7 @@ public class MessageAttachmentConfiguration : IEntityTypeConfiguration<MessageAt
         // ----------------------------
 
         builder.HasOne(a => a.Message)
-               .WithMany()
+               .WithMany(m => m.MessageAttachments)
                .HasForeignKey(a => a.MessageId)
                .HasConstraintName(DbConstraints.MessageAttachments.FKMessage)
                .OnDelete(DeleteBehavior.Restrict);

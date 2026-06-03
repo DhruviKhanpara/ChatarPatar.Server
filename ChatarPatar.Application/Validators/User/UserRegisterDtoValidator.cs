@@ -30,7 +30,7 @@ public class UserRegisterDtoValidator : AbstractValidator<UserRegisterDto>
 
         RuleFor(x => x.Name)
             .Cascade(CascadeMode.Stop)
-            .Must(name => !string.IsNullOrWhiteSpace(name))
+            .NotEmpty()
                 .WithMessage("Name is required.")
             .MaximumLength(ValidationConstants.User.Lengths.Name)
                 .WithMessage($"Name must not exceed {ValidationConstants.User.Lengths.Name} characters.");

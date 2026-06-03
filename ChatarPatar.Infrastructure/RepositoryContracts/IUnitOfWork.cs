@@ -23,4 +23,11 @@ public interface IUnitOfWork
     void FlushPendingAuditLogs();
 
     Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Detaches an entity from the EF change tracker.
+    /// Use after an explicit transaction commit when the entity has a RowVersion
+    /// concurrency token, to prevent a subsequent SaveChanges from seeing a stale token.
+    /// </summary>
+    void DetachEntity<T>(T entity) where T : class;
 }

@@ -106,6 +106,7 @@ public static class ValidationConstants
             public const int DmStatus = 20;
             public const int Emoji = 50;
             public const int ContentSnapshot = 500;
+            public const int MaxAttachmentsPerMessage = 10;
         }        
     }
 

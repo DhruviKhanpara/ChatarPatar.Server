@@ -34,7 +34,7 @@ internal class GenericOutboxProcessor : IOutboxProcessor
             var handler = _handlers.FirstOrDefault(x => x.MessageType == message.Type);
             if (handler == null)
             {
-                _logger.LogWarning($"[OUTBOX] No handler for type {message.Type}");
+                _logger.LogError($"[OUTBOX] No handler for type {message.Type}");
                 continue;
             }
 
