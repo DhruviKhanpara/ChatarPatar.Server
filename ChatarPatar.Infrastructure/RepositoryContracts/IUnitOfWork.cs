@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore.Storage;
+﻿using ChatarPatar.Common.AppLogging.Model.LogRequest;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace ChatarPatar.Infrastructure.RepositoryContracts;
 
@@ -7,14 +8,28 @@ public interface IUnitOfWork
     int SaveChanges();
     
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
-    
+
     /// <summary>
-    /// Saves changes to DB WITHOUT writing audit logs.
-    /// Use this for intermediate SaveChanges calls inside an explicit transaction.
-    /// Call FlushPendingAuditLogs() after CommitAsync() so logs are only written
-    /// when the full transaction has successfully committed.
+    /// Saves changes to DB WITHOUT immediately writing audit logs.
+    /// Use for every SaveChanges inside an explicit transaction.
+    ///
+    /// suppressRowAudit = false (default):
+    ///   Auto-collects row-level RowChange entries from the change tracker and queues them.
+    ///   Flush after CommitAsync.
+    ///
+    /// suppressRowAudit = true:
+    ///   Skips row-level collection entirely.
+    ///   Use when the caller will queue a single BulkEvent entry via QueueManualAuditLog instead
     /// </summary>
-    Task<int> SaveChangesWithoutAuditAsync(CancellationToken cancellationToken = default);
+    Task<int> SaveChangesWithoutAuditAsync(bool suppressRowAudit = false, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Manually queues a BulkEvent audit entry for operations that bypass the
+    /// change tracker (ExecuteUpdate, ExecuteDelete) or that fan out to N rows
+    /// from a single user action.
+    /// Call before CommitAsync; the entry is flushed with FlushPendingAuditLogs.
+    /// </summary>
+    void QueueManualAuditLog(AuditLogRequest logRequest);
 
     /// <summary>
     /// Writes all audit log entries collected during SaveChangesWithoutAuditAsync.

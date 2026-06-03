@@ -3,6 +3,7 @@ using AutoMapper.QueryableExtensions;
 using ChatarPatar.Application.DTOs.TeamMember;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
+using ChatarPatar.Common.AppLogging.Model.LogRequest;
 using ChatarPatar.Common.Enums;
 using ChatarPatar.Common.Helpers;
 using ChatarPatar.Common.HttpUserDetails;
@@ -144,18 +145,34 @@ internal class TeamMemberService : ITeamMemberService
 
         await _repositories.TeamMemberRepository.AddAsync(memberEntity);
 
-        // Seed a ReadState row for every public channel in this team so the new
-        // member's unread cursor starts at the current high-water mark for each.
-        // Private channels only get a ReadState when explicitly added (see ChannelMemberService).
         var publicChannelIds = await _repositories.ChannelRepository
             .FindByCondition(c => c.TeamId == teamId && !c.IsPrivate && !c.IsDeleted)
             .Select(c => c.Id)
             .ToListAsync();
 
-        if (publicChannelIds.Any())
-            await _repositories.ReadStateRepository.SeedForChannelsAsync([dto.UserId], publicChannelIds);
+        await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
+        try
+        {
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
 
-        await _repositories.UnitOfWork.SaveChangesAsync();
+            // Seed a ReadState row for every public channel in this team so the new
+            // member's unread cursor starts at the current high-water mark for each.
+            // Private channels only get a ReadState when explicitly added (see ChannelMemberService).
+            // ReadState is UI state — suppress row-level audit (could be N rows for N public channels).
+            if (publicChannelIds.Any())
+            {
+                await _repositories.ReadStateRepository.SeedForChannelsAsync([dto.UserId], publicChannelIds);
+                await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync(suppressRowAudit: true);
+            }
+
+            await tx.CommitAsync();
+            _repositories.UnitOfWork.FlushPendingAuditLogs();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task UpdateTeamMemberRoleAsync(Guid orgId, Guid teamId, Guid membershipId, UpdateTeamMemberRoleDto dto)

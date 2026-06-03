@@ -28,6 +28,8 @@ internal static class AuditLogBuilder
                     new SqlColumn(LoggingProperties.UserName, SqlDbType.NVarChar),
                     new SqlColumn(LoggingProperties.TableName, SqlDbType.NVarChar),
                     new SqlColumn(LoggingProperties.RecordId, SqlDbType.UniqueIdentifier),
+                    new SqlColumn(LoggingProperties.AuditLogType, SqlDbType.NVarChar, dataLength: 20),
+                    new SqlColumn(LoggingProperties.EventName,    SqlDbType.NVarChar, dataLength: 100),
                 }
             };
 

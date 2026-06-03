@@ -1353,6 +1353,8 @@ BEGIN
         [UserName]        NVARCHAR (MAX)   NULL,
         [TableName]       NVARCHAR (MAX)   NULL,
         [RecordId]        UNIQUEIDENTIFIER NULL,
+        [AuditLogType]    NVARCHAR(20)     DEFAULT 'RowChange' NOT NULL,
+        [EventName]       NVARCHAR(100)    NULL,
         CONSTRAINT [PK_AuditLog] PRIMARY KEY CLUSTERED ([Id] ASC)
     );
 END
