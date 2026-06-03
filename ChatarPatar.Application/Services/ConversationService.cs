@@ -2,6 +2,7 @@
 using ChatarPatar.Application.DTOs.Conversation;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
+using ChatarPatar.Common.AppLogging.Model.LogRequest;
 using ChatarPatar.Common.Enums;
 using ChatarPatar.Common.Helpers;
 using ChatarPatar.Common.HttpUserDetails;
@@ -187,9 +188,21 @@ internal class ConversationService : IConversationService
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
 
             // Seed ReadState for both participants. New conversation so sequence starts at 0.
+            // ReadState is UI state, not an auditable business decision — suppress.
             await _repositories.ReadStateRepository.SeedForConversationAsync(userId, conversation.Id, true);
             await _repositories.ReadStateRepository.SeedForConversationAsync(dto.TargetUserId, conversation.Id, true);
-            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync(suppressRowAudit: true);
+
+            _repositories.UnitOfWork.QueueManualAuditLog(new AuditLogRequest(
+                tableName: "Conversations",
+                eventName: "DirectConversationCreated",
+                payload: new
+                {
+                    ConversationId = conversation.Id,
+                    CreatedBy = userId,
+                    ParticipantCount = 2,
+                    ParticipantIds = new[] { dto.TargetUserId, userId }
+                }));
 
             await tx.CommitAsync();
             _repositories.UnitOfWork.FlushPendingAuditLogs();
@@ -258,14 +271,32 @@ internal class ConversationService : IConversationService
         try
         {
             await _repositories.ConversationRepository.AddAsync(conversation);
-            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
 
-            // Seed ReadState for every participant (creator + all invited users). New conversation so sequence starts at 0 for everyone.
+            // The Conversation row + all ConversationParticipant rows are saved here.
+            // We suppress row-level audit because N participants from one user action
+            // should produce exactly one BulkEvent entry, not N+1 entries.
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync(suppressRowAudit: true);
+
+            // Seed ReadState for every participant (creator + all invited users). New conversation so sequence starts at 0/global max for everyone.
+            // ReadState is UI state — never audit it.
             var allParticipantIds = normalizedParticipantIds.Append(userId);
             foreach (var participantId in allParticipantIds)
                 await _repositories.ReadStateRepository.SeedForConversationAsync(participantId, conversation.Id, true);
 
-            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync(suppressRowAudit: true);
+
+            // One BulkEvent entry for the whole operation
+            _repositories.UnitOfWork.QueueManualAuditLog(new AuditLogRequest(
+                tableName: "Conversations",
+                eventName: "GroupConversationCreated",
+                payload: new
+                {
+                    ConversationId = conversation.Id,
+                    Name = conversation.Name,
+                    CreatedBy = userId,
+                    ParticipantCount = allParticipantIds.Count(),
+                    ParticipantIds = allParticipantIds
+                }));
 
             await tx.CommitAsync();
             _repositories.UnitOfWork.FlushPendingAuditLogs();

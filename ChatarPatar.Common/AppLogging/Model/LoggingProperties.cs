@@ -19,4 +19,7 @@ public static class LoggingProperties
     public const string RecordId = "RecordId";
     public const string TableName = "TableName";
     public const string TableNameId = "TableNameId";
+
+    public const string AuditLogType = "AuditLogType";
+    public const string EventName = "EventName";
 }

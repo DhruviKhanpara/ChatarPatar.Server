@@ -4,6 +4,7 @@ using ChatarPatar.Application.Common.Extensions;
 using ChatarPatar.Application.DTOs.Channel;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
+using ChatarPatar.Common.AppLogging.Model.LogRequest;
 using ChatarPatar.Common.Enums;
 using ChatarPatar.Common.Helpers;
 using ChatarPatar.Common.HttpUserDetails;
@@ -206,12 +207,29 @@ internal class ChannelService : IChannelService
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
 
             // Seed read states
+            // ReadState is UI state, not an auditable business decision — suppress.
             if (channelEntity.IsPrivate)
                 await _repositories.ReadStateRepository.SeedForChannelAsync(authUserId, channelEntity.Id, true);
             else
                 await _repositories.ReadStateRepository.SeedForChannelsAsync(teamExists.MemberIds, [channelEntity.Id], true);
 
-            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync(suppressRowAudit: true);
+
+            // For a public channel, queue one BulkEvent to capture the fan-out count.
+            // Private channel creation is already covered by the RowChange entries above
+            // (1 Channel + 1 ChannelMember row — no fan-out problem).
+            if (!channelEntity.IsPrivate)
+            {
+                _repositories.UnitOfWork.QueueManualAuditLog(new AuditLogRequest(
+                    tableName: "ReadStates",
+                    eventName: "ChannelReadStateSeeded",
+                    payload: new
+                    {
+                        ChannelId = channelEntity.Id,
+                        TeamId = teamId,
+                        SeededForCount = teamExists.MemberIds.Count
+                    }));
+            }
 
             await tx.CommitAsync();
             _repositories.UnitOfWork.FlushPendingAuditLogs();

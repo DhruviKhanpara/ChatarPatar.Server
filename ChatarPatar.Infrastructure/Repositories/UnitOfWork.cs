@@ -55,32 +55,44 @@ internal class UnitOfWork : IUnitOfWork
     /// This guarantees audit logs are never written for rolled-back transactions.
     /// </summary>
 
-    public async Task<int> SaveChangesWithoutAuditAsync(CancellationToken cancellationToken = default)
+    public async Task<int> SaveChangesWithoutAuditAsync(bool suppressRowAudit = false, CancellationToken cancellationToken = default)
     {
         UpdateAuditInEntityBeforeSave();
 
-        // Collect audit entries BEFORE SaveChanges (while change tracker still has states)
-        var entries = CollectAuditEntries();
-
-        var result = await _context.SaveChangesAsync(cancellationToken);
-
-        // Resolve the DB-generated Ids into the collected entries (same as SaveAuditLogRequests does)
-        foreach (var logRequest in entries.Where(x => x.ChangeState == EntityState.Added))
+        if (!suppressRowAudit)
         {
-            if (logRequest.SourceEntity != null)
+            // Collect row-level entries BEFORE SaveChanges (change tracker still has states)
+            var entries = CollectAuditEntries();
+
+            var result = await _context.SaveChangesAsync(cancellationToken);
+
+            // Resolve DB-generated Ids into Added entries
+            foreach (var logRequest in entries.Where(x => x.ChangeState == EntityState.Added))
             {
-                var entry = _context.Entry(logRequest.SourceEntity.Entity);
-                var postSave = new AuditLogRequest(entry);
-                logRequest.RecordId = postSave.RecordId;
-                logRequest.ChangeRecord.After = postSave.ChangeRecord.After;
+                if (logRequest.SourceEntity != null)
+                {
+                    var entry = _context.Entry(logRequest.SourceEntity.Entity);
+                    var postSave = new AuditLogRequest(entry);
+                    logRequest.RecordId = postSave.RecordId;
+                    logRequest.ChangeRecord.After = postSave.ChangeRecord.After;
+                }
             }
+
+            // Hold them — do NOT write to Serilog yet
+            _pendingAuditLogs.AddRange(entries);
+            return result;
         }
-
-        // Hold them — do NOT write to Serilog yet
-        _pendingAuditLogs.AddRange(entries);
-
-        return result;
+        else
+        {
+            // suppressRowAudit = true: caller will queue a single BulkEvent instead.
+            // Don't collect any row-level entries — they would be noise.
+            return await _context.SaveChangesAsync(cancellationToken);
+        }
     }
+
+    /// <inheritdoc />
+    public void QueueManualAuditLog(AuditLogRequest logRequest)
+        => _pendingAuditLogs.Add(logRequest);
 
     public void FlushPendingAuditLogs()
     {
