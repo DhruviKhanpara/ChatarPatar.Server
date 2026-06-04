@@ -221,7 +221,6 @@ internal class TeamMemberService : ITeamMemberService
 
     public async Task RemoveTeamMemberAsync(Guid orgId, Guid teamId, Guid membershipId)
     {
-        // TODO: Remove Channel membership too
         var authUserId = Guid.Parse(_httpContext.GetUserId());
 
         var context = await _repositories.TeamRepository
@@ -257,16 +256,13 @@ internal class TeamMemberService : ITeamMemberService
         if (membership is null)
             throw new NotFoundAppException("Team membership");
 
-        membership.IsDeleted = true;
-
-        await _repositories.UnitOfWork.SaveChangesAsync();
+        await ExecuteCascadeRemovalAsync(membership, teamId, actorId: authUserId);
 
         TryInvalidatePermissions(membership.UserId, "Failed to invalidate permissions for user {UserId} after team member removal");
     }
 
     public async Task LeaveTeamAsync(Guid orgId, Guid teamId)
     {
-        // TODO: Channel membership too
         var authUserId = Guid.Parse(_httpContext.GetUserId());
 
         var context = await _repositories.TeamRepository
@@ -299,9 +295,7 @@ internal class TeamMemberService : ITeamMemberService
         if (membership is null)
             throw new NotFoundAppException("Team membership");
 
-        membership.IsDeleted = true;
-
-        await _repositories.UnitOfWork.SaveChangesAsync();
+        await ExecuteCascadeRemovalAsync(membership, teamId, actorId: authUserId);
 
         TryInvalidatePermissions(authUserId, "Failed to invalidate permissions for user {UserId} after leaving team");
     }
@@ -318,6 +312,119 @@ internal class TeamMemberService : ITeamMemberService
         {
             _logger.LogError(ex, errorTemplate, userId);
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // SHARED CASCADE REMOVAL LOGIC
+    //
+    // Phase 1 — Resolve sole-moderator private channels within this team
+    //   For private channels where target is only moderator:
+    //   a) If other channel members exist → auto-promote next senior
+    //   b) If no other channel members    → archive channel (memberships preserved)
+    //
+    // Phase 2 — Bulk remove all private channel memberships in this team
+    //
+    // Phase 3 — Soft-delete the TeamMember row (tracked entity)
+    //
+    // Phase 4 — Queue manual audit entries for bulk operations
+    //
+    // Phase 5 — Commit + flush audit logs
+    //
+    // All phases run inside a single transaction.
+    // ReadState rows are intentionally left — harmless stale counters,
+    // permission checks prevent the user ever reading those channels again.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private async Task ExecuteCascadeRemovalAsync(TeamMember membership, Guid teamId, Guid actorId)
+    {
+        var targetUserId = membership.UserId;
+        var now = DateTime.UtcNow;
+
+        var channelPromotions = new List<(Guid ChannelId, string ChannelName, Guid PromotedUserId)>();
+        var channelsAutoArchived = new List<(Guid ChannelId, string ChannelName)>();
+        int channelMembershipsRemoved = 0;
+
+        await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
+        try
+        {
+            // ── Phase 1: Sole-moderator private channel resolution ───────────
+            var soleModeratorChannels = await _repositories.ChannelMemberRepository
+                .GetSoleModeratorPrivateChannelsInTeamWithNextSeniorMemberAsync(targetUserId, teamId);
+
+            foreach (var channel in soleModeratorChannels)
+            {
+                bool promoted = false;
+
+                if (channel.NextSeniorMembershipId is not null)
+                {
+                    int rows = await _repositories.CascadeCleanupRepository
+                        .PromoteChannelMemberAsync(channel.NextSeniorMembershipId.Value, actorId, now);
+
+                    if (rows > 0)
+                    {
+                        promoted = true;
+                        channelPromotions.Add((channel.ChannelId, channel.ChannelName, channel.NextSeniorMemberId!.Value));
+                    }
+                }
+
+                if (!promoted)
+                {
+                    // No other members (or candidate vanished) — archive channel only.
+                    // Memberships preserved, consistent with normal archive behaviour.
+                    await _repositories.CascadeCleanupRepository
+                        .ArchiveChannelAsync(channel.ChannelId, actorId, now);
+
+                    channelsAutoArchived.Add((channel.ChannelId, channel.ChannelName));
+                }
+            }
+
+            // ── Phase 2: Bulk remove the departing user's channel memberships ─
+            // MUST run after Phase 1 so promotion/archive decisions are already made.
+            channelMembershipsRemoved = await _repositories.CascadeCleanupRepository
+                .BulkRemoveUserChannelMembershipsInTeamAsync(targetUserId, teamId, actorId, now);
+
+            // ── Phase 3: Soft-delete the TeamMember row (tracked entity) ─────
+            membership.IsDeleted = true;
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+
+            // ── Phase 4: Queue manual audit entries ───────────────────────────
+            if (channelMembershipsRemoved > 0)
+                _repositories.UnitOfWork.QueueManualAuditLog(new AuditLogRequest(
+                    tableName: "ChannelMembers",
+                    eventName: "BulkChannelMembershipsRemovedOnTeamRemoval",
+                    payload: new { TargetUserId = targetUserId, TeamId = teamId, AffectedRows = channelMembershipsRemoved }));
+
+            if (channelPromotions.Count > 0)
+                _repositories.UnitOfWork.QueueManualAuditLog(new AuditLogRequest(
+                    tableName: "ChannelMembers",
+                    eventName: "AutoPromotionsOnTeamMemberRemoval",
+                    payload: new { AutoPromotions = channelPromotions }));
+
+            if (channelsAutoArchived.Count > 0)
+                _repositories.UnitOfWork.QueueManualAuditLog(new AuditLogRequest(
+                    tableName: "Channels",
+                    eventName: "AutoArchivedOnTeamMemberRemoval",
+                    payload: new { AutoArchived = channelsAutoArchived }));
+
+            // ── Phase 5: Commit + flush ───────────────────────────────────────
+            await tx.CommitAsync();
+            _repositories.UnitOfWork.FlushPendingAuditLogs();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+
+        _logger.LogInformation(
+            "User {TargetUserId} removed from team {TeamId} by actor {ActorId}. "
+            + "Channel memberships removed: {ChannelMemberships}. "
+            + "Auto-promoted: {ChannelPromotions} channel moderator(s). "
+            + "Auto-archived: {ChannelsArchived} private channel(s).",
+            targetUserId, teamId, actorId,
+            channelMembershipsRemoved,
+            channelPromotions.Count,
+            channelsAutoArchived.Count);
     }
 
     #endregion
