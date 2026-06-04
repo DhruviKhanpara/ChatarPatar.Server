@@ -20,14 +20,8 @@ public record SoleAdminTeamResult(
 /// Represents one private channel where the departing user is the only ChannelModerator.
 /// </summary>
 /// <remarks>
-/// TotalMemberCount is intentionally absent — an empty-channel branch is unreachable here.
-///
-/// If the team survived Phase 1 (was NOT archived), other team members exist, and for a
-/// private channel those members must have an explicit ChannelMember row. So
-/// NextSeniorMemberId is always non-null by the time Phase 2 runs.
-///
-/// If the team WAS archived in Phase 1 (truly no other members), all its channels were
-/// archived and their ChannelMember rows removed in that same phase — this query will
+/// NextSeniorMemberId may be null when the departing user is the only member of
+/// the private channel — in that case the channel is archived with no promotion.
 /// never return those channels.
 /// </remarks>
 public record SoleModeratorChannelResult(

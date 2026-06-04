@@ -32,14 +32,6 @@ public interface IUnitOfWork
     void QueueManualAuditLog(AuditLogRequest logRequest);
 
     /// <summary>
-    /// Manually queues an audit log entry that was produced outside of the
-    /// change tracker — e.g. from an ExecuteUpdateAsync / ExecuteDeleteAsync
-    /// bulk operation. These entries are flushed together with the rest of
-    /// the pending audit logs when FlushPendingAuditLogs() is called.
-    /// </summary>
-    void QueueManualAuditLog(AuditLogRequest logRequest);
-
-    /// <summary>
     /// Writes all audit log entries collected during SaveChangesWithoutAuditAsync.
     /// Call this after CommitAsync() succeeds — never in the catch block.
     /// </summary>

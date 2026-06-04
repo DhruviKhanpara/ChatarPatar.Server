@@ -24,5 +24,5 @@ public interface IChannelMemberRepository : IBaseSoftDeleteRepository<ChannelMem
     /// Public channels are excluded — they have no ChannelMember rows.
     /// Single round-trip.
     /// </summary>
-    Task<List<SoleModeratorChannelResult>> GetSoleModeratorPrivateChannelsWithNextSeniorMemberAsync(Guid userId, Guid orgId);
+    Task<List<SoleModeratorChannelResult>> GetSoleModeratorPrivateChannelsInOrgWithNextSeniorMemberAsync(Guid userId, Guid orgId);
 }

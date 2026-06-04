@@ -17,8 +17,7 @@ internal class ChannelMemberRepository : BaseSoftDeleteRepository<ChannelMember>
     public IQueryable<ChannelMember> GetByIdInChannel(Guid membershipId, Guid channelId) =>
         FindByCondition(x => x.Id == membershipId && x.ChannelId == channelId);
 
-    public async Task<List<SoleModeratorChannelResult>> GetSoleModeratorPrivateChannelsWithNextSeniorMemberAsync(
-    Guid userId, Guid orgId)
+    public async Task<List<SoleModeratorChannelResult>> GetSoleModeratorPrivateChannelsInOrgWithNextSeniorMemberAsync(Guid userId, Guid orgId)
     {
         // Only private channels have ChannelMember rows.
         // Public channels have implicit access for all TeamMembers — no rows to worry about.
