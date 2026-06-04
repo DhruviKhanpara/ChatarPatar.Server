@@ -50,4 +50,23 @@ internal class OrganizationMemberRepository : BaseSoftDeleteRepository<Organizat
             .Include(x => x.Organization)
                 .ThenInclude(o => o.LogoFile)
             .OrderBy(x => x.JoinedAt);
+
+    /// <inheritdoc />
+    public async Task<OrganizationMember?> GetByIdWithUpdateLockAsync(Guid membershipId)
+    {
+        // FromSqlInterpolated is safe against SQL injection — EF parameterizes the value.
+        // UPDLOCK: blocks other transactions from acquiring an update lock on this row.
+        // HOLDLOCK: promotes the shared lock to serializable for this row, preventing
+        //           a deleted-and-recreated phantom from appearing as active.
+        //
+        // The global IsDeleted query filter does NOT apply to FromSqlRaw/Interpolated —
+        // we check IsDeleted explicitly in the WHERE clause instead.
+        return await _context.Set<OrganizationMember>()
+            .FromSqlInterpolated($@"
+                SELECT *
+                FROM   [dbo].[OrganizationMembers] WITH (UPDLOCK, HOLDLOCK)
+                WHERE  [Id]        = {membershipId}
+                  AND  [IsDeleted] = 0")
+            .FirstOrDefaultAsync();
+    }
 }

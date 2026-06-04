@@ -40,4 +40,6 @@ public interface IRepositoryManager
     INotificationTemplateRepository NotificationTemplateRepository { get; }
     
     IOtpVerificationRepository OtpVerificationRepository { get; }
+
+    ICascadeCleanupRepository CascadeCleanupRepository { get; }
 }
