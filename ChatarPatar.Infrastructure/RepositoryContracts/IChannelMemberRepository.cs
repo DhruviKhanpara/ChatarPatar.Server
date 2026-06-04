@@ -25,4 +25,10 @@ public interface IChannelMemberRepository : IBaseSoftDeleteRepository<ChannelMem
     /// Single round-trip.
     /// </summary>
     Task<List<SoleModeratorChannelResult>> GetSoleModeratorPrivateChannelsInOrgWithNextSeniorMemberAsync(Guid userId, Guid orgId);
+
+    /// <summary>
+    /// Same as the org-scoped overload but filtered to a single team.
+    /// Used during team member remove/leave to only resolve channels within that team.
+    /// </summary>
+    Task<List<SoleModeratorChannelResult>> GetSoleModeratorPrivateChannelsInTeamWithNextSeniorMemberAsync(Guid userId, Guid teamId);
 }

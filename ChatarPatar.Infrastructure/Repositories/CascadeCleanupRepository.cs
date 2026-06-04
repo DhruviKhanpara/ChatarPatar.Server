@@ -68,6 +68,15 @@ internal class CascadeCleanupRepository : ICascadeCleanupRepository
                 .SetProperty(cm => cm.DeletedBy, actorId));
 
     /// <inheritdoc />
+    public async Task<int> BulkRemoveUserChannelMembershipsInTeamAsync(Guid userId, Guid teamId, Guid actorId, DateTime now) =>
+        await _context.ChannelMembers
+            .Where(cm => cm.UserId == userId && !cm.IsDeleted && cm.Channel.TeamId == teamId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(cm => cm.IsDeleted, true)
+                .SetProperty(cm => cm.DeletedAt, now)
+                .SetProperty(cm => cm.DeletedBy, actorId));
+
+    /// <inheritdoc />
     public async Task<int> PromoteTeamMemberAsync(Guid membershipId, Guid actorId, DateTime now) =>
         await _context.TeamMembers
             .Where(tm => tm.Id == membershipId && !tm.IsDeleted)

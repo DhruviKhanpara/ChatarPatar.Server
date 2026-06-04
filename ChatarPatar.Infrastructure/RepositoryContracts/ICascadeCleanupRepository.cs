@@ -39,6 +39,11 @@ public interface ICascadeCleanupRepository
     Task<int> RemoveUserChannelMembershipsInOrgAsync(Guid userId, Guid orgId, Guid actorId, DateTime now);
 
     /// <summary>
+    /// Soft-deletes all active ChannelMember rows for a user within a specific team.
+    /// </summary>
+    Task<int> BulkRemoveUserChannelMembershipsInTeamAsync(Guid userId, Guid teamId, Guid actorId, DateTime now);
+
+    /// <summary>
     /// Promotes a TeamMember row to TeamAdmin.
     /// Returns rows affected — 0 means the row was concurrently deleted.
     /// </summary>
