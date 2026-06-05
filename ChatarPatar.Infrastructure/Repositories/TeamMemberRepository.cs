@@ -12,9 +12,7 @@ internal class TeamMemberRepository : BaseSoftDeleteRepository<TeamMember>, ITea
     public TeamMemberRepository(AppDbContext context) : base(context) { }
 
     public IQueryable<TeamMember> GetByIdInTeam(Guid membershipId, Guid teamId) =>
-        FindByCondition(m => m.Id == membershipId && m.TeamId == teamId)
-            .Include(m => m.User)
-                .ThenInclude(u => u.AvatarFile);
+        FindByCondition(m => m.Id == membershipId && m.TeamId == teamId);
 
     public IQueryable<TeamMember> GetTeamMembersQuery(Guid teamId, string? search = null, TeamRoleEnum? role = null)
     {
@@ -35,6 +33,21 @@ internal class TeamMemberRepository : BaseSoftDeleteRepository<TeamMember>, ITea
             query = query.Where(m => m.Role == role.Value);
 
         return query.OrderBy(m => m.JoinedAt);
+    }
+
+    /// <inheritdoc />
+    public async Task<TeamMember?> GetByIdWithUpdateLockAsync(Guid membershipId)
+    {
+        // FromSqlInterpolated is safe against SQL injection — EF parameterizes the value.
+        // The global IsDeleted query filter does NOT apply to FromSqlRaw/Interpolated —
+        // we check IsDeleted explicitly in the WHERE clause instead.
+        return await _context.Set<TeamMember>()
+            .FromSqlInterpolated($@"
+                SELECT *
+                FROM   [dbo].[TeamMembers] WITH (UPDLOCK, HOLDLOCK)
+                WHERE  [Id]        = {membershipId}
+                  AND  [IsDeleted] = 0")
+            .FirstOrDefaultAsync();
     }
 
     public async Task<List<SoleAdminTeamResult>> GetSoleAdminTeamsWithNextSeniorMemberAsync(

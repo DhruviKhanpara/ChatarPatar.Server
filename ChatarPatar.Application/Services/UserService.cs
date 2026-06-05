@@ -101,37 +101,36 @@ internal class UserService : IUserService
         if (user == null)
             throw new NotFoundAppException("User");
 
-        FileUploadResult? uploadResult = null;
+        if (user.AvatarFileId != null)
+        {
+            var oldFile = await _repositories.FileRepository.GetByIdAsync(user.AvatarFileId.Value).FirstOrDefaultAsync();
+
+            if (oldFile != null)
+                oldFile.IsDeleted = true;
+        }
+
+        var publicId = CloudinaryPublicId.UserAvatar(user.Id);
+        var uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(dto.File, CloudinaryPath.Users().Avatars(), publicId);
+
+        user.AvatarFile = new FileEntity
+        {
+            UploadedByUserId = user.Id,
+            UserId = user.Id,
+            UsageContext = FileUsageContextEnum.Avatar,
+            PublicId = uploadResult.PublicId,
+            Url = uploadResult.Url,
+            ThumbnailUrl = uploadResult.ThumbnailUrl,
+            SizeInBytes = dto.File.Length,
+            OriginalName = dto.File.FileName,
+            MimeType = dto.File.ContentType,
+            FileType = fileType,
+        };
+
+        user.UpdatedAt = DateTime.UtcNow;
+
         await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
         try
         {
-            if (user.AvatarFileId != null)
-            {
-                var oldFile = await _repositories.FileRepository.GetByIdAsync(user.AvatarFileId.Value).FirstOrDefaultAsync();
-
-                if (oldFile != null)
-                    oldFile.IsDeleted = true;
-            }
-
-            var publicId = CloudinaryPublicId.UserAvatar(user.Id);
-            uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(dto.File, CloudinaryPath.Users().Avatars(), publicId);
-
-            user.AvatarFile = new FileEntity
-            {
-                UploadedByUserId = user.Id,
-                UserId = user.Id,
-                UsageContext = FileUsageContextEnum.Avatar,
-                PublicId = uploadResult.PublicId,
-                Url = uploadResult.Url,
-                ThumbnailUrl = uploadResult.ThumbnailUrl,
-                SizeInBytes = dto.File.Length,
-                OriginalName = dto.File.FileName,
-                MimeType = dto.File.ContentType,
-                FileType = fileType,
-            };
-
-            user.UpdatedAt = DateTime.UtcNow;
-
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
             await tx.CommitAsync();
             _repositories.UnitOfWork.FlushPendingAuditLogs();

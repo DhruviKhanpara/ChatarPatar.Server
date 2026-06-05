@@ -28,6 +28,21 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
             t.HasCheckConstraint(
                 DbConstraints.Messages.CKType,
                 "MessageType BETWEEN 1 AND 4");
+
+            t.HasCheckConstraint(
+                DbConstraints.Messages.CKNoSelfThread,
+                "(ThreadRootMessageId IS NULL OR ThreadRootMessageId <> Id)"
+            );
+
+            t.HasCheckConstraint(
+                DbConstraints.Messages.CKReplyState,
+                "(ReplyCount = 0 AND LastReplyAt IS NULL OR ReplyCount > 0 AND LastReplyAt IS NOT NULL)"
+            );
+
+            t.HasCheckConstraint(
+                DbConstraints.Messages.CKEditedState,
+                "(IsEdited = 0 AND EditedAt IS NULL OR IsEdited = 1 AND EditedAt IS NOT NULL)"
+            );
         });
 
         builder.HasKey(m => m.Id);

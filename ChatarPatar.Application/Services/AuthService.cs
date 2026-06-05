@@ -78,7 +78,8 @@ internal class AuthService : IAuthService
         var userStatusEntity = new UserStatus
         {
             User = userEntity,
-            Status = PresenceStatusEnum.Online
+            Status = PresenceStatusEnum.Online,
+            CustomStatus = CustomPresenceStatusEnum.Active
         };
 
         if (!string.IsNullOrWhiteSpace(user.InviteToken))

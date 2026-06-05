@@ -146,6 +146,7 @@ internal class OrganizationMemberService : IOrganizationMemberService
 
         var membership = await _repositories.OrganizationMemberRepository
             .GetByIdInOrg(id: membershipId, orgId: orgId)
+            .AsNoTracking()
             .FirstOrDefaultAsync();
 
         if (membership is null)
@@ -219,6 +220,7 @@ internal class OrganizationMemberService : IOrganizationMemberService
 
         var membership = await _repositories.OrganizationMemberRepository
             .GetOrgMemberAsync(userId: authUserId, orgId: orgId)
+            .AsNoTracking()
             .FirstOrDefaultAsync();
 
         if (membership is null)
@@ -314,49 +316,43 @@ internal class OrganizationMemberService : IOrganizationMemberService
             }
 
             // ── Phase 1: Sole-admin team resolution ──────────────────────────────
-            // Only relevant for OrgMember / OrgGuest.
-            // OrgAdmin / OrgOwner have wildcard org-level permissions — their teams
-            // are never truly orphaned regardless of their TeamMember rows.
-            if (freshMembership.Role is OrganizationRoleEnum.OrgMember or OrganizationRoleEnum.OrgGuest)
+            var soleAdminTeams = await _repositories.TeamMemberRepository
+                .GetSoleAdminTeamsWithNextSeniorMemberAsync(targetUserId, orgId);
+
+            foreach (var team in soleAdminTeams)
             {
-                var soleAdminTeams = await _repositories.TeamMemberRepository
-                    .GetSoleAdminTeamsWithNextSeniorMemberAsync(targetUserId, orgId);
+                // ── Promotion with fallback ───────────────────────────────────
+                // The candidate (NextSeniorMembershipId) may have been concurrently
+                // deleted between the resolution query and this call.
+                // PromoteTeamMemberAsync guards with !IsDeleted and returns rows affected.
+                // If 0 → candidate is gone → fall through to team cleanup.
+                bool promoted = false;
 
-                foreach (var team in soleAdminTeams)
+                if (team.NextSeniorMembershipId is not null)
                 {
-                    // ── Promotion with fallback ───────────────────────────────────
-                    // The candidate (NextSeniorMembershipId) may have been concurrently
-                    // deleted between the resolution query and this call.
-                    // PromoteTeamMemberAsync guards with !IsDeleted and returns rows affected.
-                    // If 0 → candidate is gone → fall through to team cleanup.
-                    bool promoted = false;
+                    int rows = await _repositories.CascadeCleanupRepository
+                        .PromoteTeamMemberAsync(membershipId: team.NextSeniorMembershipId.Value, actorId, now);
 
-                    if (team.NextSeniorMembershipId is not null)
+                    if (rows > 0)
                     {
-                        int rows = await _repositories.CascadeCleanupRepository
-                            .PromoteTeamMemberAsync(membershipId: team.NextSeniorMembershipId.Value, actorId, now);
-
-                        if (rows > 0)
-                        {
-                            promoted = true;
-                            teamPromotions.Add((team.TeamId, team.TeamName, team.NextSeniorMemberId!.Value));
-                        }
-                        // rows == 0: candidate was concurrently deleted → fall through to cleanup
+                        promoted = true;
+                        teamPromotions.Add((team.TeamId, team.TeamName, team.NextSeniorMemberId!.Value));
                     }
+                    // rows == 0: candidate was concurrently deleted → fall through to cleanup
+                }
 
-                    if (!promoted)
-                    {
-                        // No other members (or candidate vanished) — full team cascade:
-                        // ArchiveTeamAsync: marks the team itself archived
-                        // ArchiveTeamAsync: archives Channels
-                        // Memberships are NOT removed here; Phase 3 removes the departing
-                        // user's own rows, and remaining members (if any) keep their rows
-                        // intact — consistent with normal archive behaviour.
-                        var archiveChannelCount = await _repositories.CascadeCleanupRepository
-                            .ArchiveTeamAsync(team.TeamId, actorId, now);
+                if (!promoted)
+                {
+                    // No other members (or candidate vanished) — full team cascade:
+                    // ArchiveTeamAsync: marks the team itself archived
+                    // ArchiveTeamAsync: archives Channels
+                    // Memberships are NOT removed here; Phase 3 removes the departing
+                    // user's own rows, and remaining members (if any) keep their rows
+                    // intact — consistent with normal archive behaviour.
+                    var archiveChannelCount = await _repositories.CascadeCleanupRepository
+                        .ArchiveTeamAsync(team.TeamId, actorId, now);
 
-                        teamsAutoArchived.Add((team.TeamId, team.TeamName, archiveChannelCount));
-                    }
+                    teamsAutoArchived.Add((team.TeamId, team.TeamName, archiveChannelCount));
                 }
             }
 

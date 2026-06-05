@@ -141,6 +141,7 @@ internal class ChannelMemberService : IChannelMemberService
             {
                 c.IsArchived,
                 c.IsPrivate,
+                IsTeamArchive = c.Team.IsArchived,
                 TargetIsTeamMember = c.Team.TeamMembers
                     .Any(m => m.UserId == dto.UserId && !m.IsDeleted),
                 AlreadyChannelMember = c.ChannelMembers
@@ -158,6 +159,9 @@ internal class ChannelMemberService : IChannelMemberService
 
         if (context is null)
             throw new NotFoundAppException("Channel");
+
+        if (context.IsTeamArchive)
+            throw new InvalidDataAppException("Cannot add members to an archived team channel.");
 
         if (context.IsArchived)
             throw new InvalidDataAppException("Cannot add members to an archived channel.");
@@ -208,13 +212,17 @@ internal class ChannelMemberService : IChannelMemberService
             {
                 c.IsArchived,
                 c.IsPrivate,
+                IsTeamArchive = c.Team.IsArchived,
                 Membership = c.ChannelMembers.Where(m => m.Id == membershipId).Select(m => new { m.UserId, m.Role }).FirstOrDefault(),
-                ModeratorCount = c.ChannelMembers.Count(m => m.Role == ChannelRoleEnum.ChannelModerator)
+                ModeratorCount = c.ChannelMembers.Count(m => m.Role == ChannelRoleEnum.ChannelModerator && !m.IsDeleted)
             })
             .FirstOrDefaultAsync();
 
         if (context is null)
             throw new NotFoundAppException("Channel");
+
+        if (context.IsTeamArchive)
+            throw new InvalidDataAppException("Cannot add members to an archived team channel.");
 
         if (context.IsArchived)
             throw new InvalidDataAppException("Cannot update member roles in an archived channel.");
@@ -256,13 +264,17 @@ internal class ChannelMemberService : IChannelMemberService
             {
                 c.IsArchived,
                 c.IsPrivate,
+                IsTeamArchive = c.Team.IsArchived,
                 Membership = c.ChannelMembers.Where(m => m.Id == membershipId).Select(m => new { m.UserId, m.Role }).FirstOrDefault(),
-                ModeratorCount = c.ChannelMembers.Count(m => m.Role == ChannelRoleEnum.ChannelModerator)
+                ModeratorCount = c.ChannelMembers.Count(m => m.Role == ChannelRoleEnum.ChannelModerator && !m.IsDeleted)
             })
             .FirstOrDefaultAsync();
 
         if (context is null)
             throw new NotFoundAppException("Channel");
+
+        if (context.IsTeamArchive)
+            throw new InvalidDataAppException("Cannot add members to an archived team channel.");
 
         if (context.IsArchived)
             throw new InvalidDataAppException("Cannot remove members from an archived channel.");
@@ -304,13 +316,17 @@ internal class ChannelMemberService : IChannelMemberService
             {
                 c.IsArchived,
                 c.IsPrivate,
+                IsTeamArchive = c.Team.IsArchived,
                 Membership = c.ChannelMembers.Where(m => m.UserId == authUserId).Select(m => new { m.Id, m.Role }).FirstOrDefault(),
-                ModeratorCount = c.ChannelMembers.Count(m => m.Role == ChannelRoleEnum.ChannelModerator)
+                ModeratorCount = c.ChannelMembers.Count(m => m.Role == ChannelRoleEnum.ChannelModerator && !m.IsDeleted)
             })
             .FirstOrDefaultAsync();
 
         if (context is null)
             throw new NotFoundAppException("Channel");
+
+        if (context.IsTeamArchive)
+            throw new InvalidDataAppException("Cannot add members to an archived team channel.");
 
         if (context.IsArchived)
             throw new InvalidDataAppException("Cannot leave from an archived channel.");

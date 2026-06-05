@@ -99,6 +99,8 @@ internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
             readState.UnreadCount++;
             if (mentionedSet.Contains(readState.UserId))
                 readState.MentionCount++;
+            
+            readState.UpdatedAt = DateTime.UtcNow;
         }
 
         // ── Persist all ReadState updates in a single transaction ──────────

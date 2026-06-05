@@ -15,6 +15,11 @@ public class ConversationParticipantConfiguration : IEntityTypeConfiguration<Con
             t.HasCheckConstraint(
                 DbConstraints.ConversationParticipants.CKRole,
                 "Role IN ('GroupAdmin','GroupMember')");
+
+            t.HasCheckConstraint(
+                DbConstraints.ConversationParticipants.CKLeftState,
+                "(HasLeft = 0 AND LeftAt IS NULL OR HasLeft = 1 AND LeftAt IS NOT NULL)"
+            );
         });
 
         builder.HasKey(p => p.Id);

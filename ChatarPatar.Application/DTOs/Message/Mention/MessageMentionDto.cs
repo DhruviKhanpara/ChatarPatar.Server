@@ -1,4 +1,4 @@
-﻿namespace ChatarPatar.Application.DTOs.Message;
+﻿namespace ChatarPatar.Application.DTOs.Message.Mention;
 
 public sealed class MessageMentionDto
 {

@@ -108,37 +108,36 @@ internal class OrganizationService : IOrganizationService
         if (org == null)
             throw new NotFoundAppException("Organization");
 
-        FileUploadResult? uploadResult = null;
+        if (org.LogoFileId != null)
+        {
+            var orgLogoFile = await _repositories.FileRepository.GetByIdAsync((Guid)org.LogoFileId).FirstOrDefaultAsync();
+
+            if (orgLogoFile != null)
+                orgLogoFile.IsDeleted = true;
+        }
+
+        var publicId = CloudinaryPublicId.OrgLogo(org.Id);
+        var uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(dto.File, CloudinaryPath.Organization(orgId).Profile(), publicId);
+
+        org.LogoFile = new FileEntity()
+        {
+            UploadedByUserId = userId,
+            OrgId = org.Id,
+            UsageContext = FileUsageContextEnum.Org_Logo,
+
+            PublicId = uploadResult.PublicId,
+            Url = uploadResult.Url,
+            ThumbnailUrl = uploadResult.ThumbnailUrl,
+
+            SizeInBytes = dto.File.Length,
+            OriginalName = dto.File.FileName,
+            MimeType = dto.File.ContentType,
+            FileType = fileType,
+        };
+
         await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
         try
         {
-            if (org.LogoFileId != null)
-            {
-                var orgLogoFile = await _repositories.FileRepository.GetByIdAsync((Guid)org.LogoFileId).FirstOrDefaultAsync();
-
-                if (orgLogoFile != null)
-                    orgLogoFile.IsDeleted = true;
-            }
-
-            var publicId = CloudinaryPublicId.OrgLogo(org.Id);
-            uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(dto.File, CloudinaryPath.Organization(orgId).Profile(), publicId);
-
-            org.LogoFile = new FileEntity()
-            {
-                UploadedByUserId = userId,
-                OrgId = org.Id,
-                UsageContext = FileUsageContextEnum.Org_Logo,
-
-                PublicId = uploadResult.PublicId,
-                Url = uploadResult.Url,
-                ThumbnailUrl = uploadResult.ThumbnailUrl,
-
-                SizeInBytes = dto.File.Length,
-                OriginalName = dto.File.FileName,
-                MimeType = dto.File.ContentType,
-                FileType = fileType,
-            };
-
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
             await tx.CommitAsync();
             _repositories.UnitOfWork.FlushPendingAuditLogs();
