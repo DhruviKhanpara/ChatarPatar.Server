@@ -279,7 +279,7 @@ internal class ConversationService : IConversationService
 
             // Seed ReadState for every participant (creator + all invited users). New conversation so sequence starts at 0/global max for everyone.
             // ReadState is UI state — never audit it.
-            var allParticipantIds = normalizedParticipantIds.Append(userId);
+            var allParticipantIds = normalizedParticipantIds.Append(userId).ToList();
             foreach (var participantId in allParticipantIds)
                 await _repositories.ReadStateRepository.SeedForConversationAsync(participantId, conversation.Id, true);
 
@@ -324,37 +324,36 @@ internal class ConversationService : IConversationService
         if (conv is null || conv.Type != ConversationTypeEnum.Group)
             throw new NotFoundAppException("Conversation");
 
-        FileUploadResult? uploadResult = null;
+        if (conv.LogoFileId != null)
+        {
+            var existingLogo = await _repositories.FileRepository.GetByIdAsync(conv.LogoFileId.Value).FirstOrDefaultAsync();
+
+            if (existingLogo != null)
+                existingLogo.IsDeleted = true;
+        }
+
+        var publicId = CloudinaryPublicId.ConversationLogo(conv.Id);
+        var uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(dto.File, CloudinaryPath.Conversation(conversationId).Profile(), publicId);
+
+        conv.LogoFile = new FileEntity
+        {
+            UploadedByUserId = authUserId,
+            ConversationId = conversationId,
+            UsageContext = FileUsageContextEnum.Conversation_Logo,
+
+            PublicId = uploadResult.PublicId,
+            Url = uploadResult.Url,
+            ThumbnailUrl = uploadResult.ThumbnailUrl,
+
+            SizeInBytes = dto.File.Length,
+            OriginalName = dto.File.FileName,
+            MimeType = dto.File.ContentType,
+            FileType = fileType,
+        };
+
         await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
         try
         {
-            if (conv.LogoFileId != null)
-            {
-                var existingLogo = await _repositories.FileRepository.GetByIdAsync(conv.LogoFileId.Value).FirstOrDefaultAsync();
-
-                if (existingLogo != null)
-                    existingLogo.IsDeleted = true;
-            }
-
-            var publicId = CloudinaryPublicId.ConversationLogo(conv.Id);
-            uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(dto.File, CloudinaryPath.Conversation(conversationId).Profile(), publicId);
-
-            conv.LogoFile = new FileEntity
-            {
-                UploadedByUserId = authUserId,
-                ConversationId = conversationId,
-                UsageContext = FileUsageContextEnum.Conversation_Logo,
-
-                PublicId = uploadResult.PublicId,
-                Url = uploadResult.Url,
-                ThumbnailUrl = uploadResult.ThumbnailUrl,
-
-                SizeInBytes = dto.File.Length,
-                OriginalName = dto.File.FileName,
-                MimeType = dto.File.ContentType,
-                FileType = fileType,
-            };
-
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
             await tx.CommitAsync();
             _repositories.UnitOfWork.FlushPendingAuditLogs();

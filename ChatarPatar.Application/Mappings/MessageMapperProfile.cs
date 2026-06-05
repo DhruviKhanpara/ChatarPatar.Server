@@ -1,5 +1,7 @@
 ﻿using AutoMapper;
 using ChatarPatar.Application.DTOs.Message;
+using ChatarPatar.Application.DTOs.Message.Attachment;
+using ChatarPatar.Application.DTOs.Message.Mention;
 using ChatarPatar.Infrastructure.Entities;
 
 namespace ChatarPatar.Application.Mappings;

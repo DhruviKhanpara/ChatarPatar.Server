@@ -1,4 +1,6 @@
-﻿using ChatarPatar.Common.Enums;
+﻿using ChatarPatar.Application.DTOs.Message.Attachment;
+using ChatarPatar.Application.DTOs.Message.Mention;
+using ChatarPatar.Common.Enums;
 
 namespace ChatarPatar.Application.DTOs.Message;
 

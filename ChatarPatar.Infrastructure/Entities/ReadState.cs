@@ -28,6 +28,7 @@ public class ReadState : BaseEntity
 
     public DateTime? LastReadAt { get; set; }
     public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
 
     [Timestamp]
     public byte[] RowVersion { get; set; } = null!;

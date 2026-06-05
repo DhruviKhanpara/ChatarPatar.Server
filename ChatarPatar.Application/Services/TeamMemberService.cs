@@ -146,7 +146,7 @@ internal class TeamMemberService : ITeamMemberService
         await _repositories.TeamMemberRepository.AddAsync(memberEntity);
 
         var publicChannelIds = await _repositories.ChannelRepository
-            .FindByCondition(c => c.TeamId == teamId && !c.IsPrivate && !c.IsDeleted)
+            .FindByCondition(c => c.TeamId == teamId && !c.IsArchived && !c.IsPrivate && !c.IsDeleted)
             .Select(c => c.Id)
             .ToListAsync();
 
@@ -186,7 +186,7 @@ internal class TeamMemberService : ITeamMemberService
             {
                 t.IsArchived,
                 Membership = t.TeamMembers.Where(m => m.Id == membershipId).Select(m => new { m.UserId, m.Role }).FirstOrDefault(),
-                AdminCount = t.TeamMembers.Count(m => m.Role == TeamRoleEnum.TeamAdmin)
+                AdminCount = t.TeamMembers.Count(m => m.Role == TeamRoleEnum.TeamAdmin && !m.IsDeleted)
             })
             .FirstOrDefaultAsync();
 
@@ -230,7 +230,7 @@ internal class TeamMemberService : ITeamMemberService
             {
                 t.IsArchived,
                 Membership = t.TeamMembers.Where(m => m.Id == membershipId).Select(m => new { m.UserId, m.Role }).FirstOrDefault(),
-                AdminCount = t.TeamMembers.Count(m => m.Role == TeamRoleEnum.TeamAdmin)
+                AdminCount = t.TeamMembers.Count(m => m.Role == TeamRoleEnum.TeamAdmin && !m.IsDeleted)
             })
             .FirstOrDefaultAsync();
 
@@ -251,6 +251,7 @@ internal class TeamMemberService : ITeamMemberService
 
         var membership = await _repositories.TeamMemberRepository
             .GetByIdInTeam(membershipId, teamId)
+            .AsNoTracking()
             .FirstOrDefaultAsync();
 
         if (membership is null)
@@ -272,7 +273,7 @@ internal class TeamMemberService : ITeamMemberService
             {
                 t.IsArchived,
                 Membership = t.TeamMembers.Where(m => m.UserId == authUserId).Select(m => new { m.Id, m.Role }).FirstOrDefault(),
-                AdminCount = t.TeamMembers.Count(m => m.Role == TeamRoleEnum.TeamAdmin)
+                AdminCount = t.TeamMembers.Count(m => m.Role == TeamRoleEnum.TeamAdmin && !m.IsDeleted)
             })
             .FirstOrDefaultAsync();
 
@@ -290,6 +291,7 @@ internal class TeamMemberService : ITeamMemberService
 
         var membership = await _repositories.TeamMemberRepository
             .GetByIdInTeam(context.Membership.Id, teamId)
+            .AsNoTracking()
             .FirstOrDefaultAsync();
 
         if (membership is null)
@@ -347,6 +349,25 @@ internal class TeamMemberService : ITeamMemberService
         await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
         try
         {
+            // ── Idempotency guard — UPDLOCK + HOLDLOCK ────────────────────────────
+            // Re-fetch the membership row inside the transaction with an update lock.
+            // This serializes concurrent remove/leave calls for the same member:
+            //   — The first call acquires the lock and proceeds.
+            //   — A second concurrent call blocks here until the first commits.
+            //   — After the first commits, the second finds IsDeleted=true and exits.
+            // Without this, two concurrent calls can both pass the pre-transaction
+            // check and independently run all cascade phases, causing duplicate
+            // promotions, double audit entries, and double permission invalidation.
+            var freshMembership = await _repositories.TeamMemberRepository
+                .GetByIdWithUpdateLockAsync(membership.Id);
+
+            if (freshMembership is null || freshMembership.IsDeleted)
+            {
+                // Row was already deleted by a concurrent request — nothing to do.
+                await tx.RollbackAsync();
+                return;
+            }
+
             // ── Phase 1: Sole-moderator private channel resolution ───────────
             var soleModeratorChannels = await _repositories.ChannelMemberRepository
                 .GetSoleModeratorPrivateChannelsInTeamWithNextSeniorMemberAsync(targetUserId, teamId);
@@ -384,7 +405,10 @@ internal class TeamMemberService : ITeamMemberService
                 .BulkRemoveUserChannelMembershipsInTeamAsync(targetUserId, teamId, actorId, now);
 
             // ── Phase 3: Soft-delete the TeamMember row (tracked entity) ─────
-            membership.IsDeleted = true;
+            freshMembership.IsDeleted = true;
+            freshMembership.DeletedAt = now;
+            freshMembership.DeletedBy = actorId;
+
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
 
             // ── Phase 4: Queue manual audit entries ───────────────────────────

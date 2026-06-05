@@ -14,7 +14,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using System.Collections.Generic;
 
 namespace ChatarPatar.Application.Services;
 
@@ -24,7 +23,7 @@ internal class MessageService : IMessageService
     private readonly IValidationService _validationService;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<MessageService> _logger;
-    private readonly IMapper _mapper; 
+    private readonly IMapper _mapper;
     private readonly IOutboxBackgroundQueue _queue;
 
     public MessageService(IRepositoryManager repositories, IValidationService validationService, IHttpContextAccessor httpContextAccessor, ILogger<MessageService> logger, IMapper mapper, IOutboxBackgroundQueue queue)
@@ -38,38 +37,7 @@ internal class MessageService : IMessageService
     }
     private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
 
-    public async Task<CursorPagedResult<MessageDto>> GetConversationMessagesAsync(Guid conversationId, MessageQueryParams queryParams)
-    {
-        var authUserId = Guid.Parse(_httpContext.GetUserId());
-
-        var conversationExists = await _repositories.ConversationRepository
-            .GetByIdForUser(conversationId, authUserId)
-            .AnyAsync();
-
-        if (!conversationExists)
-            throw new NotFoundAppException("Conversation");
-
-        var pageSize = Math.Clamp(queryParams.PageSize, 1, 100);
-
-        var messages = await _repositories.MessageRepository
-            .GetConversationMessagesQuery(conversationId, queryParams.BeforeSequence, queryParams.ThreadRootMessageId)
-            .Take(pageSize + 1)
-            .AsNoTracking()
-            .ProjectTo<MessageDto>(_mapper.ConfigurationProvider)
-            .ToListAsync();
-
-        var hasMore = messages.Count > pageSize;
-
-        if (hasMore)
-            messages.RemoveAt(pageSize);
-
-        long? nextCursor = null;
-
-        if (hasMore && messages.Count > 0)
-            nextCursor = messages.Last().SequenceNumber;
-
-        return new CursorPagedResult<MessageDto>(messages, hasMore, nextCursor);
-    }
+    #region Channel Message
 
     public async Task<CursorPagedResult<MessageDto>> GetChannelMessagesAsync(Guid orgId, Guid teamId, Guid channelId, MessageQueryParams queryParams)
     {
@@ -134,122 +102,6 @@ internal class MessageService : IMessageService
         return new CursorPagedResult<MessageDto>(messages, hasMore, nextCursor);
     }
 
-    public async Task<MessageDto> SendConversationMessageAsync(Guid conversationId, SendMessageDto dto)
-    {
-        await _validationService.ValidateAsync(dto);
-
-        var senderId = Guid.Parse(_httpContext.GetUserId());
-
-        // ── Step 1: Idempotency ────────────────────────────────────────────
-        var existing = await TryGetExistingMessageAsync(senderId, dto.ClientMessageId, null, conversationId);
-
-        if (existing is not null)
-            return existing;
-
-        // ── Step 2: Thread root validation ────────────────────────────────
-        await ValidateThreadRootAsync(dto.ThreadRootMessageId, null, conversationId);
-        
-        // ── Step 3: Attachment validation ─────────────────────────────────
-        List<FileEntity> attachedFiles = await ValidateAttachmentsAsync(dto.FileIds, senderId);
-
-        // ── Step 4: Derive MessageType ─────────────────────────────────────
-        var messageType = DeriveMessageType(dto.Content, attachedFiles);
-
-        // ── Step 5: DB transaction ─────────────────────────────────────────
-        var message = CreateMessage(dto, senderId, messageType, null, conversationId);
-
-        await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
-        try
-        {
-            // 5a — Message row
-            await _repositories.MessageRepository.AddAsync(message);
-            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
-
-            // 5b — Flip pending files → attached, set scope, clear ExpiresAt
-            await AttachFilesAsync(message, dto.FileIds, attachedFiles, null, conversationId);
-
-            // 5c — Mentions
-            await CreateMentionsAsync(message, dto.MentionedUserIds, null, conversationId);
-
-            // 5d — Thread root counters
-            await UpdateThreadCountersAsync(dto.ThreadRootMessageId);
-
-            // 5e — Post-save side effects
-            // Conversation: synchronous ReadState update.
-            // Participants are a small bounded set so fanout is cheap here.
-            var conversation = await _repositories.ConversationRepository
-                .FindByCondition(c => c.Id == conversationId)
-                .Select(c => new
-                {
-                    c.Type,
-                    c.DirectParticipantAId,
-                    c.DirectParticipantBId
-                })
-                .FirstOrDefaultAsync()
-                ?? throw new NotFoundAppException("Conversation");
-
-            var otherParticipantIds = conversation.Type == ConversationTypeEnum.Direct
-                ? ResolveDirectDmOtherParticipant(conversation.DirectParticipantAId, conversation.DirectParticipantBId, senderId)
-                : await _repositories.ConversationParticipantRepository
-                    .GetActiveParticipantsQuery(conversationId)
-                    .Where(p => p.UserId != senderId)
-                    .Select(p => p.UserId)
-                    .ToHashSetAsync();
-
-            var mentionedSet = dto.MentionedUserIds.ToHashSet();
-
-            // 5f — Delivery state for Group conversations
-            if (conversation.Type == ConversationTypeEnum.Group)
-            {
-                if (otherParticipantIds.Count + 1 <= ValidationConstants.Conversation.GroupReceiptThreshold)
-                {
-                    // Small group: seed one MessageReceipt row per other active participant.
-                    // DeliveredAt seeded now as a placeholder — SignalR will set the real delivery time.
-                    var receipts = otherParticipantIds
-                        .Select(participantId => new MessageReceipt
-                        {
-                            MessageId = message.Id,
-                            UserId = participantId,
-                            DeliveredAt = DateTime.UtcNow,
-                            SeenAt = null,
-                            CreatedAt = DateTime.UtcNow,
-                            UpdatedAt = DateTime.UtcNow
-                        })
-                        .ToList();
-
-                    await _repositories.MessageReceiptRepository.AddRangeAsync(receipts);
-                }
-            }
-
-            var readStates = await _repositories.ReadStateRepository
-                    .FindByCondition(rs => otherParticipantIds.Contains(rs.UserId) && rs.ConversationId == conversationId)
-                    .ToListAsync();
-
-            // ReadState rows are guaranteed to exist for all participants.
-            // They are provisioned during conversation membership creation.
-            foreach (var readState in readStates)
-            {
-                readState.UnreadCount++;
-                if (mentionedSet.Contains(readState.UserId))
-                    readState.MentionCount++;
-            }
-
-            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
-            await tx.CommitAsync();
-            _repositories.UnitOfWork.FlushPendingAuditLogs();
-        }
-        catch
-        {
-            await tx.RollbackAsync();
-            throw;
-        }
-
-        // SignalR: wire here once Hub is ready
-        // _hubContext.Clients.Group(groupKey).SendAsync("MessageReceived", dto);
-
-        return await GetMessageDto(message.Id);
-    }
-
     public async Task<MessageDto> SendChannelMessageAsync(Guid orgId, Guid teamId, Guid channelId, SendMessageDto dto)
     {
         await _validationService.ValidateAsync(dto);
@@ -266,9 +118,15 @@ internal class MessageService : IMessageService
         // Only Moderator+ may post to Announcement channels. Channel type is only known here.
         var channel = await _repositories.ChannelRepository
                 .FindByCondition(c => c.Id == channelId)
-                .Select(x => new { x.Id, x.Type })
+                .Select(x => new { x.Id, x.Type, x.IsArchived, IsTeamArchive = x.Team.IsArchived })
                 .FirstOrDefaultAsync()
                 ?? throw new NotFoundAppException("Channel");
+
+        if (channel.IsTeamArchive)
+            throw new InvalidDataAppException("Cannot send message to an archived team channel.");
+
+        if (channel.IsArchived)
+            throw new InvalidDataAppException("Cannot send message from an archived channel.");
 
         if (channel.Type == ChannelTypeEnum.Announcement)
         {
@@ -363,13 +221,170 @@ internal class MessageService : IMessageService
         return await GetMessageDto(message.Id);
     }
 
+    #endregion
+
+    #region Conversation Message
+
+    public async Task<CursorPagedResult<MessageDto>> GetConversationMessagesAsync(Guid conversationId, MessageQueryParams queryParams)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var conversationExists = await _repositories.ConversationRepository
+            .GetByIdForUser(conversationId, authUserId)
+            .AnyAsync();
+
+        if (!conversationExists)
+            throw new NotFoundAppException("Conversation");
+
+        var pageSize = Math.Clamp(queryParams.PageSize, 1, 100);
+
+        var messages = await _repositories.MessageRepository
+            .GetConversationMessagesQuery(conversationId, queryParams.BeforeSequence, queryParams.ThreadRootMessageId)
+            .Take(pageSize + 1)
+            .AsNoTracking()
+            .ProjectTo<MessageDto>(_mapper.ConfigurationProvider)
+            .ToListAsync();
+
+        var hasMore = messages.Count > pageSize;
+
+        if (hasMore)
+            messages.RemoveAt(pageSize);
+
+        long? nextCursor = null;
+
+        if (hasMore && messages.Count > 0)
+            nextCursor = messages.Last().SequenceNumber;
+
+        return new CursorPagedResult<MessageDto>(messages, hasMore, nextCursor);
+    }
+
+    public async Task<MessageDto> SendConversationMessageAsync(Guid conversationId, SendMessageDto dto)
+    {
+        await _validationService.ValidateAsync(dto);
+
+        var senderId = Guid.Parse(_httpContext.GetUserId());
+
+        // ── Step 1: Idempotency ────────────────────────────────────────────
+        var existing = await TryGetExistingMessageAsync(senderId, dto.ClientMessageId, null, conversationId);
+
+        if (existing is not null)
+            return existing;
+
+        // ── Step 2: Thread root validation ────────────────────────────────
+        await ValidateThreadRootAsync(dto.ThreadRootMessageId, null, conversationId);
+
+        // ── Step 3: Attachment validation ─────────────────────────────────
+        List<FileEntity> attachedFiles = await ValidateAttachmentsAsync(dto.FileIds, senderId);
+
+        // ── Step 4: Derive MessageType ─────────────────────────────────────
+        var messageType = DeriveMessageType(dto.Content, attachedFiles);
+
+        // ── Step 5: DB transaction ─────────────────────────────────────────
+        var message = CreateMessage(dto, senderId, messageType, null, conversationId);
+
+        await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
+        try
+        {
+            // 5a — Message row
+            await _repositories.MessageRepository.AddAsync(message);
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+
+            // 5b — Flip pending files → attached, set scope, clear ExpiresAt
+            await AttachFilesAsync(message, dto.FileIds, attachedFiles, null, conversationId);
+
+            // 5c — Mentions
+            await CreateMentionsAsync(message, dto.MentionedUserIds, null, conversationId);
+
+            // 5d — Thread root counters
+            await UpdateThreadCountersAsync(dto.ThreadRootMessageId);
+
+            // 5e — Post-save side effects
+            // Conversation: synchronous ReadState update.
+            // Participants are a small bounded set so fanout is cheap here.
+            var conversation = await _repositories.ConversationRepository
+                .FindByCondition(c => c.Id == conversationId)
+                .Select(c => new
+                {
+                    c.Type,
+                    c.DirectParticipantAId,
+                    c.DirectParticipantBId
+                })
+                .FirstOrDefaultAsync()
+                ?? throw new NotFoundAppException("Conversation");
+
+            var otherParticipantIds = conversation.Type == ConversationTypeEnum.Direct
+                ? ResolveDirectDmOtherParticipant(conversation.DirectParticipantAId, conversation.DirectParticipantBId, senderId)
+                : await _repositories.ConversationParticipantRepository
+                    .GetActiveParticipantsQuery(conversationId)
+                    .Where(p => p.UserId != senderId)
+                    .Select(p => p.UserId)
+                    .ToHashSetAsync();
+
+            var mentionedSet = dto.MentionedUserIds.ToHashSet();
+
+            // 5f — Delivery state for Group conversations
+            if (conversation.Type == ConversationTypeEnum.Group)
+            {
+                if (otherParticipantIds.Count + 1 <= ValidationConstants.Conversation.GroupReceiptThreshold)
+                {
+                    // Small group: seed one MessageReceipt row per other active participant.
+                    // DeliveredAt seeded now as a placeholder — SignalR will set the real delivery time.
+                    var receipts = otherParticipantIds
+                        .Select(participantId => new MessageReceipt
+                        {
+                            MessageId = message.Id,
+                            UserId = participantId,
+                            DeliveredAt = DateTime.UtcNow,
+                            SeenAt = null,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        })
+                        .ToList();
+
+                    await _repositories.MessageReceiptRepository.AddRangeAsync(receipts);
+                }
+            }
+
+            var readStates = await _repositories.ReadStateRepository
+                    .FindByCondition(rs => otherParticipantIds.Contains(rs.UserId) && rs.ConversationId == conversationId)
+                    .ToListAsync();
+
+            // ReadState rows are guaranteed to exist for all participants.
+            // They are provisioned during conversation membership creation.
+            foreach (var readState in readStates)
+            {
+                readState.UnreadCount++;
+                if (mentionedSet.Contains(readState.UserId))
+                    readState.MentionCount++;
+
+                readState.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+            await tx.CommitAsync();
+            _repositories.UnitOfWork.FlushPendingAuditLogs();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+
+        // SignalR: wire here once Hub is ready
+        // _hubContext.Clients.Group(groupKey).SendAsync("MessageReceived", dto);
+
+        return await GetMessageDto(message.Id);
+    }
+
+    #endregion
+
     #region Private Section
 
     private async Task<MessageDto?> TryGetExistingMessageAsync(Guid senderId, Guid clientMessageId, Guid? channelId = null, Guid? conversationId = null)
     {
         var existing = await _repositories.MessageRepository
             .FindByClientMessageIdAsync(senderId, clientMessageId, channelId, conversationId)
-            .Select(x => new {x.Id})
+            .Select(x => new { x.Id })
             .FirstOrDefaultAsync();
 
         if (existing is null)

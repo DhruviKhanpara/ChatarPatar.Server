@@ -24,7 +24,7 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
                         AND LogoFileId IS NULL
                         AND DirectParticipantAId IS NOT NULL
                         AND DirectParticipantBId IS NOT NULL
-                        AND DirectParticipantAId <> DirectParticipantBId)
+                        AND DirectParticipantAId < DirectParticipantBId)
                     OR
                     (Type = 'Group'
                         AND Name IS NOT NULL

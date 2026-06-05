@@ -155,6 +155,7 @@ public static class DbConstraints
         public const string FKRejoinedByUser = "FK_ConvParticipants_RejoinedBy";
 
         public const string CKRole = "CK_ConvParticipants_Role";
+        public const string CKLeftState = "CK_ConvParticipants_LeftState";
 
         public const string UniqueConversationUser = "UQ_ConvParticipants";
 
@@ -193,6 +194,9 @@ public static class DbConstraints
         public const string CKDmStatus = "CK_Messages_DmStatus";
         public const string CKThreadReplyRule = "CK_Messages_ThreadReplyRule";
         public const string CKType = "CK_Messages_MessageType";
+        public const string CKNoSelfThread = "CK_Messages_NoSelfThread";
+        public const string CKReplyState = "CK_Messages_ReplyState";
+        public const string CKEditedState = "CK_Messages_EditState";
 
         public const string UniqueChannelClientMessage = "UX_Messages_Channel_ClientMessage";
         public const string UniqueConversationClientMessage = "UX_Messages_Conversation_ClientMessage";

@@ -1,6 +1,6 @@
 ﻿using ChatarPatar.Common.Enums;
 
-namespace ChatarPatar.Application.DTOs.Message;
+namespace ChatarPatar.Application.DTOs.Message.Attachment;
 
 public sealed class MessageAttachmentDto
 {

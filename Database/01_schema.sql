@@ -467,7 +467,7 @@ BEGIN
                 AND LogoFileId IS NULL
                 AND DirectParticipantAId IS NOT NULL
                 AND DirectParticipantBId IS NOT NULL
-                AND DirectParticipantAId <> DirectParticipantBId)
+                AND DirectParticipantAId < DirectParticipantBId)
             OR
             (Type = 'Group'
                 AND Name IS NOT NULL
@@ -510,6 +510,7 @@ BEGIN
         CONSTRAINT FK_ConvParticipants_AddedBy       FOREIGN KEY (AddedBy)        REFERENCES Users(Id),
         CONSTRAINT FK_ConvParticipants_RejoinedBy    FOREIGN KEY (RejoinedBy)     REFERENCES Users(Id),
         CONSTRAINT CK_ConvParticipants_Role   CHECK (Role IN ('GroupAdmin','GroupMember')),
+        CONSTRAINT [CK_ConvParticipants_LeftState] CHECK ([HasLeft]=(0) AND [LeftAt] IS NULL OR [HasLeft]=(1) AND [LeftAt] IS NOT NULL),
         CONSTRAINT UQ_ConvParticipants UNIQUE NONCLUSTERED ([ConversationId] ASC, [UserId] ASC)
     );
 
@@ -587,7 +588,10 @@ BEGIN
         ),  -- ReplyCount only allowed on root messages
         CONSTRAINT CK_Message_MessageType CHECK (
             MessageType BETWEEN 1 AND 4
-        )
+        ),
+        CONSTRAINT [CK_Messages_NoSelfThread] CHECK ([ThreadRootMessageId] IS NULL OR [ThreadRootMessageId] <> [Id]),
+        CONSTRAINT [CK_Messages_ReplyState] CHECK ([ReplyCount]=0 AND [LastReplyAt] IS NULL OR [ReplyCount]>0 AND [LastReplyAt] IS NOT NULL),
+        CONSTRAINT [CK_Messages_EditState] CHECK ([IsEdited]=(0) AND [EditedAt] IS NULL OR [IsEdited]=(1) AND [EditedAt] IS NOT NULL),
     );
 
     CREATE NONCLUSTERED INDEX IX_Messages_ThreadRootMessageId 
@@ -1002,10 +1006,14 @@ BEGIN
                 (Status = 0 AND CustomStatus IS NULL)
                 OR
                 -- Online → only active/busy/dnd
-                (Status = 1 AND CustomStatus IN (1,2,3))
+                (Status = 1
+                    AND CustomStatus IS NOT NULL
+                    AND CustomStatus IN (1,2,3))
                 OR
                 -- Away → only brb/appear_away
-                (Status = 2 AND CustomStatus IN (4,5))
+                (Status = 2
+                    AND CustomStatus IS NOT NULL
+                    AND CustomStatus IN (4,5))
             )
     );
 
@@ -1172,7 +1180,7 @@ BEGIN
         SubjectText  NVARCHAR(500)       NOT NULL,
         BodyText     NVARCHAR(MAX)       NOT NULL,
 
-        IsActive     BIT                 DEFAULT ((1)),
+        IsActive     BIT                 DEFAULT ((1)) NOT NULL,
 
         RowVersion   ROWVERSION          NOT NULL
     

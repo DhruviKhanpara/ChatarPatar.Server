@@ -176,37 +176,36 @@ internal class TeamService : ITeamService
 
         team.EnsureEditable();
 
-        FileUploadResult? uploadResult = null;
+        if (team.IconFileId != null)
+        {
+            var existingIcon = await _repositories.FileRepository.GetByIdAsync((Guid)team.IconFileId).FirstOrDefaultAsync();
+
+            if (existingIcon != null)
+                existingIcon.IsDeleted = true;
+        }
+
+        var publicId = CloudinaryPublicId.TeamIcon(team.Id);
+        var uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(dto.File, CloudinaryPath.Organization(orgId).Team(teamId).Profile(), publicId);
+
+        team.IconFile = new FileEntity
+        {
+            UploadedByUserId = authUserId,
+            TeamId = teamId,
+            UsageContext = FileUsageContextEnum.Team_Icon,
+
+            PublicId = uploadResult.PublicId,
+            Url = uploadResult.Url,
+            ThumbnailUrl = uploadResult.ThumbnailUrl,
+
+            SizeInBytes = dto.File.Length,
+            OriginalName = dto.File.FileName,
+            MimeType = dto.File.ContentType,
+            FileType = fileType,
+        };
+
         await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
         try
         {
-            if (team.IconFileId != null)
-            {
-                var existingIcon = await _repositories.FileRepository.GetByIdAsync((Guid)team.IconFileId).FirstOrDefaultAsync();
-
-                if (existingIcon != null)
-                    existingIcon.IsDeleted = true;
-            }
-
-            var publicId = CloudinaryPublicId.TeamIcon(team.Id);
-            uploadResult = await _externalServiceManager.CloudinaryService.UploadProfileAssetAsync(dto.File, CloudinaryPath.Organization(orgId).Team(teamId).Profile(), publicId);
-
-            team.IconFile = new FileEntity
-            {
-                UploadedByUserId = authUserId,
-                TeamId = teamId,
-                UsageContext = FileUsageContextEnum.Team_Icon,
-
-                PublicId = uploadResult.PublicId,
-                Url = uploadResult.Url,
-                ThumbnailUrl = uploadResult.ThumbnailUrl,
-
-                SizeInBytes = dto.File.Length,
-                OriginalName = dto.File.FileName,
-                MimeType = dto.File.ContentType,
-                FileType = fileType,
-            };
-
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
             await tx.CommitAsync();
             _repositories.UnitOfWork.FlushPendingAuditLogs();

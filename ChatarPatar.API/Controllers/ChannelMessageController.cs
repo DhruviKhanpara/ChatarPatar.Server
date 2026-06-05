@@ -12,13 +12,13 @@ namespace ChatarPatar.API.Controllers;
 
 [ApiController]
 [ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}")]
+[Route("api/v{version:apiVersion}/orgs/{orgId:guid}/teams/{teamId:guid}/channels/{channelId:guid}/messages")]
 [Authorize]
-public class MessageController : ControllerBase
+public class ChannelMessageController : ControllerBase
 {
     private readonly IServiceManager _services;
 
-    public MessageController(IServiceManager services)
+    public ChannelMessageController(IServiceManager services)
     {
         _services = services;
     }
@@ -28,7 +28,7 @@ public class MessageController : ControllerBase
     /// Uses cursor-based pagination: pass BeforeSequence from the oldest
     /// message in the current page to load the next (older) page.
     /// </summary>
-    [HttpGet("orgs/{orgId:guid}/teams/{teamId:guid}/channels/{channelId:guid}/messages")]
+    [HttpGet]
     [SkipPermission]
     public async Task<ActionResult<CursorPagedResult<MessageDto>>> GetChannelMessages([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid channelId, [FromQuery] MessageQueryParams queryParams)
     {
@@ -37,37 +37,13 @@ public class MessageController : ControllerBase
     }
 
     /// <summary>
-    /// Returns a paged list of messages for a conversation.
-    /// Uses cursor-based pagination: pass BeforeSequence from the oldest
-    /// message in the current page to load the next (older) page.
-    /// </summary>
-    [HttpGet("conversations/{conversationId:guid}/messages")]
-    [SkipPermission]
-    public async Task<ActionResult<CursorPagedResult<MessageDto>>> GetConversationMessages([FromRoute] Guid conversationId, [FromQuery] MessageQueryParams queryParams)
-    {
-        var result = await _services.MessageService.GetConversationMessagesAsync(conversationId, queryParams);
-        return Ok(result);
-    }
-
-    /// <summary>
     /// Sends a message to a channel.
     /// </summary>
-    [HttpPost("orgs/{orgId:guid}/teams/{teamId:guid}/channels/{channelId:guid}/messages")]
+    [HttpPost]
     [RequirePermission(PermissionCheckLogicEnum.Any, Permissions.MESSAGE_SEND, Permissions.MESSAGE_THREAD_REPLY)]
     public async Task<ActionResult<MessageDto>> SendMessage([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid channelId, [FromBody] SendMessageDto dto)
     {
         var result = await _services.MessageService.SendChannelMessageAsync(orgId, teamId, channelId, dto);
-        return Ok(result);
-    }
-
-    /// <summary>
-    /// Sends a message to a conversation.
-    /// </summary>
-    [HttpPost("conversations/{conversationId:guid}/messages")]
-    [RequirePermission(PermissionCheckLogicEnum.Any, Permissions.MESSAGE_SEND, Permissions.MESSAGE_THREAD_REPLY)]
-    public async Task<ActionResult<MessageDto>> SendMessage([FromRoute] Guid conversationId, [FromBody] SendMessageDto dto)
-    {
-        var result = await _services.MessageService.SendConversationMessageAsync(conversationId, dto);
         return Ok(result);
     }
 }
