@@ -1,14 +1,17 @@
 ﻿using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using ChatarPatar.Application.DTOs.Message;
+using ChatarPatar.Application.DTOs.Message.Pin;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Application.ServiceContracts.Notification;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.Consts;
 using ChatarPatar.Common.Enums;
+using ChatarPatar.Common.Helpers;
 using ChatarPatar.Common.HttpUserDetails;
 using ChatarPatar.Common.Models;
 using ChatarPatar.Infrastructure.Entities;
+using ChatarPatar.Infrastructure.Helpers;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -221,6 +224,71 @@ internal class MessageService : IMessageService
         return await GetMessageDto(message.Id);
     }
 
+    public async Task<PinnedMessageResponseDto> PinChannelMessageAsync(Guid channelId, Guid messageId)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var message = await _repositories.MessageRepository
+            .GetByIdInChannel(messageId, channelId)
+            .Select(x => new
+            {
+                x.Content,
+                FirstAttachment = x.MessageAttachments
+                    .Select(ma => ma.File)
+                    .FirstOrDefault(),
+                ChannelIsArchived = x.Channel.IsArchived,
+                TeamIsArchived = x.Channel.Team.IsArchived
+            })
+            .FirstOrDefaultAsync();
+
+        if (message == null)
+            throw new NotFoundAppException("Message");
+
+        if (message.TeamIsArchived)
+            throw new InvalidDataAppException("Cannot pin in an archived team channel.");
+
+        if (message.ChannelIsArchived)
+            throw new InvalidDataAppException("Cannot pin in an archived channel.");
+
+        var existPin = await _repositories.PinnedMessageRepository
+            .ActivePinInChannel(messageId, channelId)
+            .AsNoTracking()
+            .SingleOrDefaultAsync();
+
+        if (existPin is not null)
+            return _mapper.Map<PinnedMessageResponseDto>(existPin);
+
+        var contentSnapshot = BuildContentSnapshot(message.Content, message.FirstAttachment);
+
+        var pin = new PinnedMessage
+        {
+            MessageId = messageId,
+            ChannelId = channelId,
+            PinnedByUserId = authUserId,
+            ContentSnapshot = contentSnapshot
+        };
+
+        try
+        {
+            await _repositories.PinnedMessageRepository.AddAsync(pin);
+            await _repositories.UnitOfWork.SaveChangesAsync();
+
+            return _mapper.Map<PinnedMessageResponseDto>(pin);
+        }
+        catch (DbUpdateException ex) when (ex.IsPinnedMessagePerChannelUniqueViolation())
+        {
+            var concurrentPin = await _repositories.PinnedMessageRepository
+                .ActivePinInChannel(messageId, channelId)
+                .AsNoTracking()
+                .SingleOrDefaultAsync();
+
+            if (concurrentPin is null)
+                throw;
+
+            return _mapper.Map<PinnedMessageResponseDto>(concurrentPin);
+        }
+    }
+
     #endregion
 
     #region Conversation Message
@@ -374,6 +442,63 @@ internal class MessageService : IMessageService
         // _hubContext.Clients.Group(groupKey).SendAsync("MessageReceived", dto);
 
         return await GetMessageDto(message.Id);
+    }
+
+    public async Task<PinnedMessageResponseDto> PinConversationMessageAsync(Guid conversationId, Guid messageId)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var message = await _repositories.MessageRepository
+            .GetByIdInConversation(messageId, conversationId)
+            .Select(x => new
+            {
+                x.Content,
+                FirstAttachment = x.MessageAttachments
+                    .Select(ma => ma.File)
+                    .FirstOrDefault()
+            })
+            .FirstOrDefaultAsync();
+
+        if (message == null)
+            throw new NotFoundAppException("Message");
+
+        var existPin = await _repositories.PinnedMessageRepository
+            .ActivePinInConversation(messageId, conversationId)
+            .AsNoTracking()
+            .SingleOrDefaultAsync();
+
+        if (existPin is not null)
+            return _mapper.Map<PinnedMessageResponseDto>(existPin);
+
+        var contentSnapshot = BuildContentSnapshot(message.Content, message.FirstAttachment);
+
+        var pin = new PinnedMessage
+        {
+            MessageId = messageId,
+            ConversationId = conversationId,
+            PinnedByUserId = authUserId,
+            ContentSnapshot = contentSnapshot
+        };
+
+        try
+        {
+            await _repositories.PinnedMessageRepository.AddAsync(pin);
+            await _repositories.UnitOfWork.SaveChangesAsync();
+
+            return _mapper.Map<PinnedMessageResponseDto>(pin);
+        }
+        catch (DbUpdateException ex) when (ex.IsPinnedMessagePerConversationUniqueViolation())
+        {
+            var concurrentPin = await _repositories.PinnedMessageRepository
+                .ActivePinInConversation(messageId, conversationId)
+                .AsNoTracking()
+                .SingleOrDefaultAsync();
+
+            if (concurrentPin is null)
+                throw;
+
+            return _mapper.Map<PinnedMessageResponseDto>(concurrentPin);
+        }
     }
 
     #endregion
@@ -543,5 +668,19 @@ internal class MessageService : IMessageService
             .FirstAsync();
     }
 
+    private static string BuildContentSnapshot(string? content, FileEntity? attachment)
+    {
+        return !string.IsNullOrWhiteSpace(content)
+        ? content.Truncate(500)
+        : attachment switch
+        {
+            null => "[Attachment]",
+            { FileType: FileTypeEnum.Image, OriginalName: var n } => $"📷 {n}",
+            { FileType: FileTypeEnum.Video, OriginalName: var n } => $"🎥 {n}",
+            { FileType: FileTypeEnum.Audio, OriginalName: var n } => $"🎵 {n}",
+            { FileType: FileTypeEnum.Document, OriginalName: var n } => $"📄 {n}",
+            { OriginalName: var n } => $"📎 {n}"
+        };
+    }
     #endregion
 }

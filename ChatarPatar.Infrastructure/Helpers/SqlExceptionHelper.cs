@@ -20,6 +20,28 @@ public static class SqlExceptionHelper
         return false;
     }
 
+    public static bool IsPinnedMessagePerChannelUniqueViolation(this DbUpdateException ex)
+    {
+        if (ex.InnerException is SqlException sqlEx)
+        {
+            return sqlEx.Number is 2601 or 2627
+                && sqlEx.Message.Contains(DbConstraints.PinnedMessages.UniquePinnedMessagePerChannel);
+        }
+
+        return false;
+    }
+
+    public static bool IsPinnedMessagePerConversationUniqueViolation(this DbUpdateException ex)
+    {
+        if (ex.InnerException is SqlException sqlEx)
+        {
+            return sqlEx.Number is 2601 or 2627
+                && sqlEx.Message.Contains(DbConstraints.PinnedMessages.UniquePinnedMessagePerConversation);
+        }
+
+        return false;
+    }
+
     public static bool IsUniqueConstraintViolation(this DbUpdateException exception, out string message)
     {
         message = null!;

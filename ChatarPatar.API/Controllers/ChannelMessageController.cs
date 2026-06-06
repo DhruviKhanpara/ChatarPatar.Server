@@ -46,4 +46,15 @@ public class ChannelMessageController : ControllerBase
         var result = await _services.MessageService.SendChannelMessageAsync(orgId, teamId, channelId, dto);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Pin a message to a channel.
+    /// </summary>
+    [HttpPost("{messageId:guid}/pin")]
+    [RequirePermission(PermissionCheckLogicEnum.Any, Permissions.MESSAGE_PIN)]
+    public async Task<ActionResult<MessageDto>> PinMessage([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid channelId, [FromRoute] Guid messageId)
+    {
+        var result = await _services.MessageService.PinChannelMessageAsync(channelId, messageId);
+        return Ok(result);
+    }
 }

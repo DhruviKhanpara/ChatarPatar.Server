@@ -46,4 +46,15 @@ public class ConversationMessageController : ControllerBase
         var result = await _services.MessageService.SendConversationMessageAsync(conversationId, dto);
         return Ok(result);
     }
+
+    /// <summary>
+    /// pin a message to a conversation.
+    /// </summary>
+    [HttpPost]
+    [RequirePermission(PermissionCheckLogicEnum.Any, Permissions.MESSAGE_PIN)]
+    public async Task<ActionResult<MessageDto>> PinMessage([FromRoute] Guid conversationId, [FromBody] Guid messageId)
+    {
+        var result = await _services.MessageService.PinConversationMessageAsync(conversationId, messageId);
+        return Ok(result);
+    }
 }
