@@ -2,6 +2,7 @@
 using ChatarPatar.Application.DTOs.Message;
 using ChatarPatar.Application.DTOs.Message.Attachment;
 using ChatarPatar.Application.DTOs.Message.Mention;
+using ChatarPatar.Application.DTOs.Message.Pin;
 using ChatarPatar.Infrastructure.Entities;
 
 namespace ChatarPatar.Application.Mappings;
@@ -31,5 +32,8 @@ public class MessageMapperProfile : Profile
             .ForMember(dest => dest.UserId, opt => opt.MapFrom(src => src.MentionedUserId))
             .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.MentionedUser.Name))
             .ForMember(dest => dest.Username, opt => opt.MapFrom(src => src.MentionedUser.Username));
+
+        // Message Pinned
+        CreateMap<PinnedMessage, PinnedMessageResponseDto>();
     }
 }

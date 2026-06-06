@@ -9,6 +9,12 @@ internal class MessageRepository : BaseRepository<Message>, IMessageRepository
 {
     public MessageRepository(AppDbContext context) : base(context) { }
 
+    public IQueryable<Message> GetByIdInChannel(Guid messageId, Guid channelId) =>
+        FindByCondition(x => x.Id == messageId && x.ChannelId == channelId);
+    
+    public IQueryable<Message> GetByIdInConversation(Guid messageId, Guid conversationId) =>
+        FindByCondition(x => x.Id == messageId && x.ConversationId == conversationId);
+
     public IQueryable<Message?> FindByClientMessageIdAsync(Guid senderId, Guid clientMessageId, Guid? channelId = null, Guid? conversationId = null)
     {
         return FindByCondition(m =>
