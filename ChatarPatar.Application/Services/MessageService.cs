@@ -2,6 +2,7 @@
 using AutoMapper.QueryableExtensions;
 using ChatarPatar.Application.DTOs.Message;
 using ChatarPatar.Application.DTOs.Message.Pin;
+using ChatarPatar.Application.DTOs.Message.Reaction;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Application.ServiceContracts.Notification;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
@@ -11,6 +12,7 @@ using ChatarPatar.Common.Helpers;
 using ChatarPatar.Common.HttpUserDetails;
 using ChatarPatar.Common.Models;
 using ChatarPatar.Infrastructure.Entities;
+using ChatarPatar.Infrastructure.ExternalServiceContracts;
 using ChatarPatar.Infrastructure.Helpers;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
@@ -28,8 +30,9 @@ internal class MessageService : IMessageService
     private readonly ILogger<MessageService> _logger;
     private readonly IMapper _mapper;
     private readonly IOutboxBackgroundQueue _queue;
+    private readonly IExternalServiceManager _externalServiceManager;
 
-    public MessageService(IRepositoryManager repositories, IValidationService validationService, IHttpContextAccessor httpContextAccessor, ILogger<MessageService> logger, IMapper mapper, IOutboxBackgroundQueue queue)
+    public MessageService(IRepositoryManager repositories, IValidationService validationService, IHttpContextAccessor httpContextAccessor, ILogger<MessageService> logger, IMapper mapper, IOutboxBackgroundQueue queue, IExternalServiceManager externalServiceManager)
     {
         _repositories = repositories;
         _validationService = validationService;
@@ -37,6 +40,7 @@ internal class MessageService : IMessageService
         _logger = logger;
         _mapper = mapper;
         _queue = queue;
+        _externalServiceManager = externalServiceManager;
     }
     private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
 
@@ -91,6 +95,9 @@ internal class MessageService : IMessageService
             .Take(pageSize + 1)
             .ProjectTo<MessageDto>(_mapper.ConfigurationProvider)
             .ToListAsync();
+
+        // Stamp ReactedByMe for the calling user across all returned messages
+        await StampReactionsAsync(messages, authUserId);
 
         var hasMore = messages.Count > pageSize;
 
@@ -162,7 +169,7 @@ internal class MessageService : IMessageService
         List<FileEntity> attachedFiles = await ValidateAttachmentsAsync(dto.FileIds, senderId);
 
         // ── Step 5: Derive MessageType ─────────────────────────────────────
-        var messageType = DeriveMessageType(dto.Content, attachedFiles);
+        var messageType = DeriveMessageType(dto.Content, attachedFiles.Select(x => x.FileType));
 
         // ── Step 6: DB transaction ─────────────────────────────────────────
         var message = CreateMessage(dto, senderId, messageType, channelId);
@@ -222,6 +229,125 @@ internal class MessageService : IMessageService
         // _hubContext.Clients.Group(groupKey).SendAsync("MessageReceived", dto);
 
         return await GetMessageDto(message.Id);
+    }
+
+    public async Task<MessageDto> EditChannelMessageAsync(Guid orgId, Guid teamId, Guid channelId, Guid messageId, EditMessageDto dto)
+    {
+        await _validationService.ValidateAsync(dto);
+
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var message = await _repositories.MessageRepository
+            .GetByIdInChannel(messageId, channelId)
+            .Select(m => new
+            {
+                Entity = m,
+                m.SenderId,
+                ChannelIsArchived = m.Channel!.IsArchived,
+                TeamIsArchived = m.Channel.Team.IsArchived,
+                CurrentFiles = m.MessageAttachments.Select(a => new { a.FileId, a.File.FileType }).ToList(),
+                CurrentMentions = m.MessageMentions.Select(mn => new { mn.Id, mn.MentionedUserId }).ToList(),
+            })
+            .FirstOrDefaultAsync()
+            ?? throw new NotFoundAppException("Message");
+
+        if (message.TeamIsArchived)
+            throw new InvalidDataAppException("Cannot edit a message in an archived team channel.");
+
+        if (message.ChannelIsArchived)
+            throw new InvalidDataAppException("Cannot edit a message in an archived channel.");
+
+        if (message.SenderId != authUserId)
+            throw new ForbiddenAppException("You can only edit your own messages.");
+
+        var currentFileIdSet = message.CurrentFiles.Select(a => a.FileId).ToHashSet();
+        var desiredFileIdSet = dto.FileIds.ToHashSet();
+
+        var fileIdsToRemove = currentFileIdSet.Except(desiredFileIdSet).ToList();
+        var fileIdsToAdd = desiredFileIdSet.Except(currentFileIdSet).ToList();
+
+        List<FileEntity> newFiles = fileIdsToAdd.Count > 0
+            ? await ValidateAttachmentsAsync(fileIdsToAdd, authUserId)
+            : [];
+
+        var finalFileTypes = message.CurrentFiles
+            .Where(f => desiredFileIdSet.Contains(f.FileId))
+            .Select(f => f.FileType)
+            .Concat(newFiles.Select(f => f.FileType));
+
+        var messageType = DeriveMessageType(dto.Content, finalFileTypes);
+
+        var currentMentionUserIds = message.CurrentMentions.Select(mn => mn.MentionedUserId).ToHashSet();
+        var desiredMentionUserIds = dto.MentionedUserIds.ToHashSet();
+
+        var mentionIdsToRemove = message.CurrentMentions
+            .Where(mn => !desiredMentionUserIds.Contains(mn.MentionedUserId))
+            .Select(mn => mn.Id)
+            .ToList();
+
+        var mentionUserIdsToAdd = desiredMentionUserIds.Except(currentMentionUserIds).ToList();
+
+        List<(string PublicId, FileTypeEnum FileType)> filesToCleanup = [];
+
+        await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
+        try
+        {
+            if (fileIdsToRemove.Count > 0)
+                filesToCleanup = await RemoveAttachmentsAsync(messageId, fileIdsToRemove, authUserId);
+
+            if (newFiles.Count > 0)
+                await AttachFilesAsync(message.Entity, fileIdsToAdd, newFiles, channelId);
+
+            await ReorderAttachmentsAsync(messageId, dto.FileIds);
+
+            if (mentionIdsToRemove.Count > 0)
+                await RemoveMentionsAsync(mentionIdsToRemove);
+
+            if (mentionUserIdsToAdd.Count > 0)
+                await CreateMentionsAsync(message.Entity, mentionUserIdsToAdd, channelId);
+
+            var entity = message.Entity;
+            entity.Content = dto.Content?.Trim();
+            entity.MessageType = messageType;
+            entity.IsEdited = true;
+            entity.EditedAt = DateTime.UtcNow;
+            entity.UpdatedAt = DateTime.UtcNow;
+
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+            await tx.CommitAsync();
+            _repositories.UnitOfWork.FlushPendingAuditLogs();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+
+        if (filesToCleanup.Any())
+            await FileCleanupFromCloudinary(filesToCleanup, messageId);
+
+        return await GetMessageDto(messageId);
+    }
+
+    /// <summary>
+    /// Toggles an emoji reaction on a channel message.
+    /// If the calling user has already reacted with this emoji → removes it.
+    /// If they have not yet reacted → adds it.
+    /// </summary>
+    public async Task<MessageReactionToggleResultDto> ToggleChannelMessageReactionAsync(Guid orgId, Guid teamId, Guid channelId, Guid messageId, MessageReactionToggleDto dto)
+    {
+        await _validationService.ValidateAsync(dto);
+
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var messageExists = await _repositories.MessageRepository
+            .GetByIdInChannel(messageId, channelId)
+            .AnyAsync();
+
+        if (!messageExists)
+            throw new NotFoundAppException("Message");
+
+        return await ToggleReactionAsync(messageId, channelId, null, authUserId, dto.Emoji);
     }
 
     public async Task<PinnedMessageResponseDto> PinChannelMessageAsync(Guid channelId, Guid messageId)
@@ -289,6 +415,52 @@ internal class MessageService : IMessageService
         }
     }
 
+    public async Task DeleteChannelMessageAsync(Guid orgId, Guid teamId, Guid channelId, Guid messageId)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var message = await _repositories.MessageRepository
+            .GetByIdInChannel(messageId, channelId)
+            .FirstOrDefaultAsync()
+            ?? throw new NotFoundAppException("Message");
+
+        if (message.IsDeleted)
+            throw new NotFoundAppException("Message");
+
+        if (message.SenderId != authUserId)
+            throw new ForbiddenAppException("You can only delete your own messages.");
+
+        message.IsDeleted = true;
+        message.DeletedBy = authUserId;
+        message.DeletedAt = DateTime.UtcNow;
+        message.UpdatedAt = DateTime.UtcNow;
+
+        await _repositories.UnitOfWork.SaveChangesAsync();
+    }
+
+    public async Task ForceDeleteChannelMessageAsync(Guid orgId, Guid teamId, Guid channelId, Guid messageId)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var message = await _repositories.MessageRepository
+            .GetByIdInChannel(messageId, channelId)
+            .FirstOrDefaultAsync()
+            ?? throw new NotFoundAppException("Message");
+
+        if (message.IsDeleted)
+            throw new NotFoundAppException("Message");
+
+        if (message.SenderId == authUserId)
+            throw new InvalidDataAppException("Use the delete-own endpoint to delete your own messages.");
+
+        message.IsDeleted = true;
+        message.DeletedBy = authUserId;
+        message.DeletedAt = DateTime.UtcNow;
+        message.UpdatedAt = DateTime.UtcNow;
+
+        await _repositories.UnitOfWork.SaveChangesAsync();
+    }
+
     #endregion
 
     #region Conversation Message
@@ -312,6 +484,9 @@ internal class MessageService : IMessageService
             .AsNoTracking()
             .ProjectTo<MessageDto>(_mapper.ConfigurationProvider)
             .ToListAsync();
+
+        // Stamp ReactedByMe for the calling user across all returned messages
+        await StampReactionsAsync(messages, authUserId);
 
         var hasMore = messages.Count > pageSize;
 
@@ -345,7 +520,7 @@ internal class MessageService : IMessageService
         List<FileEntity> attachedFiles = await ValidateAttachmentsAsync(dto.FileIds, senderId);
 
         // ── Step 4: Derive MessageType ─────────────────────────────────────
-        var messageType = DeriveMessageType(dto.Content, attachedFiles);
+        var messageType = DeriveMessageType(dto.Content, attachedFiles.Select(x => x.FileType));
 
         // ── Step 5: DB transaction ─────────────────────────────────────────
         var message = CreateMessage(dto, senderId, messageType, null, conversationId);
@@ -444,6 +619,117 @@ internal class MessageService : IMessageService
         return await GetMessageDto(message.Id);
     }
 
+    public async Task<MessageDto> EditConversationMessageAsync(Guid conversationId, Guid messageId, EditMessageDto dto)
+    {
+        await _validationService.ValidateAsync(dto);
+
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var message = await _repositories.MessageRepository
+            .GetByIdInConversation(messageId, conversationId)
+            .Select(m => new
+            {
+                Entity = m,
+                m.SenderId,
+                CurrentFiles = m.MessageAttachments.Select(a => new { a.FileId, a.File.FileType }).ToList(),
+                CurrentMentions = m.MessageMentions.Select(mn => new { mn.Id, mn.MentionedUserId }).ToList(),
+            })
+            .FirstOrDefaultAsync()
+            ?? throw new NotFoundAppException("Message");
+
+        if (message.SenderId != authUserId)
+            throw new ForbiddenAppException("You can only edit your own messages.");
+
+        var currentFileIdSet = message.CurrentFiles.Select(a => a.FileId).ToHashSet();
+        var desiredFileIdSet = dto.FileIds.ToHashSet();
+
+        var fileIdsToRemove = currentFileIdSet.Except(desiredFileIdSet).ToList();
+        var fileIdsToAdd = desiredFileIdSet.Except(currentFileIdSet).ToList();
+
+        List<FileEntity> newFiles = fileIdsToAdd.Count > 0
+            ? await ValidateAttachmentsAsync(fileIdsToAdd, authUserId)
+            : [];
+
+        var finalFileTypes = message.CurrentFiles
+            .Where(f => desiredFileIdSet.Contains(f.FileId))
+            .Select(f => f.FileType)
+            .Concat(newFiles.Select(f => f.FileType));
+
+        var messageType = DeriveMessageType(dto.Content, finalFileTypes);
+
+        var currentMentionUserIds = message.CurrentMentions.Select(mn => mn.MentionedUserId).ToHashSet();
+        var desiredMentionUserIds = dto.MentionedUserIds.ToHashSet();
+
+        var mentionIdsToRemove = message.CurrentMentions
+            .Where(mn => !desiredMentionUserIds.Contains(mn.MentionedUserId))
+            .Select(mn => mn.Id)
+            .ToList();
+
+        var mentionUserIdsToAdd = desiredMentionUserIds.Except(currentMentionUserIds).ToList();
+
+        List<(string PublicId, FileTypeEnum FileType)> filesToCleanup = [];
+
+        await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
+        try
+        {
+            if (fileIdsToRemove.Count > 0)
+                filesToCleanup = await RemoveAttachmentsAsync(messageId, fileIdsToRemove, authUserId);
+
+            if (newFiles.Count > 0)
+                await AttachFilesAsync(message.Entity, fileIdsToAdd, newFiles, null, conversationId);
+
+            await ReorderAttachmentsAsync(messageId, dto.FileIds);
+
+            if (mentionIdsToRemove.Count > 0)
+                await RemoveMentionsAsync(mentionIdsToRemove);
+
+            if (mentionUserIdsToAdd.Count > 0)
+                await CreateMentionsAsync(message.Entity, mentionUserIdsToAdd, null, conversationId);
+
+            var entity = message.Entity;
+            entity.Content = dto.Content?.Trim();
+            entity.MessageType = messageType;
+            entity.IsEdited = true;
+            entity.EditedAt = DateTime.UtcNow;
+            entity.UpdatedAt = DateTime.UtcNow;
+
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+            await tx.CommitAsync();
+            _repositories.UnitOfWork.FlushPendingAuditLogs();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+
+        if (filesToCleanup.Any())
+            await FileCleanupFromCloudinary(filesToCleanup, messageId);
+
+        return await GetMessageDto(messageId);
+    }
+
+    /// <summary>
+    /// Toggles an emoji reaction on a conversation message.
+    /// If the calling user has already reacted with this emoji → removes it.
+    /// If they have not yet reacted → adds it.
+    /// </summary>
+    public async Task<MessageReactionToggleResultDto> ToggleConversationMessageReactionAsync(Guid conversationId, Guid messageId, MessageReactionToggleDto dto)
+    {
+        await _validationService.ValidateAsync(dto);
+
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var messageExists = await _repositories.MessageRepository
+            .GetByIdInConversation(messageId, conversationId)
+            .AnyAsync();
+
+        if (!messageExists)
+            throw new NotFoundAppException("Message");
+
+        return await ToggleReactionAsync(messageId, null, conversationId, authUserId, dto.Emoji);
+    }
+
     public async Task<PinnedMessageResponseDto> PinConversationMessageAsync(Guid conversationId, Guid messageId)
     {
         var authUserId = Guid.Parse(_httpContext.GetUserId());
@@ -499,6 +785,52 @@ internal class MessageService : IMessageService
 
             return _mapper.Map<PinnedMessageResponseDto>(concurrentPin);
         }
+    }
+
+    public async Task DeleteConversationMessageAsync(Guid conversationId, Guid messageId)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var message = await _repositories.MessageRepository
+            .GetByIdInConversation(messageId, conversationId)
+            .FirstOrDefaultAsync()
+            ?? throw new NotFoundAppException("Message");
+
+        if (message.IsDeleted)
+            throw new NotFoundAppException("Message");
+
+        if (message.SenderId != authUserId)
+            throw new ForbiddenAppException("You can only delete your own messages.");
+
+        message.IsDeleted = true;
+        message.DeletedBy = authUserId;
+        message.DeletedAt = DateTime.UtcNow;
+        message.UpdatedAt = DateTime.UtcNow;
+
+        await _repositories.UnitOfWork.SaveChangesAsync();
+    }
+
+    public async Task ForceDeleteConversationMessageAsync(Guid conversationId, Guid messageId)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var message = await _repositories.MessageRepository
+            .GetByIdInConversation(messageId, conversationId)
+            .FirstOrDefaultAsync()
+            ?? throw new NotFoundAppException("Message");
+
+        if (message.IsDeleted)
+            throw new NotFoundAppException("Message");
+
+        if (message.SenderId == authUserId)
+            throw new InvalidDataAppException("Use the delete-own endpoint to delete your own messages.");
+
+        message.IsDeleted = true;
+        message.DeletedBy = authUserId;
+        message.DeletedAt = DateTime.UtcNow;
+        message.UpdatedAt = DateTime.UtcNow;
+
+        await _repositories.UnitOfWork.SaveChangesAsync();
     }
 
     #endregion
@@ -633,18 +965,87 @@ internal class MessageService : IMessageService
         root.LastReplyAt = DateTime.UtcNow;
     }
 
-    private static MessageTypeEnum DeriveMessageType(string? content, List<FileEntity> files)
+    private async Task<List<(string PublicId, FileTypeEnum FileType)>> RemoveAttachmentsAsync(Guid messageId, List<Guid> fileIdsToRemove, Guid authUserId)
+    {
+        var attachmentsToDelete = await _repositories.MessageAttachmentRepository
+            .FindByCondition(a => a.MessageId == messageId && fileIdsToRemove.Contains(a.FileId))
+            .ToListAsync();
+
+        _repositories.MessageAttachmentRepository.RemoveRange(attachmentsToDelete);
+
+        var filesToDelete = await _repositories.FileRepository
+            .FindByCondition(f => fileIdsToRemove.Contains(f.Id) && !f.IsDeleted)
+            .ToListAsync();
+
+        foreach (var file in filesToDelete)
+        {
+            file.IsDeleted = true;
+        }
+
+        return filesToDelete.Select(x => (x.PublicId, x.FileType)).ToList();
+    }
+
+    private async Task ReorderAttachmentsAsync(Guid messageId, List<Guid> orderedFileIds)
+    {
+        if (orderedFileIds.Count == 0)
+            return;
+
+        var surviving = await _repositories.MessageAttachmentRepository
+            .FindByCondition(a => a.MessageId == messageId)
+            .ToListAsync();
+
+        var desiredOrder = orderedFileIds
+            .Select((fileId, idx) => (fileId, idx))
+            .ToDictionary(x => x.fileId, x => x.idx);
+
+        foreach (var attachment in surviving)
+        {
+            if (desiredOrder.TryGetValue(attachment.FileId, out var newOrder))
+                attachment.DisplayOrder = newOrder;
+        }
+    }
+
+    private async Task RemoveMentionsAsync(List<Guid> mentionIds)
+    {
+        var mentionsToDelete = await _repositories.MessageMentionRepository
+            .FindByCondition(mn => mentionIds.Contains(mn.Id))
+            .ToListAsync();
+
+        _repositories.MessageMentionRepository.RemoveRange(mentionsToDelete);
+    }
+
+    private async Task FileCleanupFromCloudinary(List<(string PublicId, FileTypeEnum FileType)> filesToCleanup, Guid messageId)
+    {
+        foreach (var file in filesToCleanup)
+        {
+            try
+            {
+                await _externalServiceManager.CloudinaryService.DeleteFileAsync(file.PublicId, file.FileType);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Failed to delete message attachment from Cloudinary. MessageId: {MessageId}, PublicId: {PublicId}",
+                    messageId,
+                    file.PublicId);
+            }
+        }
+    }
+
+    private static MessageTypeEnum DeriveMessageType(string? content, IEnumerable<FileTypeEnum> fileTypes)
     {
         var hasText = !string.IsNullOrWhiteSpace(content);
-        var hasFiles = files.Count > 0;
 
         if (hasText)
             return MessageTypeEnum.Text;
 
-        if (!hasFiles)
+        var types = fileTypes.ToList();
+
+        if (types.Count == 0)
             throw new InvalidDataAppException("Message must contain text or at least one attachment.");
 
-        return files.All(f => f.FileType == FileTypeEnum.Image) ? MessageTypeEnum.Image : MessageTypeEnum.File;
+        return fileTypes.All(f => f == FileTypeEnum.Image) ? MessageTypeEnum.Image : MessageTypeEnum.File;
     }
 
     private static HashSet<Guid> ResolveDirectDmOtherParticipant(Guid? directParticipantAId, Guid? directParticipantBId, Guid senderId)
@@ -682,5 +1083,146 @@ internal class MessageService : IMessageService
             { OriginalName: var n } => $"📎 {n}"
         };
     }
+
+    /// <summary>
+    /// Core toggle logic shared by both channel and conversation variants.
+    ///
+    /// Flow:
+    ///   1. Check if the user already has this reaction on this message.
+    ///   2a. If yes → remove it (hard-delete; reactions have no soft-delete).
+    ///   2b. If no  → add it. Catches the unique constraint race and treats it
+    ///               as an idempotent "already added" rather than a 500.
+    ///   3. Build and return the updated per-emoji summary.
+    /// </summary>
+    private async Task<MessageReactionToggleResultDto> ToggleReactionAsync(Guid messageId, Guid? channelId, Guid? conversationId, Guid authUserId, string emoji)
+    {
+        var existingReaction = await _repositories.MessageReactionRepository
+            .FindByCondition(r =>
+                r.MessageId == messageId &&
+                r.UserId == authUserId &&
+                r.Emoji == emoji)
+            .FirstOrDefaultAsync();
+
+        bool added;
+
+        if (existingReaction is not null)
+        {
+            _repositories.MessageReactionRepository.Remove(existingReaction);
+            await _repositories.UnitOfWork.SaveChangesAsync();
+            added = false;
+        }
+        else
+        {
+            var reaction = new MessageReaction
+            {
+                MessageId = messageId,
+                UserId = authUserId,
+                Emoji = emoji,
+                CreatedAt = DateTime.UtcNow,
+            };
+
+            await _repositories.MessageReactionRepository.AddAsync(reaction);
+
+            try
+            {
+                await _repositories.UnitOfWork.SaveChangesAsync();
+                added = true;
+            }
+            catch (DbUpdateException ex) when (ex.IsReactionUniqueViolation())
+            {
+                _repositories.UnitOfWork.DetachEntity(reaction);
+                added = true;
+            }
+        }
+
+        // ── Build updated summary for this emoji ──────────────────────────
+        var updatedSummary = await BuildReactionSummaryForEmojiAsync(messageId, emoji, authUserId);
+
+        return new MessageReactionToggleResultDto
+        {
+            Emoji = emoji,
+            Added = added,
+            UpdatedSummary = updatedSummary?.Count > 0 ? updatedSummary : null,
+        };
+    }
+
+    /// <summary>
+    /// Builds the reaction summary for a single emoji on a message.
+    /// Used after a toggle to return the updated state to the client.
+    /// Returns null if no reactions exist for that emoji any more.
+    /// </summary>
+    private async Task<MessageReactionSummaryDto?> BuildReactionSummaryForEmojiAsync(Guid messageId, string emoji, Guid authUserId)
+    {
+        var reactors = await _repositories.MessageReactionRepository
+            .FindByCondition(r => r.MessageId == messageId && r.Emoji == emoji)
+            .OrderByDescending(r => r.CreatedAt)
+            .Select(r => new { r.UserId, r.User.Name })
+            .ToListAsync();
+
+        if (reactors.Count == 0)
+            return null;
+
+        return new MessageReactionSummaryDto
+        {
+            Emoji = emoji,
+            Count = reactors.Count,
+            ReactedByMe = reactors.Any(r => r.UserId == authUserId),
+            PreviewNames = reactors
+                .Take(5)
+                .Select(r => r.Name)
+                .ToList(),
+        };
+    }
+
+    /// <summary>
+    /// After ProjectTo, reactions are grouped but ReactedByMe is false for everyone
+    /// (AutoMapper has no auth context). This method does a single batch query to
+    /// find which (messageId, emoji) pairs the calling user has reacted to, then
+    /// stamps the flag in memory.
+    /// </summary>
+    private async Task StampReactionsAsync(List<MessageDto> messages, Guid authUserId)
+    {
+        if (messages.Count == 0)
+            return;
+
+        var messageIds = messages.Select(m => m.Id).ToList();
+
+        var rawReactions = await _repositories.MessageReactionRepository
+            .FindByCondition(r => messageIds.Contains(r.MessageId))
+            .OrderBy(r => r.CreatedAt)
+            .Select(r => new
+            {
+                r.MessageId,
+                r.UserId,
+                r.Emoji,
+                r.User.Name,
+            })
+            .ToListAsync();
+
+        if (rawReactions.Count == 0)
+            return;
+
+        var grouped = rawReactions
+            .GroupBy(r => r.MessageId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.GroupBy(r => r.Emoji)
+                       .Select(eg => new MessageReactionSummaryDto
+                       {
+                           Emoji = eg.Key,
+                           Count = eg.Count(),
+                           ReactedByMe = eg.Any(r => r.UserId == authUserId),
+                           PreviewNames = eg.Take(5).Select(r => r.Name).ToList(),
+                       })
+                       .ToList()
+            );
+
+        foreach (var message in messages)
+        {
+            if (grouped.TryGetValue(message.Id, out var reactionSummaries))
+                message.Reactions = reactionSummaries;
+        }
+    }
+
     #endregion
 }

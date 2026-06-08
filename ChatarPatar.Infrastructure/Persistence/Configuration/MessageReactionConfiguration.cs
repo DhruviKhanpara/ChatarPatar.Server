@@ -40,7 +40,7 @@ public class MessageReactionConfiguration : IEntityTypeConfiguration<MessageReac
         // ----------------------------
 
         builder.HasOne(r => r.Message)
-               .WithMany()
+               .WithMany(x => x.MessageReactions)
                .HasForeignKey(r => r.MessageId)
                .HasConstraintName(DbConstraints.MessageReactions.FKMessage)
                .OnDelete(DeleteBehavior.Restrict);

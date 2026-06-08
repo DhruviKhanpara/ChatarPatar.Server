@@ -107,7 +107,12 @@ public static class ValidationConstants
             public const int Emoji = 50;
             public const int ContentSnapshot = 500;
             public const int MaxAttachmentsPerMessage = 10;
-        }        
+        }
+
+        public static class Patterns
+        {
+            public const string EmojiShortcode = @"^:[a-z0-9_+\-]+:$";
+        }
     }
 
     public static class Notification
