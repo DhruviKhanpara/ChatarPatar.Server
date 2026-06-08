@@ -1,5 +1,6 @@
 ﻿using ChatarPatar.Application.DTOs.Message.Attachment;
 using ChatarPatar.Application.DTOs.Message.Mention;
+using ChatarPatar.Application.DTOs.Message.Reaction;
 using ChatarPatar.Common.Enums;
 
 namespace ChatarPatar.Application.DTOs.Message;
@@ -35,6 +36,7 @@ public sealed class MessageDto
 
     public List<MessageAttachmentDto> Attachments { get; set; } = [];
     public List<MessageMentionDto> Mentions { get; set; } = [];
+    public List<MessageReactionSummaryDto> Reactions { get; set; } = [];
 
     public bool IsDeleted { get; set; }
     public DateTime CreatedAt { get; set; }

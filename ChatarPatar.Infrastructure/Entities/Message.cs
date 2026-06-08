@@ -21,6 +21,7 @@ public class Message : BaseEntity
 
     public virtual List<MessageAttachment> MessageAttachments { get; set; } = new List<MessageAttachment>();
     public virtual List<MessageMention> MessageMentions { get; set; } = new List<MessageMention>();
+    public virtual List<MessageReaction> MessageReactions { get; set; } = new List<MessageReaction>();
     #endregion
 
     public long SequenceNumber { get; set; }
