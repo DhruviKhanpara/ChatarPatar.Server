@@ -53,6 +53,9 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
         builder.Property(c => c.IsDeleted)
                .HasDefaultValue(false);
 
+        builder.Property(c => c.LastMessageAt)
+               .IsRequired(false);
+
         builder.Property(c => c.CreatedAt)
                .HasDefaultValueSql("SYSUTCDATETIME()");
 
@@ -63,6 +66,13 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
                .IsUnique()
                .HasDatabaseName(DbConstraints.Conversations.UniqueDirectConversationParticipants)
                .HasFilter("[Type] = 'Direct'");
+
+        // ----------------------------
+        // Indexes
+        // ----------------------------
+
+        builder.HasIndex(c => c.LastMessageAt)
+               .HasDatabaseName(DbConstraints.Conversations.IXLastMessageAt);
 
         // ----------------------------
         // Relationships

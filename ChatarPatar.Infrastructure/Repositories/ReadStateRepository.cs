@@ -120,6 +120,18 @@ internal class ReadStateRepository : BaseRepository<ReadState>, IReadStateReposi
         await ApplyConversationCursorAsync(readState, conversationId);
     }
 
+    public async Task IncrementUnreadAsync(Guid userId, Guid conversationId, bool incrementMention)
+    {
+        await _context.ReadStates
+            .Where(rs => rs.UserId == userId && rs.ConversationId == conversationId)
+            .ExecuteUpdateAsync(s => incrementMention
+                ? s.SetProperty(rs => rs.UnreadCount, rs => rs.UnreadCount + 1)
+                 .SetProperty(rs => rs.MentionCount, rs => rs.MentionCount + 1)
+                 .SetProperty(rs => rs.UpdatedAt, DateTime.UtcNow)
+                : s.SetProperty(rs => rs.UnreadCount, rs => rs.UnreadCount + 1)
+                 .SetProperty(rs => rs.UpdatedAt, DateTime.UtcNow));
+    }
+
     #region Private Section
 
     private async Task<long> GetGlobalSequenceMaxAsync()

@@ -444,6 +444,8 @@ BEGIN
         DirectParticipantAId    UNIQUEIDENTIFIER    NULL,
         DirectParticipantBId    UNIQUEIDENTIFIER    NULL,
 
+        LastMessageAt           DATETIME2           NULL,
+
         -- Soft delete
     	IsDeleted               BIT                 NOT NULL DEFAULT 0,
     	CreatedBy		        UNIQUEIDENTIFIER	NULL,
@@ -477,6 +479,7 @@ BEGIN
     );
 
     CREATE UNIQUE INDEX UX_Conversations_Direct ON dbo.Conversations (DirectParticipantAId, DirectParticipantBId) WHERE Type = 'Direct';
+    CREATE NONCLUSTERED INDEX IX_Conversations_LastMessageAt ON dbo.Conversations (LastMessageAt DESC) WHERE IsDeleted = 0;
 END
 GO
 
@@ -1005,15 +1008,23 @@ BEGIN
                 -- Offline → no custom status
                 (Status = 0 AND CustomStatus IS NULL)
                 OR
-                -- Online → only active/busy/dnd
-                (Status = 1
-                    AND CustomStatus IS NOT NULL
-                    AND CustomStatus IN (1,2,3))
+                -- Online → optional active/busy/dnd
+                (
+                    Status = 1
+                    AND (
+                        CustomStatus IS NULL
+                        OR CustomStatus IN (1,2,3)
+                    )
+                )
                 OR
-                -- Away → only brb/appear_away
-                (Status = 2
-                    AND CustomStatus IS NOT NULL
-                    AND CustomStatus IN (4,5))
+                -- Away → optional brb/appear_away
+                (
+                    Status = 2
+                    AND (
+                        CustomStatus IS NULL
+                        OR CustomStatus IN (4,5)
+                    )
+                )
             )
     );
 

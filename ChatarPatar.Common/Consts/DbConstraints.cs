@@ -145,6 +145,8 @@ public static class DbConstraints
         public const string CKDirectRule = "CK_Conversations_DirectRule";
         
         public const string UniqueDirectConversationParticipants = "UX_Conversations_Direct";
+
+        public const string IXLastMessageAt = "IX_Conversations_LastMessageAt";
     }
 
     public static class ConversationParticipants

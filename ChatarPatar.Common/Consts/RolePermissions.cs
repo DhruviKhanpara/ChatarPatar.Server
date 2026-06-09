@@ -82,6 +82,7 @@ public static class RolePermissions
             Permissions.TEAM_MEMBERS_INVITE,
             Permissions.TEAM_CHANNELS_CREATE,
             Permissions.MESSAGE_SEND,
+            Permissions.MESSAGE_PIN,
             Permissions.MESSAGE_EDIT_OWN,
             Permissions.MESSAGE_DELETE_OWN,
             Permissions.MESSAGE_REACT,

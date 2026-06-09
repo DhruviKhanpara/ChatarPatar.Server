@@ -50,7 +50,7 @@ internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
 
         // Explicit channel member IDs (covers private + public with explicit rows)
         var allMemberIds = await _repositories.ChannelMemberRepository
-            .FindByCondition(m => m.ChannelId == payload.ChannelId)
+            .FindByCondition(m => m.ChannelId == payload.ChannelId && !m.User.IsDeleted)
             .Select(m => m.UserId)
             .ToHashSetAsync();
 
@@ -58,7 +58,7 @@ internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
         if (!channel.IsPrivate)
         {
             var teamMemberIds = await _repositories.TeamMemberRepository
-                .FindByCondition(m => m.TeamId == channel.TeamId && !m.IsDeleted)
+                .FindByCondition(m => m.TeamId == channel.TeamId && !m.IsDeleted && !m.User.IsDeleted)
                 .Select(m => m.UserId)
                 .ToHashSetAsync();
 

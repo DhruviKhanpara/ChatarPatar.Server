@@ -3,6 +3,7 @@ using AutoMapper.QueryableExtensions;
 using ChatarPatar.Application.DTOs.Common;
 using ChatarPatar.Application.DTOs.Organization;
 using ChatarPatar.Application.ServiceContracts;
+using ChatarPatar.Application.ServiceContracts.Notification;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.Enums;
 using ChatarPatar.Common.Helpers;
@@ -10,6 +11,7 @@ using ChatarPatar.Common.HttpUserDetails;
 using ChatarPatar.Common.Models;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.ExternalServiceContracts;
+using ChatarPatar.Infrastructure.Helpers;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -25,8 +27,9 @@ internal class OrganizationService : IOrganizationService
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IExternalServiceManager _externalServiceManager;
     private readonly ILogger<OrganizationService> _logger;
+    private readonly IOutboxBackgroundQueue _queue;
 
-    public OrganizationService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IExternalServiceManager externalServiceManager, ILogger<OrganizationService> logger)
+    public OrganizationService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IExternalServiceManager externalServiceManager, ILogger<OrganizationService> logger, IOutboxBackgroundQueue queue)
     {
         _repositories = repositories;
         _mapper = mapper;
@@ -34,6 +37,7 @@ internal class OrganizationService : IOrganizationService
         _httpContextAccessor = httpContextAccessor;
         _externalServiceManager = externalServiceManager;
         _logger = logger;
+        _queue = queue;
     }
     private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
 
@@ -184,6 +188,8 @@ internal class OrganizationService : IOrganizationService
 
     public async Task RemoveOrganizationLogoAsync(Guid orgId)
     {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
         var org = await _repositories.OrganizationRepository
             .GetById(orgId)
             .Include(x => x.LogoFile)
@@ -195,14 +201,20 @@ internal class OrganizationService : IOrganizationService
         if (org.LogoFileId == null)
             return;
 
-        string? oldPublicId = null;
+        var authUserName = _httpContext.GetUserName()
+            ?? _httpContext.GetUserEmail()
+            ?? _httpContext.GetUserId()
+            ?? "System";
+
         await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
         try
         {
             if (org.LogoFile != null)
             {
-                oldPublicId = org.LogoFile.PublicId;
                 org.LogoFile.IsDeleted = true;
+
+                var outboxMessage = OutboxMessageFactory.BuildCloudinaryDeleteMessage(org.LogoFile.PublicId, FileTypeEnum.Image, authUserId, authUserName);
+                await _repositories.OutboxMessageRepository.AddAsync(outboxMessage);
             }
 
             org.LogoFileId = null;
@@ -210,20 +222,13 @@ internal class OrganizationService : IOrganizationService
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
             await tx.CommitAsync();
             _repositories.UnitOfWork.FlushPendingAuditLogs();
+
+            _queue.Enqueue();
         }
         catch
         {
             await tx.RollbackAsync();
             throw;
-        }
-
-        if (oldPublicId != null)
-        {
-            try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(oldPublicId, FileTypeEnum.Image); }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to delete org logo from Cloudinary. PublicId: {PublicId}", oldPublicId);
-            }
         }
     }
 }

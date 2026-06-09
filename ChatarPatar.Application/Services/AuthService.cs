@@ -78,8 +78,7 @@ internal class AuthService : IAuthService
         var userStatusEntity = new UserStatus
         {
             User = userEntity,
-            Status = PresenceStatusEnum.Online,
-            CustomStatus = CustomPresenceStatusEnum.Active
+            Status = PresenceStatusEnum.Online
         };
 
         if (!string.IsNullOrWhiteSpace(user.InviteToken))
@@ -473,8 +472,6 @@ internal class AuthService : IAuthService
                 // Invalidate — force the user to go through forgot-password again
                 otpEntity.IsUsed = true;
                 otpEntity.UsedAt = DateTime.UtcNow;
-                await _repositories.UnitOfWork.SaveChangesAsync();
-                throw new InvalidDataAppException("Invalid or expired OTP.");
             }
 
             await _repositories.UnitOfWork.SaveChangesAsync();

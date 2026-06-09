@@ -13,6 +13,7 @@ using ChatarPatar.Common.Models;
 using ChatarPatar.Common.Security;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.ExternalServiceContracts;
+using ChatarPatar.Infrastructure.Helpers;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -29,8 +30,9 @@ internal class UserService : IUserService
     private readonly IMapper _mapper;
     private readonly IEmailNotificationService _emailNotificationService;
     private readonly ILogger<UserService> _logger;
+    private readonly IOutboxBackgroundQueue _queue;
 
-    public UserService(IRepositoryManager repositories, IExternalServiceManager externalServiceManager, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IMapper mapper, IEmailNotificationService emailNotificationService, ILogger<UserService> logger)
+    public UserService(IRepositoryManager repositories, IExternalServiceManager externalServiceManager, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IMapper mapper, IEmailNotificationService emailNotificationService, ILogger<UserService> logger, IOutboxBackgroundQueue queue)
     {
         _repositories = repositories;
         _externalServiceManager = externalServiceManager;
@@ -39,6 +41,7 @@ internal class UserService : IUserService
         _mapper = mapper;
         _emailNotificationService = emailNotificationService;
         _logger = logger;
+        _queue = queue;
     }
 
     private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
@@ -205,14 +208,20 @@ internal class UserService : IUserService
         if (user.AvatarFileId == null)
             return;
 
-        string? oldPublicId = null;
+        var authUserName = _httpContext.GetUserName()
+            ?? _httpContext.GetUserEmail()
+            ?? _httpContext.GetUserId()
+            ?? "System";
+
         await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
         try
         {
             if (user.AvatarFile != null)
             {
-                oldPublicId = user.AvatarFile.PublicId;
                 user.AvatarFile.IsDeleted = true;
+
+                var outboxMessage = OutboxMessageFactory.BuildCloudinaryDeleteMessage(user.AvatarFile.PublicId, FileTypeEnum.Image, userId, authUserName);
+                await _repositories.OutboxMessageRepository.AddAsync(outboxMessage);
             }
 
             user.AvatarFileId = null;
@@ -221,20 +230,13 @@ internal class UserService : IUserService
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
             await tx.CommitAsync();
             _repositories.UnitOfWork.FlushPendingAuditLogs();
+
+            _queue.Enqueue();
         }
         catch
         {
             await tx.RollbackAsync();
             throw;
-        }
-
-        if (oldPublicId != null)
-        {
-            try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(oldPublicId, FileTypeEnum.Image); }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to delete user avatar from Cloudinary. PublicId: {PublicId}", oldPublicId);
-            }
         }
     }
 

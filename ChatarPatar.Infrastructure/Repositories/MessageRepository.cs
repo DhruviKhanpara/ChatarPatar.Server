@@ -61,4 +61,13 @@ internal class MessageRepository : BaseRepository<Message>, IMessageRepository
 
         return query.OrderByDescending(m => m.SequenceNumber);
     }
+
+    public async Task IncrementReplyCountAsync(Guid messageId, DateTime repliedAt)
+    {
+        await _context.Messages
+            .Where(m => m.Id == messageId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(m => m.ReplyCount, m => m.ReplyCount + 1)
+                .SetProperty(m => m.LastReplyAt, repliedAt));
+    }
 }

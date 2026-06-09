@@ -1,4 +1,5 @@
 ﻿using ChatarPatar.Common.EmailNotification.Model;
+using ChatarPatar.Common.Enums;
 
 namespace ChatarPatar.Common.Models;
 
@@ -32,4 +33,12 @@ public sealed class MessageSentChannelPayload : NotificationPayload
     public Guid ChannelId { get; set; }
     public Guid SenderId { get; set; }
     public List<Guid> MentionedUserIds { get; set; } = [];
+}
+
+public sealed class CloudinaryDeletePayload : NotificationPayload
+{
+    public const string OutboxType = "Cloudinary.Delete";
+
+    public string PublicId { get; set; } = string.Empty;
+    public FileTypeEnum FileType { get; set; }
 }
