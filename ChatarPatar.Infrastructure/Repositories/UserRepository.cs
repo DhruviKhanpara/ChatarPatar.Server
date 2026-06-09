@@ -12,6 +12,9 @@ internal class UserRepository : BaseRepository<User>, IUserRepository
     public IQueryable<User> GetById(Guid id) => 
         FindByCondition(x => x.Id == id);
 
+    public IQueryable<User> GetByIds(IEnumerable<Guid> ids) =>
+        FindByCondition(x => ids.Contains(x.Id));
+
     public async Task<User?> GetUserByIdentifierAsync(string email, string username) => 
         await FindByCondition(x => x.Email == email || x.Username == username)
             .AsNoTracking()

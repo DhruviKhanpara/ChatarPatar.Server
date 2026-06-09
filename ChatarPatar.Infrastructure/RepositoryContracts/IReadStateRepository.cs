@@ -29,4 +29,6 @@ public interface IReadStateRepository : IBaseRepository<ReadState>
     /// Falls back to SeedForConversationAsync if the row is missing.
     /// </summary>
     Task ResetForConversationRejoinAsync(Guid userId, Guid conversationId);
+
+    Task IncrementUnreadAsync(Guid userId, Guid conversationId, bool incrementMention);
 }

@@ -1,6 +1,7 @@
 ﻿using ChatarPatar.Application.DTOs.Common;
 using ChatarPatar.Application.DTOs.Conversation;
 using ChatarPatar.Application.ServiceContracts;
+using ChatarPatar.Application.ServiceContracts.Notification;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.AppLogging.Model.LogRequest;
 using ChatarPatar.Common.Enums;
@@ -24,14 +25,16 @@ internal class ConversationService : IConversationService
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IExternalServiceManager _externalServiceManager;
     private readonly ILogger<ConversationService> _logger;
+    private readonly IOutboxBackgroundQueue _queue;
 
-    public ConversationService(IRepositoryManager repositories, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IExternalServiceManager externalServiceManager, ILogger<ConversationService> logger)
+    public ConversationService(IRepositoryManager repositories, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IExternalServiceManager externalServiceManager, ILogger<ConversationService> logger, IOutboxBackgroundQueue queue)
     {
         _repositories = repositories;
         _validationService = validationService;
         _httpContextAccessor = httpContextAccessor;
         _externalServiceManager = externalServiceManager;
         _logger = logger;
+        _queue = queue;
     }
     private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
 
@@ -44,7 +47,7 @@ internal class ConversationService : IConversationService
         var totalCount = await baseQuery.CountAsync();
 
         var conversations = await baseQuery
-            .OrderByDescending(c => c.Messages.Max(m => (DateTime?)m.CreatedAt) ?? c.CreatedAt)
+            .OrderByDescending(c => c.LastMessageAt ?? c.CreatedAt)
             .ThenByDescending(c => c.Id)
             .PaginateOffset(paginationParams.PageSize, paginationParams.PageNumber)
             .AsNoTracking()
@@ -411,14 +414,20 @@ internal class ConversationService : IConversationService
         if (conv.LogoFileId == null)
             return;
 
-        string? oldPublicId = null;
+        var authUserName = _httpContext.GetUserName()
+            ?? _httpContext.GetUserEmail()
+            ?? _httpContext.GetUserId()
+            ?? "System";
+
         await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
         try
         {
             if (conv.LogoFile != null)
             {
-                oldPublicId = conv.LogoFile.PublicId;
                 conv.LogoFile.IsDeleted = true;
+
+                var outboxMessage = OutboxMessageFactory.BuildCloudinaryDeleteMessage(conv.LogoFile.PublicId, FileTypeEnum.Image, authUserId, authUserName);
+                await _repositories.OutboxMessageRepository.AddAsync(outboxMessage);
             }
 
             conv.LogoFileId = null;
@@ -426,20 +435,13 @@ internal class ConversationService : IConversationService
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
             await tx.CommitAsync();
             _repositories.UnitOfWork.FlushPendingAuditLogs();
+
+            _queue.Enqueue();
         }
         catch
         {
             await tx.RollbackAsync();
             throw;
-        }
-
-        if (oldPublicId != null)
-        {
-            try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(oldPublicId, FileTypeEnum.Image); }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to delete conversation logo from Cloudinary. PublicId: {PublicId}", oldPublicId);
-            }
         }
     }
 

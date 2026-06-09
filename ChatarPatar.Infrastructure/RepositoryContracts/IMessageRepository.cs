@@ -10,4 +10,5 @@ public interface IMessageRepository : IBaseRepository<Message>
     Task<Message?> GetThreadRootAsync(Guid messageId, Guid? channelId = null, Guid? conversationId = null);
     IQueryable<Message> GetChannelMessagesQuery(Guid channelId, long? beforeSequence, Guid? threadRootMessageId);
     IQueryable<Message> GetConversationMessagesQuery(Guid conversationId, long? beforeSequence, Guid? threadRootMessageId);
+    Task IncrementReplyCountAsync(Guid messageId, DateTime repliedAt);
 }

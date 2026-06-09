@@ -4,6 +4,7 @@ using ChatarPatar.Application.Common.Extensions;
 using ChatarPatar.Application.DTOs.Common;
 using ChatarPatar.Application.DTOs.Team;
 using ChatarPatar.Application.ServiceContracts;
+using ChatarPatar.Application.ServiceContracts.Notification;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.Enums;
 using ChatarPatar.Common.Helpers;
@@ -11,6 +12,7 @@ using ChatarPatar.Common.HttpUserDetails;
 using ChatarPatar.Common.Models;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.ExternalServiceContracts;
+using ChatarPatar.Infrastructure.Helpers;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -26,8 +28,9 @@ internal class TeamService : ITeamService
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IExternalServiceManager _externalServiceManager;
     private readonly ILogger<TeamService> _logger;
+    private readonly IOutboxBackgroundQueue _queue;
 
-    public TeamService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IExternalServiceManager externalServiceManager, ILogger<TeamService> logger)
+    public TeamService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IExternalServiceManager externalServiceManager, ILogger<TeamService> logger, IOutboxBackgroundQueue queue)
     {
         _repositories = repositories;
         _mapper = mapper;
@@ -35,6 +38,7 @@ internal class TeamService : ITeamService
         _httpContextAccessor = httpContextAccessor;
         _externalServiceManager = externalServiceManager;
         _logger = logger;
+        _queue = queue;
     }
     private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
 
@@ -254,6 +258,8 @@ internal class TeamService : ITeamService
 
     public async Task RemoveTeamIconAsync(Guid orgId, Guid teamId)
     {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
         var team = await _repositories.TeamRepository
             .GetByIdInOrg(teamId, orgId)
             .Include(x => x.IconFile)
@@ -267,14 +273,20 @@ internal class TeamService : ITeamService
         if (team.IconFileId == null)
             return;
 
-        string? oldPublicId = null;
+        var authUserName = _httpContext.GetUserName()
+            ?? _httpContext.GetUserEmail()
+            ?? _httpContext.GetUserId()
+            ?? "System";
+
         await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
         try
         {
             if (team.IconFile != null)
             {
-                oldPublicId = team.IconFile.PublicId;
                 team.IconFile.IsDeleted = true;
+
+                var outboxMessage = OutboxMessageFactory.BuildCloudinaryDeleteMessage(team.IconFile.PublicId, FileTypeEnum.Image, authUserId, authUserName);
+                await _repositories.OutboxMessageRepository.AddAsync(outboxMessage);
             }
 
             team.IconFileId = null;
@@ -282,20 +294,13 @@ internal class TeamService : ITeamService
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
             await tx.CommitAsync();
             _repositories.UnitOfWork.FlushPendingAuditLogs();
+
+            _queue.Enqueue();
         }
         catch
         {
             await tx.RollbackAsync();
             throw;
-        }
-
-        if (oldPublicId != null)
-        {
-            try { await _externalServiceManager.CloudinaryService.DeleteFileAsync(oldPublicId, FileTypeEnum.Image); }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to delete team icon from Cloudinary. PublicId: {PublicId}", oldPublicId);
-            }
         }
     }
 

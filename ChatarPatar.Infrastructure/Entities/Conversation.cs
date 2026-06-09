@@ -37,4 +37,6 @@ public class Conversation : AuditableEntity
     /// Always the GUID that compares larger (Max of the two).
     /// </summary>
     public Guid? DirectParticipantBId { get; set; }
+
+    public DateTime? LastMessageAt { get; set; }
 }

@@ -32,18 +32,19 @@ internal class GenericOutboxProcessor : IOutboxProcessor
         foreach (var message in messages)
         {
             var handler = _handlers.FirstOrDefault(x => x.MessageType == message.Type);
-            if (handler == null)
-            {
-                _logger.LogError($"[OUTBOX] No handler for type {message.Type}");
-                continue;
-            }
-
+            
             var initiatedBy = ExtractInitiatedBy(message.Payload);
             if (string.IsNullOrWhiteSpace(initiatedBy))
                 initiatedBy = null;
 
             using (LogContext.PushProperty(LoggingProperties.UserName, initiatedBy))
             {
+                if (handler == null)
+                {
+                    _logger.LogError($"[OUTBOX] No handler for type {message.Type}");
+                    continue;
+                }
+
                 try
                 {
                     await handler.HandleAsync(message);
@@ -56,7 +57,7 @@ internal class GenericOutboxProcessor : IOutboxProcessor
                     {
                         message.IsProcessed = true;
                         message.ProcessedAt = DateTime.UtcNow;
-                        _logger.LogWarning($"[OUTBOX] Message {message.Type} failed after max retries. Marking as processed.");
+                        _logger.LogWarning("[OUTBOX] Message {MessageType} failed after max retries. Marking as processed.", message.Type);
                     }
                     else
                     {
@@ -66,14 +67,17 @@ internal class GenericOutboxProcessor : IOutboxProcessor
                         );
                     }
 
-                    _logger.LogError($"[OUTBOX] Error processing message. Type={message.Type}, Error={ex.Message}");
+                    _logger.LogError(ex, "[OUTBOX] Error processing message. Type={MessageType}", message.Type);
                 }
+                
+                _repositoryManager.OutboxMessageRepository.Update(message);
             }
-
-            _repositoryManager.OutboxMessageRepository.Update(message);
         }
 
-        await _repositoryManager.UnitOfWork.SaveChangesAsync();
+        using (LogContext.PushProperty(LoggingProperties.UserName, "System"))
+        {
+            await _repositoryManager.UnitOfWork.SaveChangesAsync();
+        }
     }
 
     private static string ExtractInitiatedBy(string payload)

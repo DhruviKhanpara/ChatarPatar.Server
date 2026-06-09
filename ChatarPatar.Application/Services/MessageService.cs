@@ -6,19 +6,18 @@ using ChatarPatar.Application.DTOs.Message.Reaction;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Application.ServiceContracts.Notification;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
+using ChatarPatar.Common.AppLogging.Model.LogRequest;
 using ChatarPatar.Common.Consts;
 using ChatarPatar.Common.Enums;
 using ChatarPatar.Common.Helpers;
 using ChatarPatar.Common.HttpUserDetails;
 using ChatarPatar.Common.Models;
 using ChatarPatar.Infrastructure.Entities;
-using ChatarPatar.Infrastructure.ExternalServiceContracts;
 using ChatarPatar.Infrastructure.Helpers;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 
 namespace ChatarPatar.Application.Services;
 
@@ -30,9 +29,8 @@ internal class MessageService : IMessageService
     private readonly ILogger<MessageService> _logger;
     private readonly IMapper _mapper;
     private readonly IOutboxBackgroundQueue _queue;
-    private readonly IExternalServiceManager _externalServiceManager;
 
-    public MessageService(IRepositoryManager repositories, IValidationService validationService, IHttpContextAccessor httpContextAccessor, ILogger<MessageService> logger, IMapper mapper, IOutboxBackgroundQueue queue, IExternalServiceManager externalServiceManager)
+    public MessageService(IRepositoryManager repositories, IValidationService validationService, IHttpContextAccessor httpContextAccessor, ILogger<MessageService> logger, IMapper mapper, IOutboxBackgroundQueue queue)
     {
         _repositories = repositories;
         _validationService = validationService;
@@ -40,7 +38,6 @@ internal class MessageService : IMessageService
         _logger = logger;
         _mapper = mapper;
         _queue = queue;
-        _externalServiceManager = externalServiceManager;
     }
     private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
 
@@ -118,13 +115,7 @@ internal class MessageService : IMessageService
 
         var senderId = Guid.Parse(_httpContext.GetUserId());
 
-        // ── Step 1: Idempotency ────────────────────────────────────────────
-        var existing = await TryGetExistingMessageAsync(senderId, dto.ClientMessageId, channelId);
-
-        if (existing is not null)
-            return existing;
-
-        // ── Step 2: Announcement channel guard ────────────────────────────
+        // ── Step 1: Announcement channel guard ────────────────────────────
         // Only Moderator+ may post to Announcement channels. Channel type is only known here.
         var channel = await _repositories.ChannelRepository
                 .FindByCondition(c => c.Id == channelId)
@@ -162,6 +153,12 @@ internal class MessageService : IMessageService
                 throw new ForbiddenAppException("Only channel moderators can post in announcement channels.");
         }
 
+        // ── Step 2: Idempotency ────────────────────────────────────────────
+        var existing = await TryGetExistingMessageAsync(senderId, dto.ClientMessageId, channelId);
+
+        if (existing is not null)
+            return existing;
+
         // ── Step 3: Thread root validation ────────────────────────────────
         await ValidateThreadRootAsync(dto.ThreadRootMessageId, channelId);
 
@@ -173,6 +170,10 @@ internal class MessageService : IMessageService
 
         // ── Step 6: DB transaction ─────────────────────────────────────────
         var message = CreateMessage(dto, senderId, messageType, channelId);
+        var authUserName = _httpContext.GetUserName()
+            ?? _httpContext.GetUserEmail()
+            ?? _httpContext.GetUserId()
+            ?? "System";
 
         await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
         try
@@ -193,25 +194,9 @@ internal class MessageService : IMessageService
             // 6e — Post-save side effects
             // Channel: write Outbox row then signal the background worker.
             // Worker reads it and fans out ReadState updates for all members.
-            var outboxPayload = new MessageSentChannelPayload
-            {
-                MessageId = message.Id,
-                SequenceNumber = message.SequenceNumber,
-                ChannelId = channelId,
-                SenderId = senderId,
-                MentionedUserIds = dto.MentionedUserIds,
-                InitiatedBy = senderId.ToString(),
-            };
+            var outboxMessage = OutboxMessageFactory.BuildChannelSendMessage(dto.MentionedUserIds, channelId, message.Id, message.SequenceNumber, senderId, authUserName);
 
-            await _repositories.OutboxMessageRepository.AddAsync(new OutboxMessage
-            {
-                Type = MessageSentChannelPayload.OutboxType,
-                Payload = JsonConvert.SerializeObject(outboxPayload),
-                IsProcessed = false,
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = senderId,
-                IsDeleted = false
-            });
+            await _repositories.OutboxMessageRepository.AddAsync(outboxMessage);
 
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
             await tx.CommitAsync();
@@ -288,6 +273,10 @@ internal class MessageService : IMessageService
         var mentionUserIdsToAdd = desiredMentionUserIds.Except(currentMentionUserIds).ToList();
 
         List<(string PublicId, FileTypeEnum FileType)> filesToCleanup = [];
+        var authUserName = _httpContext.GetUserName()
+            ?? _httpContext.GetUserEmail()
+            ?? _httpContext.GetUserId()
+            ?? "System";
 
         await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
         try
@@ -313,18 +302,29 @@ internal class MessageService : IMessageService
             entity.EditedAt = DateTime.UtcNow;
             entity.UpdatedAt = DateTime.UtcNow;
 
+            // ── Enqueue Cloudinary deletes inside the transaction ──────────────
+            // If the transaction rolls back these outbox rows roll back too,
+            // so we never delete assets for files that are still attached.
+
+            var outboxMessages = filesToCleanup
+                .Select(file => OutboxMessageFactory.BuildCloudinaryDeleteMessage(file.PublicId, file.FileType, authUserId, authUserName))
+                .ToList();
+
+            await _repositories.OutboxMessageRepository.AddRangeAsync(outboxMessages);
+
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
             await tx.CommitAsync();
             _repositories.UnitOfWork.FlushPendingAuditLogs();
+
+            // Signal background worker if there's anything to process
+            if (filesToCleanup.Count > 0)
+                _queue.Enqueue();
         }
         catch
         {
             await tx.RollbackAsync();
             throw;
         }
-
-        if (filesToCleanup.Any())
-            await FileCleanupFromCloudinary(filesToCleanup, messageId);
 
         return await GetMessageDto(messageId);
     }
@@ -523,6 +523,33 @@ internal class MessageService : IMessageService
         var messageType = DeriveMessageType(dto.Content, attachedFiles.Select(x => x.FileType));
 
         // ── Step 5: DB transaction ─────────────────────────────────────────
+        var conversation = await _repositories.ConversationRepository
+            .GetByIdForUser(conversationId, senderId)
+            .FirstOrDefaultAsync()
+            ?? throw new NotFoundAppException("Conversation");
+
+        var otherParticipantIds = conversation.Type == ConversationTypeEnum.Direct
+            ? ResolveDirectDmOtherParticipant(conversation.DirectParticipantAId, conversation.DirectParticipantBId, senderId)
+            : await _repositories.ConversationParticipantRepository
+                .GetActiveParticipantsQuery(conversationId)
+                .Where(p => p.UserId != senderId)
+                .Select(p => p.UserId)
+                .ToHashSetAsync();
+
+        var activeParticipantIds = await _repositories.UserRepository
+            .GetByIds(otherParticipantIds)
+            .Select(x => x.Id)
+            .ToListAsync();
+
+        if (activeParticipantIds.Count != otherParticipantIds.Count)
+        {
+            var missingIds = otherParticipantIds
+                .Except(activeParticipantIds)
+                .ToList();
+
+            _logger.LogWarning("One or more conversation participants could not be found. Missing: {MissingIds}", string.Join(", ", missingIds));
+        }
+
         var message = CreateMessage(dto, senderId, messageType, null, conversationId);
 
         await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
@@ -531,6 +558,9 @@ internal class MessageService : IMessageService
             // 5a — Message row
             await _repositories.MessageRepository.AddAsync(message);
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+
+            // Update lastMessageAt in conversation
+            conversation.LastMessageAt = message.CreatedAt;
 
             // 5b — Flip pending files → attached, set scope, clear ExpiresAt
             await AttachFilesAsync(message, dto.FileIds, attachedFiles, null, conversationId);
@@ -544,35 +574,17 @@ internal class MessageService : IMessageService
             // 5e — Post-save side effects
             // Conversation: synchronous ReadState update.
             // Participants are a small bounded set so fanout is cheap here.
-            var conversation = await _repositories.ConversationRepository
-                .FindByCondition(c => c.Id == conversationId)
-                .Select(c => new
-                {
-                    c.Type,
-                    c.DirectParticipantAId,
-                    c.DirectParticipantBId
-                })
-                .FirstOrDefaultAsync()
-                ?? throw new NotFoundAppException("Conversation");
-
-            var otherParticipantIds = conversation.Type == ConversationTypeEnum.Direct
-                ? ResolveDirectDmOtherParticipant(conversation.DirectParticipantAId, conversation.DirectParticipantBId, senderId)
-                : await _repositories.ConversationParticipantRepository
-                    .GetActiveParticipantsQuery(conversationId)
-                    .Where(p => p.UserId != senderId)
-                    .Select(p => p.UserId)
-                    .ToHashSetAsync();
 
             var mentionedSet = dto.MentionedUserIds.ToHashSet();
 
             // 5f — Delivery state for Group conversations
             if (conversation.Type == ConversationTypeEnum.Group)
             {
-                if (otherParticipantIds.Count + 1 <= ValidationConstants.Conversation.GroupReceiptThreshold)
+                if (activeParticipantIds.Count + 1 <= ValidationConstants.Conversation.GroupReceiptThreshold)
                 {
                     // Small group: seed one MessageReceipt row per other active participant.
                     // DeliveredAt seeded now as a placeholder — SignalR will set the real delivery time.
-                    var receipts = otherParticipantIds
+                    var receipts = activeParticipantIds
                         .Select(participantId => new MessageReceipt
                         {
                             MessageId = message.Id,
@@ -588,19 +600,14 @@ internal class MessageService : IMessageService
                 }
             }
 
-            var readStates = await _repositories.ReadStateRepository
-                    .FindByCondition(rs => otherParticipantIds.Contains(rs.UserId) && rs.ConversationId == conversationId)
-                    .ToListAsync();
-
             // ReadState rows are guaranteed to exist for all participants.
             // They are provisioned during conversation membership creation.
-            foreach (var readState in readStates)
+            foreach (var participantId in activeParticipantIds)
             {
-                readState.UnreadCount++;
-                if (mentionedSet.Contains(readState.UserId))
-                    readState.MentionCount++;
-
-                readState.UpdatedAt = DateTime.UtcNow;
+                await _repositories.ReadStateRepository.IncrementUnreadAsync(
+                    userId: participantId,
+                    conversationId: conversationId,
+                    incrementMention: mentionedSet.Contains(participantId));
             }
 
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
@@ -668,6 +675,10 @@ internal class MessageService : IMessageService
         var mentionUserIdsToAdd = desiredMentionUserIds.Except(currentMentionUserIds).ToList();
 
         List<(string PublicId, FileTypeEnum FileType)> filesToCleanup = [];
+        var authUserName = _httpContext.GetUserName()
+            ?? _httpContext.GetUserEmail()
+            ?? _httpContext.GetUserId()
+            ?? "System";
 
         await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
         try
@@ -693,18 +704,29 @@ internal class MessageService : IMessageService
             entity.EditedAt = DateTime.UtcNow;
             entity.UpdatedAt = DateTime.UtcNow;
 
+            // ── Enqueue Cloudinary deletes inside the transaction ──────────────
+            // If the transaction rolls back these outbox rows roll back too,
+            // so we never delete assets for files that are still attached.
+
+            var outboxMessages = filesToCleanup
+                .Select(file => OutboxMessageFactory.BuildCloudinaryDeleteMessage(file.PublicId, file.FileType, authUserId, authUserName))
+                .ToList();
+
+            await _repositories.OutboxMessageRepository.AddRangeAsync(outboxMessages);
+
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
             await tx.CommitAsync();
             _repositories.UnitOfWork.FlushPendingAuditLogs();
+
+            // Signal background worker if there's anything to process
+            if (filesToCleanup.Count > 0)
+                _queue.Enqueue();
         }
         catch
         {
             await tx.RollbackAsync();
             throw;
         }
-
-        if (filesToCleanup.Any())
-            await FileCleanupFromCloudinary(filesToCleanup, messageId);
 
         return await GetMessageDto(messageId);
     }
@@ -938,7 +960,23 @@ internal class MessageService : IMessageService
         if (mentionedUserIds.Count == 0)
             return;
 
-        var mentions = mentionedUserIds
+        var uniqueUserIds = mentionedUserIds.Distinct().ToList();
+
+        var activeMentionedUserIds = await _repositories.UserRepository
+            .GetByIds(uniqueUserIds)
+            .Select(x => x.Id)
+            .ToListAsync();
+
+        if (activeMentionedUserIds.Count != uniqueUserIds.Count)
+        {
+            var missingIds = uniqueUserIds
+                .Except(activeMentionedUserIds)
+                .ToList();
+
+            throw new InvalidDataAppException($"One or more mentioned user could not be found. Missing: {string.Join(", ", missingIds)}");
+        }
+
+        var mentions = uniqueUserIds
             .Distinct()
             .Select(uid => new MessageMention
             {
@@ -957,12 +995,16 @@ internal class MessageService : IMessageService
         if (!threadRootMessageId.HasValue)
             return;
 
-        var root = await _repositories.MessageRepository
-            .FindByCondition(m => m.Id == threadRootMessageId.Value)
-            .FirstAsync();
+        await _repositories.MessageRepository
+            .IncrementReplyCountAsync(threadRootMessageId.Value, DateTime.UtcNow);
 
-        root.ReplyCount++;
-        root.LastReplyAt = DateTime.UtcNow;
+        _repositories.UnitOfWork.QueueManualAuditLog(new AuditLogRequest(
+            tableName: "Message",
+            eventName: "ReplyCountIncremented",
+            payload: new
+            {
+                MessageId = threadRootMessageId.Value
+            }));
     }
 
     private async Task<List<(string PublicId, FileTypeEnum FileType)>> RemoveAttachmentsAsync(Guid messageId, List<Guid> fileIdsToRemove, Guid authUserId)
@@ -1012,25 +1054,6 @@ internal class MessageService : IMessageService
             .ToListAsync();
 
         _repositories.MessageMentionRepository.RemoveRange(mentionsToDelete);
-    }
-
-    private async Task FileCleanupFromCloudinary(List<(string PublicId, FileTypeEnum FileType)> filesToCleanup, Guid messageId)
-    {
-        foreach (var file in filesToCleanup)
-        {
-            try
-            {
-                await _externalServiceManager.CloudinaryService.DeleteFileAsync(file.PublicId, file.FileType);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(
-                    ex,
-                    "Failed to delete message attachment from Cloudinary. MessageId: {MessageId}, PublicId: {PublicId}",
-                    messageId,
-                    file.PublicId);
-            }
-        }
     }
 
     private static MessageTypeEnum DeriveMessageType(string? content, IEnumerable<FileTypeEnum> fileTypes)

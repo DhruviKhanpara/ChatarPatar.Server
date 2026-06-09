@@ -113,6 +113,7 @@ internal class UnitOfWork : IUnitOfWork
     private void UpdateAuditInEntityBeforeSave()
     {
         var isLogin = Guid.TryParse(_httpContextAccessor.HttpContext?.GetUserId(), out Guid authUserId);
+        var isBackgroundContext = _httpContextAccessor.HttpContext is null;
 
         var entities = _context.ChangeTracker
                 .Entries<AuditableEntity>()
@@ -120,7 +121,7 @@ internal class UnitOfWork : IUnitOfWork
 
         foreach (var entry in entities)
         {
-            if (!isLogin)
+            if (!isLogin && !isBackgroundContext)
             {
                 _logger.LogWarning(
                     "Audit detected write operation without authenticated user. Entity: {Entity}",
