@@ -47,7 +47,7 @@ public class PermissionFilter : IAsyncActionFilter
         // The developer forgot to annotate this endpoint.
         // Fail closed — return 403 so this is caught during development/review,
         // not silently left open in production.
-        await WriteResponseAsync(
+        SetErrorContext(
             context.HttpContext,
             HttpStatusCode.Forbidden,
             ExceptionCodes.MISSING_PERMISSION_ANNOTATION,
@@ -65,7 +65,7 @@ public class PermissionFilter : IAsyncActionFilter
         // Must be authenticated — no JWT/cookie means no userId in claims
         if (!Guid.TryParse(httpContext.GetUserId(), out var userId))
         {
-            await WriteResponseAsync(
+            SetErrorContext(
                 httpContext,
                 HttpStatusCode.Unauthorized,
                 ExceptionCodes.AUTH_REQUIRED,
@@ -80,7 +80,7 @@ public class PermissionFilter : IAsyncActionFilter
         // At least one scope is required — org-scoped or conversation-scoped
         if (orgId == null && conversationId == null)
         {
-            await WriteResponseAsync(
+            SetErrorContext(
                 httpContext,
                 HttpStatusCode.BadRequest,
                 ExceptionCodes.INVALID_DATA,
@@ -105,7 +105,7 @@ public class PermissionFilter : IAsyncActionFilter
 
         if (!allowed)
         {
-            await WriteResponseAsync(
+            SetErrorContext(
                 httpContext,
                 HttpStatusCode.Forbidden,
                 ExceptionCodes.FORBIDDEN,
@@ -155,18 +155,12 @@ public class PermissionFilter : IAsyncActionFilter
     }
 
     // Mirrors ExceptionHandlingMiddleware.WriteApiResponseAsync
-    private static async Task WriteResponseAsync(HttpContext httpContext, HttpStatusCode statusCode, string exceptionCode, string message)
+    private static void SetErrorContext(HttpContext httpContext, HttpStatusCode statusCode, string exceptionCode, string message)
     {
         httpContext.Items["ExceptionCode"] = exceptionCode;
         httpContext.Items["StatusMessage"] = message;
 
-        var response = new ApiResponse(statusCode, exceptionCode, result: null, statusMessage: message);
-        var json = JsonConvert.SerializeObject(response);
-
         httpContext.Response.StatusCode = (int)statusCode;
-        httpContext.Response.ContentType = "application/json";
-
-        await httpContext.Response.WriteAsync(json);
     }
 
     #endregion

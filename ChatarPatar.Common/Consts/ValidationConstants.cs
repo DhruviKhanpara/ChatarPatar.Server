@@ -50,6 +50,7 @@ public static class ValidationConstants
             public const int Role = 50;
             public const int Email = 254;
             public const int Token = 512;
+            public const int VoidReason = 100;
         }
 
         public static class Patterns

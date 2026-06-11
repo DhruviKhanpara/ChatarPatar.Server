@@ -48,7 +48,7 @@ public class ExceptionHandlingMiddleware
                 ? ex.UserFriendlyMessage
                 : ex.Message;
 
-            await WriteApiResponseAsync(httpContext, statusCode, exceptionCode, exceptionMessage);
+            SetErrorContext(httpContext, statusCode, exceptionCode, exceptionMessage);
         }
         catch (DbUpdateException ex) when (ex.IsUniqueConstraintViolation(out var message))
         {
@@ -58,7 +58,7 @@ public class ExceptionHandlingMiddleware
                     ex.Message
             );
 
-            await WriteApiResponseAsync(httpContext, HttpStatusCode.Conflict, ExceptionCodes.DUPLICATE_RESOURCE, message);
+            SetErrorContext(httpContext, HttpStatusCode.Conflict, ExceptionCodes.DUPLICATE_RESOURCE, message);
         }
         catch (Exception ex)
         {
@@ -70,24 +70,18 @@ public class ExceptionHandlingMiddleware
 
             string exceptionMessage = "Something went wrong. Please try again later.";
 
-            await WriteApiResponseAsync(httpContext, HttpStatusCode.InternalServerError, ExceptionCodes.UNHANDLED_EXCEPTION, exceptionMessage);
+            SetErrorContext(httpContext, HttpStatusCode.InternalServerError, ExceptionCodes.UNHANDLED_EXCEPTION, exceptionMessage);
         }
     }
 
     #region Private Section
 
-    private static async Task WriteApiResponseAsync(HttpContext httpContext, HttpStatusCode statusCode, string exceptionCode, string message)
+    private static void SetErrorContext(HttpContext httpContext, HttpStatusCode statusCode, string exceptionCode, string message)
     {
         httpContext.Items["ExceptionCode"] = exceptionCode;
         httpContext.Items["StatusMessage"] = message;
 
-        var response = new ApiResponse(statusCode, exceptionCode, result: null, statusMessage: message);
-        var json = JsonConvert.SerializeObject(response);
-
         httpContext.Response.StatusCode = (int)statusCode;
-        httpContext.Response.ContentType = "application/json";
-
-        await httpContext.Response.WriteAsync(json);
     }
 
     private static (HttpStatusCode statusCode, string exceptionCode) MapException(AppException ex)

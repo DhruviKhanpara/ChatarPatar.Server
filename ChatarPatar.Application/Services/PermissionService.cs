@@ -50,7 +50,8 @@ internal class PermissionService : IPermissionService
         var current = _cache.GetOrCreate(versionKey, _ => 1);
         _cache.Set(versionKey, current + 1, new MemoryCacheEntryOptions
         {
-            Priority = CacheItemPriority.NeverRemove
+            SlidingExpiration = TimeSpan.FromHours(2),
+            Priority = CacheItemPriority.High
         });
     }
 

@@ -26,9 +26,9 @@ public class OrganizationInviteConfiguration : IEntityTypeConfiguration<Organiza
                 "[FailedAttempts] >= 0");
         });
 
-        builder.HasKey(m => m.Id);
+        builder.HasKey(o => o.Id);
 
-        builder.Property(m => m.Id)
+        builder.Property(o => o.Id)
                .HasDefaultValueSql("NEWSEQUENTIALID()");
 
         builder.Property(o => o.Email)
@@ -41,7 +41,7 @@ public class OrganizationInviteConfiguration : IEntityTypeConfiguration<Organiza
                .HasMaxLength(ValidationConstants.Organization.Lengths.Token)
                .IsUnicode(true);
 
-        builder.Property(m => m.Role)
+        builder.Property(o => o.Role)
                .HasConversion(
                     v => v.ToString(),
                     v => Enum.Parse<OrganizationRoleEnum>(v))
@@ -50,28 +50,32 @@ public class OrganizationInviteConfiguration : IEntityTypeConfiguration<Organiza
                .IsRequired()
                .IsUnicode(true);
 
-        builder.Property(m => m.UpdatedAt)
+        builder.Property(o => o.UpdatedAt)
                .HasDefaultValueSql("SYSUTCDATETIME()");
 
-        builder.Property(m => m.IsUsed)
+        builder.Property(o => o.IsUsed)
                .HasDefaultValue(false)
                .IsRequired();
 
-        builder.Property(m => m.FailedAttempts)
+        builder.Property(o => o.FailedAttempts)
                .HasDefaultValue(0)
                .IsRequired();
 
-        builder.Property(m => m.CreatedAt)
+        builder.Property(o => o.VoidReason)
+               .HasMaxLength(ValidationConstants.Organization.Lengths.VoidReason)
+               .IsUnicode(true);
+
+        builder.Property(o => o.CreatedAt)
                .HasDefaultValueSql("SYSUTCDATETIME()");
         
-        builder.Property(m => m.UpdatedAt)
+        builder.Property(o => o.UpdatedAt)
                .HasDefaultValueSql("SYSUTCDATETIME()");
 
         // ----------------------------
         // Unique constraint (Token)
         // ----------------------------
 
-        builder.HasIndex(x => x.Token)
+        builder.HasIndex(o => o.Token)
                .IsUnique()
                .HasDatabaseName(DbConstraints.OrganizationInvites.UniqueToken);
 
@@ -79,15 +83,15 @@ public class OrganizationInviteConfiguration : IEntityTypeConfiguration<Organiza
         // Indexes
         // ----------------------------
 
-        builder.HasIndex(x => x.OrganizationId)
+        builder.HasIndex(o => o.OrganizationId)
                .HasDatabaseName(DbConstraints.OrganizationInvites.IXOrgId)
                .HasFilter("[IsUsed] = 0");
 
-        builder.HasIndex(x => x.Email)
+        builder.HasIndex(o => o.Email)
                .HasDatabaseName(DbConstraints.OrganizationInvites.IXEmail)
                .HasFilter("[IsUsed] = 0");
 
-        builder.HasIndex(x => x.ExpiresAt)
+        builder.HasIndex(o => o.ExpiresAt)
                .HasDatabaseName(DbConstraints.OrganizationInvites.IXExpiresAt)
                .HasFilter("[IsUsed] = 0");
 
@@ -95,21 +99,21 @@ public class OrganizationInviteConfiguration : IEntityTypeConfiguration<Organiza
         // Relationships
         // ----------------------------
 
-        builder.HasOne(x => x.Organization)
+        builder.HasOne(o => o.Organization)
                .WithMany()
-               .HasForeignKey(x => x.OrganizationId)
+               .HasForeignKey(o => o.OrganizationId)
                .OnDelete(DeleteBehavior.Restrict)
                .HasConstraintName(DbConstraints.OrganizationInvites.FKOrg);
 
-        builder.HasOne(x => x.CreatedByUser)
+        builder.HasOne(o => o.CreatedByUser)
                .WithMany()
-               .HasForeignKey(x => x.CreatedBy)
+               .HasForeignKey(o => o.CreatedBy)
                .OnDelete(DeleteBehavior.Restrict)
                .HasConstraintName(DbConstraints.OrganizationInvites.FKCreatedByUser);
 
-        builder.HasOne(x => x.UsedByUser)
+        builder.HasOne(o => o.UsedByUser)
                .WithMany()
-               .HasForeignKey(x => x.UsedBy)
+               .HasForeignKey(o => o.UsedBy)
                .OnDelete(DeleteBehavior.SetNull)
                .HasConstraintName(DbConstraints.OrganizationInvites.FKUsedByUser);
     }
