@@ -495,9 +495,8 @@ internal class AuthService : IAuthService
         if (invite.FailedAttempts >= _tokenSettings.InviteMaxFailedAttempts)
         {
             // Void the invite — the sender will need to issue a new one
-            invite.IsUsed = true;
-            invite.UsedAt = DateTime.UtcNow;
-            invite.UsedBy = invite.CreatedBy; // use the inviter as sentinel
+            invite.VoidedAt = DateTime.UtcNow;
+            invite.VoidReason = "BruteForce";
         }
 
         // Persist the incremented FailedAttempts before throwing

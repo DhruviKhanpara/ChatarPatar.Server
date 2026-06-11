@@ -106,6 +106,9 @@ public class Program
             });
         }
 
+        app.UseMiddleware<ResponseWrapperMiddleware>();
+        app.UseMiddleware<ExceptionHandlingMiddleware>();
+
         app.UseHttpsRedirection();
 
         app.UseCors("AllowSpecificOrigin");
@@ -113,10 +116,8 @@ public class Program
         app.UseAuthentication();
         app.UseAuthorization();
 
+        // after auth — claims are now populated
         app.UseMiddleware<LoggingMiddleware>();
-
-        app.UseMiddleware<ResponseWrapperMiddleware>();
-        app.UseMiddleware<ExceptionHandlingMiddleware>();
 
         app.MapControllers();
 

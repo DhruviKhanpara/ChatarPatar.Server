@@ -51,7 +51,7 @@ namespace ChatarPatar.API.Configuration
                         return Task.CompletedTask;
                     },
 
-                    OnChallenge = async context =>
+                    OnChallenge = context =>
                     {
                         context.HandleResponse();
 
@@ -76,29 +76,25 @@ namespace ChatarPatar.API.Configuration
                             message = "The provided token is invalid.";
                         }
 
-                        await WriteApiResponseAsync(context.HttpContext, HttpStatusCode.Unauthorized, exceptionCode, message);
+                        SetErrorContext(context.HttpContext, HttpStatusCode.Unauthorized, exceptionCode, message);
+                        return Task.CompletedTask;
                     },
 
-                    OnForbidden = async context =>
+                    OnForbidden = context =>
                     {
-                        await WriteApiResponseAsync(context.HttpContext, HttpStatusCode.Forbidden, ExceptionCodes.FORBIDDEN, "You do not have permission to perform this action.");
+                        SetErrorContext(context.HttpContext, HttpStatusCode.Forbidden, ExceptionCodes.FORBIDDEN, "You do not have permission to perform this action.");
+                        return Task.CompletedTask;
                     }
                 };
             });
         }
 
-        private static async Task WriteApiResponseAsync(HttpContext httpContext, HttpStatusCode statusCode, string exceptionCode, string message)
+        private static void SetErrorContext(HttpContext httpContext, HttpStatusCode statusCode, string exceptionCode, string message)
         {
             httpContext.Items["ExceptionCode"] = exceptionCode;
             httpContext.Items["StatusMessage"] = message;
 
-            var response = new ApiResponse(statusCode, exceptionCode, result: null, statusMessage: message);
-            var json = JsonConvert.SerializeObject(response);
-
             httpContext.Response.StatusCode = (int)statusCode;
-            httpContext.Response.ContentType = "application/json";
-
-            await httpContext.Response.WriteAsync(json);
         }
     }
 }

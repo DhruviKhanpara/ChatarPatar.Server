@@ -30,6 +30,9 @@ public class OrganizationInvite : BaseEntity
 
     public int FailedAttempts { get; set; } = 0;
 
+    public DateTime? VoidedAt { get; set; }
+    public string? VoidReason { get; set; }
+
     public DateTime ExpiresAt { get; set; } // typically CreatedAt + 7 days
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
