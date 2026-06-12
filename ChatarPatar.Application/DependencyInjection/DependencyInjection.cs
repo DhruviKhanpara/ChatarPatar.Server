@@ -3,6 +3,7 @@ using ChatarPatar.Application.ServiceContracts.Notification;
 using ChatarPatar.Application.Services.Notification;
 using ChatarPatar.Application.Services.Notification.BackgroundServices;
 using ChatarPatar.Application.Services.Notification.Dispatcher;
+using ChatarPatar.Application.Services.SignalR;
 using ChatarPatar.Application.Validators.User;
 using FluentValidation;
 using Microsoft.Extensions.Configuration;
@@ -25,6 +26,9 @@ public static class DependencyInjection
 
         // --- Background service (hosted, picks up queue signals) ---
         services.AddHostedService<OutboxBackgroundService>();
+
+        // SignalR connection tracker (singleton — lives for app lifetime)
+        services.AddSingleton<UserConnectionTracker>();
 
         // --- Validators ---
         services.AddValidatorsFromAssemblyContaining<UserLoginDtoValidator>();
@@ -58,6 +62,8 @@ public static class DependencyInjection
         services.AddScoped<IFileService, FileService>();
 
         services.AddScoped<IPermissionService, PermissionService>();
+
+        services.AddScoped<IPresenceService, PresenceService>();
 
         // --- Notification ---
         services.AddScoped<INotificationDispatcher, OutboxNotificationDispatcher>();

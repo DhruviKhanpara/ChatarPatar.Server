@@ -4,8 +4,11 @@ using ChatarPatar.API.ActionFilters;
 using ChatarPatar.API.Configuration;
 using ChatarPatar.API.Configurations;
 using ChatarPatar.API.Middlewares;
+using ChatarPatar.API.SignalR.Service;
+using ChatarPatar.Application.ServiceContracts.SignalR;
 using ChatarPatar.Application.Services.DependencyInjection;
 using ChatarPatar.Common.DependencyInjection;
+using ChatarPatar.Common.SignalR;
 using ChatarPatar.Infrastructure.DependencyInjection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
@@ -75,6 +78,12 @@ public class Program
         builder.Services.AddCommonService(builder.Configuration);
         builder.Services.AddInfrastructure(builder.Configuration);
 
+        builder.Services.AddSignalRConfiguration();
+
+        builder.Services.AddScoped<SignalRService>();
+        builder.Services.AddScoped<ISignalRService>(sp => sp.GetRequiredService<SignalRService>());
+        builder.Services.AddScoped<ISignalRPushService>(sp => sp.GetRequiredService<SignalRService>());
+
         // CORS configuration to allow requests from Angular app
         builder.Services.AddCorsConfiguration(builder.Configuration);
 
@@ -118,6 +127,8 @@ public class Program
 
         // after auth — claims are now populated
         app.UseMiddleware<LoggingMiddleware>();
+
+        app.MapHubs();
 
         app.MapControllers();
 

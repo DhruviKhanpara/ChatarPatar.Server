@@ -1,5 +1,7 @@
 ﻿using ChatarPatar.Common.Enums;
 using ChatarPatar.Common.Models;
+using ChatarPatar.Common.SignalR;
+using ChatarPatar.Common.SignalR.Model;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.ExternalServiceContracts.Notification;
 using ChatarPatar.Infrastructure.RepositoryContracts;
@@ -24,12 +26,14 @@ internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
     public string MessageType => MessageSentChannelPayload.OutboxType;
 
     private readonly IRepositoryManager _repositories;
+    private readonly ISignalRPushService _signalR;
     private readonly ILogger<MessageSentChannelOutboxHandler> _logger;
 
-    public MessageSentChannelOutboxHandler(IRepositoryManager repositories, ILogger<MessageSentChannelOutboxHandler> logger)
+    public MessageSentChannelOutboxHandler(IRepositoryManager repositories, ILogger<MessageSentChannelOutboxHandler> logger, ISignalRPushService signalR)
     {
         _repositories = repositories;
         _logger = logger;
+        _signalR = signalR;
     }
 
     public async Task HandleAsync(OutboxMessage message)
@@ -173,6 +177,48 @@ internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
         // GenericOutboxProcessor's final SaveChangesAsync accidentally re-touches them.
         foreach (var readState in existingReadStates)
             _repositories.UnitOfWork.DetachEntity(readState);
+
+        // ── Phase 4: SignalR pushes (post-commit) ──────────────────────────────
+
+        // Push badge to each member's personal group
+        foreach (var rs in existingReadStates)
+        {
+            try
+            {
+                await _signalR.PushReadStateBadgeAsync(rs.UserId, new ReadStatePush
+                {
+                    ChannelId = payload.ChannelId,
+                    UnreadCount = rs.UnreadCount,
+                    MentionCount = rs.MentionCount
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[OUTBOX] ReadStateBadge push failed. UserId={UserId}", rs.UserId);
+            }
+        }
+
+        // Push notification to each recipient's personal group
+        foreach (var n in notifications)
+        {
+            try
+            {
+                await _signalR.PushNotificationAsync(n.RecipientId, new NotificationPush
+                {
+                    Id = n.Id,
+                    Type = n.Type,
+                    ActorId = n.ActorId,
+                    MessageId = n.MessageId,
+                    ChannelId = n.ChannelId,
+                    Preview = n.Preview,
+                    CreatedAt = n.CreatedAt
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[OUTBOX] NotificationPush failed. UserId={UserId}", n.RecipientId);
+            }
+        }
 
         _logger.LogInformation(
             "[OUTBOX] ReadState fanout complete — MessageId={MessageId} ChannelId={ChannelId} MembersUpdated={Count} MentionsUpdated={MentionCount}",

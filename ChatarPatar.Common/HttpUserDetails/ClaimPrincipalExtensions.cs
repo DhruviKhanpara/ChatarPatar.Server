@@ -2,7 +2,7 @@
 
 namespace ChatarPatar.Common.HttpUserDetails;
 
-internal static class ClaimPrincipalExtensions
+public static class ClaimPrincipalExtensions
 {
     public static string? GetUserEmail(this ClaimsPrincipal principal)
     {

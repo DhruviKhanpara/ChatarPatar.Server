@@ -47,6 +47,14 @@ namespace ChatarPatar.API.Configuration
                             context.Token = token;
                         }
 
+                        // WebSocket query-string token for SignalR
+                        if (string.IsNullOrWhiteSpace(context.Token))
+                        {
+                            var accessToken = context.Request.Query[accessTokenName].ToString();
+                            if (!string.IsNullOrEmpty(accessToken) && context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                                context.Token = accessToken;
+                        }
+
                         return Task.CompletedTask;
                     },
 
