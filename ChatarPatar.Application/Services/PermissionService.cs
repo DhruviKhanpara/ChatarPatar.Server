@@ -125,8 +125,13 @@ internal class PermissionService : IPermissionService
 
                 if (channel.IsPrivate)
                 {
-                    // Private: must have explicit ChannelMembers row
-                    if (channel.Role == null) return false; // not a member of this private channel
+                    // OrgOwner / OrgAdmin bypass private channel membership requirement —
+                    // they already have elevated permissions from step 2 (org role union).
+                    // Everyone else must have an explicit ChannelMembers row.
+                    var isElevatedOrgRole = orgRole is OrganizationRoleEnum.OrgOwner or OrganizationRoleEnum.OrgAdmin;
+
+                    if (!isElevatedOrgRole && channel.Role == null)
+                        return false; // not a member of this private channel
 
                     if (RolePermissions.ChannelRolePermissions.TryGetValue(channel.Role.Value, out var channelPerms))
                         combined.UnionWith(channelPerms);

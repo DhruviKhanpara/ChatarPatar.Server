@@ -33,6 +33,11 @@ public sealed class MessageSentChannelPayload : NotificationPayload
     public Guid ChannelId { get; set; }
     public Guid SenderId { get; set; }
     public List<Guid> MentionedUserIds { get; set; } = [];
+
+    // Notification fields
+    public Guid? ThreadRootMessageId { get; set; }
+    public Guid? ThreadRootSenderId { get; set; }
+    public string? ContentPreview { get; set; }
 }
 
 public sealed class CloudinaryDeletePayload : NotificationPayload

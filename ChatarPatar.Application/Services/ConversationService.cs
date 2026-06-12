@@ -194,6 +194,21 @@ internal class ConversationService : IConversationService
             // ReadState is UI state, not an auditable business decision — suppress.
             await _repositories.ReadStateRepository.SeedForConversationAsync(userId, conversation.Id, true);
             await _repositories.ReadStateRepository.SeedForConversationAsync(dto.TargetUserId, conversation.Id, true);
+            
+            // Notify the target user that a new DM was started with them
+            var dmNotification = new NotificationEntity
+            {
+                RecipientId = dto.TargetUserId,
+                Type = NotificationTypeEnum.DirectMessage,
+                ActorId = userId,
+                ConversationId = conversation.Id,
+                Preview = null,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _repositories.NotificationRepository.AddAsync(dmNotification);
+
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync(suppressRowAudit: true);
 
             _repositories.UnitOfWork.QueueManualAuditLog(new AuditLogRequest(
@@ -285,6 +300,23 @@ internal class ConversationService : IConversationService
             var allParticipantIds = normalizedParticipantIds.Append(userId).ToList();
             foreach (var participantId in allParticipantIds)
                 await _repositories.ReadStateRepository.SeedForConversationAsync(participantId, conversation.Id, true);
+
+            // Notify all non-creator participants they were added to a group
+            var groupNotifications = normalizedParticipantIds
+                .Select(participantId => new NotificationEntity
+                {
+                    RecipientId = participantId,
+                    Type = NotificationTypeEnum.AddedToGroup,
+                    ActorId = userId,
+                    ConversationId = conversation.Id,
+                    Preview = conversation.Name,
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow
+                })
+                .ToList();
+
+            if (groupNotifications.Any())
+                await _repositories.NotificationRepository.AddRangeAsync(groupNotifications);
 
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync(suppressRowAudit: true);
 

@@ -31,6 +31,8 @@ internal sealed class ServiceManager : IServiceManager
 
     public IMessageService MessageService => Get<IMessageService>();
 
+    public INotificationService NotificationService => Get<INotificationService>();
+
     public IFileService FileService => Get<IFileService>();
 
     public IPermissionService PermissionService => Get<IPermissionService>();

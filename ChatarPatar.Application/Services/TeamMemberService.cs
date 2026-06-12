@@ -160,10 +160,20 @@ internal class TeamMemberService : ITeamMemberService
             // Private channels only get a ReadState when explicitly added (see ChannelMemberService).
             // ReadState is UI state — suppress row-level audit (could be N rows for N public channels).
             if (publicChannelIds.Any())
-            {
                 await _repositories.ReadStateRepository.SeedForChannelsAsync([dto.UserId], publicChannelIds);
-                await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync(suppressRowAudit: true);
-            }
+
+            // Notify the added user
+            await _repositories.NotificationRepository.AddAsync(new NotificationEntity
+            {
+                RecipientId = dto.UserId,
+                Type = NotificationTypeEnum.AddedToTeam,
+                ActorId = authUserId,
+                TeamId = teamId,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync(suppressRowAudit: true);
 
             await tx.CommitAsync();
             _repositories.UnitOfWork.FlushPendingAuditLogs();

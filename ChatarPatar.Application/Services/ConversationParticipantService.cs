@@ -125,6 +125,17 @@ internal class ConversationParticipantService : IConversationParticipantService
 
             // First time joining — seed a ReadState row.
             await _repositories.ReadStateRepository.SeedForConversationAsync(dto.UserId, conversationId);
+
+            // Notify the newly added participant
+            await _repositories.NotificationRepository.AddAsync(new NotificationEntity
+            {
+                RecipientId = dto.UserId,
+                Type = NotificationTypeEnum.AddedToGroup,
+                ActorId = userId,
+                ConversationId = conversationId,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
         }
 
         await _repositories.UnitOfWork.SaveChangesAsync();
