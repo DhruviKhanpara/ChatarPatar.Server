@@ -194,9 +194,20 @@ internal class ChannelMemberService : IChannelMemberService
 
         await _repositories.ChannelMemberRepository.AddAsync(memberEntity);
 
-        // Seed a ReadState row so the new member's unread cursor starts at the
+        // Seed a ReadState row so the new member's unread cursor starts at the 
         // current channel high-water mark — no historical messages shown as unread.
         await _repositories.ReadStateRepository.SeedForChannelAsync(dto.UserId, channelId);
+
+        // Notify the added user
+        await _repositories.NotificationRepository.AddAsync(new NotificationEntity
+        {
+            RecipientId = dto.UserId,
+            Type = NotificationTypeEnum.AddedToChannel,
+            ActorId = authUserId,
+            ChannelId = channelId,
+            IsRead = false,
+            CreatedAt = DateTime.UtcNow
+        });
 
         await _repositories.UnitOfWork.SaveChangesAsync();
     }

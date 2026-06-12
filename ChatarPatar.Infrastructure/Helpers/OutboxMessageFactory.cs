@@ -25,7 +25,7 @@ public static class OutboxMessageFactory
         };
     }
 
-    public static OutboxMessage BuildChannelSendMessage(List<Guid> mentionedUserIds, Guid channelId, Guid messageId, long messageSequenceNumber, Guid initiatedBy, string initiatedByName)
+    public static OutboxMessage BuildChannelSendMessage(List<Guid> mentionedUserIds, Guid channelId, Guid messageId, long messageSequenceNumber, Guid initiatedBy, string initiatedByName, Guid? threadRootMessageId = null, Guid? threadRootSenderId = null, string? contentPreview = null)
     {
         return new OutboxMessage
         {
@@ -38,6 +38,9 @@ public static class OutboxMessageFactory
                 SenderId = initiatedBy,
                 MentionedUserIds = mentionedUserIds,
                 InitiatedBy = initiatedByName,
+                ThreadRootMessageId = threadRootMessageId,
+                ThreadRootSenderId = threadRootSenderId,
+                ContentPreview = contentPreview
             }),
             IsProcessed = false,
             CreatedAt = DateTime.UtcNow,

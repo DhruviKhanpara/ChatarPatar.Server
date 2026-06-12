@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ChatarPatar.Infrastructure.Entities;
 
-public class Notification : BaseEntity
+public class NotificationEntity : BaseEntity
 {
     #region Table References
     [ForeignKey(nameof(MessageId))]

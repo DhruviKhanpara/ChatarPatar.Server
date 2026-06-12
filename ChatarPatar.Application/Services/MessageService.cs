@@ -193,8 +193,23 @@ internal class MessageService : IMessageService
 
             // 6e — Post-save side effects
             // Channel: write Outbox row then signal the background worker.
-            // Worker reads it and fans out ReadState updates for all members.
-            var outboxMessage = OutboxMessageFactory.BuildChannelSendMessage(dto.MentionedUserIds, channelId, message.Id, message.SequenceNumber, senderId, authUserName);
+            // Worker reads it and fans out ReadState updates for all members,
+            // and creates Mention / ThreadReply notifications.
+
+            // Resolve thread root sender if this is a reply — needed by the outbox
+            // handler to create a ThreadReply notification without an extra DB query there.
+            Guid? threadRootSenderId = null;
+            if (dto.ThreadRootMessageId.HasValue)
+            {
+                threadRootSenderId = await _repositories.MessageRepository
+                    .FindByCondition(m => m.Id == dto.ThreadRootMessageId.Value)
+                    .Select(m => (Guid?)m.SenderId)
+                    .FirstOrDefaultAsync();
+            }
+
+            var contentPreview = BuildContentSnapshot(dto.Content, attachedFiles.FirstOrDefault());
+
+            var outboxMessage = OutboxMessageFactory.BuildChannelSendMessage(dto.MentionedUserIds, channelId, message.Id, message.SequenceNumber, senderId, authUserName,  dto.ThreadRootMessageId, threadRootSenderId, contentPreview);
 
             await _repositories.OutboxMessageRepository.AddAsync(outboxMessage);
 
@@ -203,6 +218,15 @@ internal class MessageService : IMessageService
             _repositories.UnitOfWork.FlushPendingAuditLogs();
 
             _queue.Enqueue();
+        }
+        catch (DbUpdateException ex) when (ex.IsMessageSendUniqueViolation())
+        {
+            var existMessage = await TryGetExistingMessageAsync(senderId, dto.ClientMessageId, channelId);
+
+            if (existMessage is not null)
+                return existMessage;
+
+            throw;
         }
         catch
         {
@@ -539,7 +563,7 @@ internal class MessageService : IMessageService
         var activeParticipantIds = await _repositories.UserRepository
             .GetByIds(otherParticipantIds)
             .Select(x => x.Id)
-            .ToListAsync();
+            .ToHashSetAsync();
 
         if (activeParticipantIds.Count != otherParticipantIds.Count)
         {
@@ -576,6 +600,7 @@ internal class MessageService : IMessageService
             // Participants are a small bounded set so fanout is cheap here.
 
             var mentionedSet = dto.MentionedUserIds.ToHashSet();
+            var now = DateTime.UtcNow;
 
             // 5f — Delivery state for Group conversations
             if (conversation.Type == ConversationTypeEnum.Group)
@@ -589,10 +614,10 @@ internal class MessageService : IMessageService
                         {
                             MessageId = message.Id,
                             UserId = participantId,
-                            DeliveredAt = DateTime.UtcNow,
+                            DeliveredAt = now,
                             SeenAt = null,
-                            CreatedAt = DateTime.UtcNow,
-                            UpdatedAt = DateTime.UtcNow
+                            CreatedAt = now,
+                            UpdatedAt = now
                         })
                         .ToList();
 
@@ -610,9 +635,66 @@ internal class MessageService : IMessageService
                     incrementMention: mentionedSet.Contains(participantId));
             }
 
+            // ── Inline notifications for conversation messages ─────────────
+            // Mention notifications — one per mentioned user (excluding sender)
+            var contentPreviewConv = BuildContentSnapshot(dto.Content, attachedFiles.FirstOrDefault());
+
+            var conversationNotifications = mentionedSet
+                .Where(x => x != senderId && activeParticipantIds.Contains(x))
+                .Select(x => new NotificationEntity()
+                {
+                    RecipientId = x,
+                    Type = NotificationTypeEnum.Mention,
+                    ActorId = senderId,
+                    MessageId = message.Id,
+                    ConversationId = conversationId,
+                    Preview = contentPreviewConv,
+                    IsRead = false,
+                    CreatedAt = now
+                })
+                .ToList();
+
+            // ThreadReply notification — notify root sender if different from current sender
+            if (dto.ThreadRootMessageId.HasValue)
+            {
+                var rootSenderId = await _repositories.MessageRepository
+                    .FindByCondition(m => m.Id == dto.ThreadRootMessageId.Value)
+                    .Select(m => (Guid?)m.SenderId)
+                    .FirstOrDefaultAsync();
+
+                if (rootSenderId.HasValue
+                    && rootSenderId.Value != senderId
+                    && activeParticipantIds.Contains(rootSenderId.Value))
+                {
+                    conversationNotifications.Add(new NotificationEntity
+                    {
+                        RecipientId = rootSenderId.Value,
+                        Type = NotificationTypeEnum.ThreadReply,
+                        ActorId = senderId,
+                        MessageId = message.Id,
+                        ConversationId = conversationId,
+                        Preview = contentPreviewConv,
+                        IsRead = false,
+                        CreatedAt = now
+                    });
+                }
+            }
+
+            if (conversationNotifications.Any())
+                await _repositories.NotificationRepository.AddRangeAsync(conversationNotifications);
+
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
             await tx.CommitAsync();
             _repositories.UnitOfWork.FlushPendingAuditLogs();
+        }
+        catch (DbUpdateException ex) when (ex.IsMessageSendUniqueViolation())
+        {
+            var existMessage = await TryGetExistingMessageAsync(senderId, dto.ClientMessageId, null, conversationId);
+
+            if (existMessage is not null)
+                return existMessage;
+
+            throw;
         }
         catch
         {

@@ -53,6 +53,8 @@ public static class DependencyInjection
 
         services.AddScoped<IMessageService, MessageService>();
 
+        services.AddScoped<INotificationService, NotificationService>();
+
         services.AddScoped<IFileService, FileService>();
 
         services.AddScoped<IPermissionService, PermissionService>();

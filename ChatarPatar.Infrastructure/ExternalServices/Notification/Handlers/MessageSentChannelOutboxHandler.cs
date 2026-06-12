@@ -1,4 +1,5 @@
-﻿using ChatarPatar.Common.Models;
+﻿using ChatarPatar.Common.Enums;
+using ChatarPatar.Common.Models;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.ExternalServiceContracts.Notification;
 using ChatarPatar.Infrastructure.RepositoryContracts;
@@ -11,8 +12,12 @@ namespace ChatarPatar.Infrastructure.ExternalServices.Notification.Handlers;
 /// <summary>
 /// Outbox handler for Type = "MessageSent.Channel".
 ///
-/// Responsibility: fan out ReadState (UnreadCount / MentionCount) increments
-/// to every active member of the channel except the sender.
+/// Responsibility:
+///  1. Fan out ReadState (UnreadCount / MentionCount) increments to every 
+///     active channel member except the sender.
+///  2. Create Mention notifications for every mentioned user (except sender).
+///  3. Create ThreadReply notification for the thread root's sender (if different
+///     from the current sender and root sender is still an active member).
 /// </summary>
 internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
 {
@@ -50,7 +55,7 @@ internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
 
         // Explicit channel member IDs (covers private + public with explicit rows)
         var allMemberIds = await _repositories.ChannelMemberRepository
-            .FindByCondition(m => m.ChannelId == payload.ChannelId && !m.User.IsDeleted)
+            .FindByCondition(m => m.ChannelId == payload.ChannelId && m.UserId != payload.SenderId && !m.User.IsDeleted)
             .Select(m => m.UserId)
             .ToHashSetAsync();
 
@@ -58,21 +63,22 @@ internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
         if (!channel.IsPrivate)
         {
             var teamMemberIds = await _repositories.TeamMemberRepository
-                .FindByCondition(m => m.TeamId == channel.TeamId && !m.IsDeleted && !m.User.IsDeleted)
+                .FindByCondition(m => m.TeamId == channel.TeamId && m.UserId != payload.SenderId && !m.IsDeleted && !m.User.IsDeleted)
                 .Select(m => m.UserId)
                 .ToHashSetAsync();
 
             allMemberIds.UnionWith(teamMemberIds);
         }
 
-        // Remove sender — they don't get an unread bump for their own message
-        allMemberIds.Remove(payload.SenderId);
-
         if (allMemberIds.Count == 0)
         {
             _logger.LogInformation("[OUTBOX] No other members found for channel {ChannelId}. Nothing to update.", payload.ChannelId);
             return;
         }
+
+        var now = DateTime.UtcNow;
+
+        // ── Phase 1: ReadState fanout ──────────────────────────────────────
 
         var mentionedSet = payload.MentionedUserIds?.ToHashSet() ?? [];
 
@@ -87,9 +93,7 @@ internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
         {
             _logger.LogWarning(
                 "[OUTBOX] Expected {Expected} ReadStates but found {Actual} for ChannelId={ChannelId}",
-                allMemberIds.Count,
-                existingReadStates.Count,
-                payload.ChannelId);
+                allMemberIds.Count, existingReadStates.Count, payload.ChannelId);
         }
 
         // ReadState rows are guaranteed to exist for all participants.
@@ -99,19 +103,58 @@ internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
             readState.UnreadCount++;
             if (mentionedSet.Contains(readState.UserId))
                 readState.MentionCount++;
-            
-            readState.UpdatedAt = DateTime.UtcNow;
+            readState.UpdatedAt = now;
         }
 
-        // ── Persist all ReadState updates in a single transaction ──────────
-        // SaveChangesWithoutAuditAsync is used so that updating N ReadState rows
+        // ── Phase 2: Notifications ─────────────────────────────────────────
+
+        // Mention notifications — one per mentioned user who is not the sender
+        var notifications = mentionedSet
+            .Where(x => x != payload.SenderId && allMemberIds.Contains(x))
+            .Select(x => new NotificationEntity()
+            {
+                RecipientId = x,
+                Type = NotificationTypeEnum.Mention,
+                ActorId = payload.SenderId,
+                MessageId = payload.MessageId,
+                ChannelId = payload.ChannelId,
+                Preview = payload.ContentPreview,
+                IsRead = false,
+                CreatedAt = now
+            })
+            .ToList();
+
+        // ThreadReply notification — notify the thread root's sender once
+        if (payload.ThreadRootMessageId.HasValue
+            && payload.ThreadRootSenderId.HasValue
+            && payload.ThreadRootSenderId.Value != payload.SenderId
+            && allMemberIds.Contains(payload.ThreadRootSenderId.Value))
+        {
+            notifications.Add(new NotificationEntity
+            {
+                RecipientId = payload.ThreadRootSenderId.Value,
+                Type = NotificationTypeEnum.ThreadReply,
+                ActorId = payload.SenderId,
+                MessageId = payload.MessageId,
+                ChannelId = payload.ChannelId,
+                Preview = payload.ContentPreview,
+                IsRead = false,
+                CreatedAt = now
+            });
+        }
+
+        if (notifications.Any())
+            await _repositories.NotificationRepository.AddRangeAsync(notifications);
+
+
+        // ── Persist all ReadState updates and notification in a single transaction ──────────
+        // SaveChangesWithoutAuditAsync is used so that updating N data rows
         // does not produce N individual audit log entries — only the single
         // summary log below is written after a successful commit.
         await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
-
         try
         {
-            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync(suppressRowAudit: true);
             await tx.CommitAsync();
         }
         catch (Exception ex)
@@ -119,9 +162,8 @@ internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
             await tx.RollbackAsync();
             _logger.LogError(
                 ex,
-                "[OUTBOX] Transaction rolled back — ReadState fanout failed. MessageId={MessageId} ChannelId={ChannelId}",
-                payload.MessageId,
-                payload.ChannelId);
+                "[OUTBOX] ReadState fanout and Notification insert failed. MessageId={MessageId} ChannelId={ChannelId}",
+                payload.MessageId, payload.ChannelId);
             throw;
         }
 
@@ -134,12 +176,12 @@ internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
 
         _logger.LogInformation(
             "[OUTBOX] ReadState fanout complete — MessageId={MessageId} ChannelId={ChannelId} MembersUpdated={Count} MentionsUpdated={MentionCount}",
-            payload.MessageId,
-            payload.ChannelId,
-            existingReadStates.Count,
-            existingReadStates.Count(rs => mentionedSet.Contains(rs.UserId)));
+            payload.MessageId, payload.ChannelId, existingReadStates.Count, existingReadStates.Count(rs => mentionedSet.Contains(rs.UserId)));
 
-        // TODO: use QueueManualAuditLog and log this in audit table
-        _logger.LogInformation("[OUTBOX] ReadState updated for {Count} members of channel {ChannelId}.", existingReadStates.Count, payload.ChannelId);
+        _logger.LogInformation(
+            "[OUTBOX] Notifications created — MessageId={MessageId} Mentions={MentionCount} ThreadReplies={ThreadCount}",
+            payload.MessageId,
+            notifications.Count(n => n.Type == NotificationTypeEnum.Mention),
+            notifications.Count(n => n.Type == NotificationTypeEnum.ThreadReply));
     }
 }

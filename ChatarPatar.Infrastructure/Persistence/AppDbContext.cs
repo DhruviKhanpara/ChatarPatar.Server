@@ -21,7 +21,7 @@ public partial class AppDbContext : DbContext
     public virtual DbSet<MessageMention> MessagesMentions { get; set; }
     public virtual DbSet<MessageReaction> MessagesReactions { get; set; }
     public virtual DbSet<MessageReceipt> MessagesReceipts { get; set; }
-    public virtual DbSet<Notification> Notifications { get; set; }
+    public virtual DbSet<NotificationEntity> Notifications { get; set; }
     public virtual DbSet<Organization> Organizations { get; set; }
     public virtual DbSet<OrganizationMember> OrganizationMembers { get; set; }
     public virtual DbSet<OrganizationInvite> OrganizationInvites { get; set; }
