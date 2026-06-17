@@ -1,4 +1,5 @@
-﻿using ChatarPatar.Infrastructure.Entities;
+﻿using ChatarPatar.Common.Enums;
+using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.Persistence;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.EntityFrameworkCore;
@@ -49,6 +50,33 @@ internal class ChannelRepository : BaseSoftDeleteRepository<Channel>, IChannelRe
             query = query.Where(c => c.Id != excludeChannelId.Value);
 
         return await query.AnyAsync();
+    }
+
+    public async Task<bool> IsActiveMembershipAsync(Guid userId, Guid channelId)
+    {
+        return await FindByCondition(c => c.Id == channelId && !c.IsDeleted)
+            .Select(c => new
+            {
+                c.IsPrivate,
+                IsExplicitMember = c.ChannelMembers.Any(m => m.UserId == userId && !m.IsDeleted),
+                IsActiveTeamMember = c.Team.TeamMembers.Any(m => m.UserId == userId && !m.IsDeleted),
+                OrgRole = c.Organization.OrganizationMembers
+                    .Where(m => m.UserId == userId && !m.IsDeleted)
+                    .Select(m => (OrganizationRoleEnum?)m.Role)
+                    .FirstOrDefault(),
+                TeamRole = c.Team.TeamMembers
+                    .Where(m => m.UserId == userId && !m.IsDeleted)
+                    .Select(m => (TeamRoleEnum?)m.Role)
+                    .FirstOrDefault()
+            })
+            .Select(x =>
+                !x.IsPrivate
+                    ? x.IsActiveTeamMember
+                    : x.IsExplicitMember
+                        || x.OrgRole == OrganizationRoleEnum.OrgOwner
+                        || x.OrgRole == OrganizationRoleEnum.OrgAdmin
+                        || x.TeamRole == TeamRoleEnum.TeamAdmin)
+            .FirstOrDefaultAsync();
     }
 }
 

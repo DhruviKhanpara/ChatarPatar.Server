@@ -27,12 +27,16 @@ public class ChatHub : Hub<IChatClient>
     private readonly IPresenceService _presenceService;
     private readonly ISignalRService _signalRService;
     private readonly UserConnectionTracker _connectionTracker;
+    private readonly IHubAuthorizationService _hubAuth;
+    private readonly ILogger<ChatHub> _logger;
 
-    public ChatHub(IPresenceService presenceService, ISignalRService signalRService, UserConnectionTracker connectionTracker)
+    public ChatHub(IPresenceService presenceService, ISignalRService signalRService, UserConnectionTracker connectionTracker, IHubAuthorizationService hubAuth, ILogger<ChatHub> logger)
     {
         _presenceService = presenceService;
         _signalRService = signalRService;
         _connectionTracker = connectionTracker;
+        _hubAuth = hubAuth;
+        _logger = logger;
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────
@@ -94,21 +98,64 @@ public class ChatHub : Hub<IChatClient>
     /// <summary>
     /// Client calls this when it opens a channel view.
     /// Joins the group so it receives MessageReceived, TypingIndicator, etc.
+    /// Throws HubException if the caller has no access to this channel.
     /// </summary>
-    public Task JoinChannel(Guid channelId)
-        => Groups.AddToGroupAsync(Context.ConnectionId, $"channel:{channelId}");
+    public async Task JoinChannel(Guid channelId)
+    {
+        var userId = Guid.Parse(Context.User!.GetUserId()
+            ?? throw new HubException("Unauthorized: user Id claim missing."));
+
+        var hasAccess = await _hubAuth.CanAccessChannelAsync(userId, channelId);
+        if (!hasAccess)
+        {
+            _logger.LogWarning(
+                "[HUB] Rejected JoinChannel — ConnectionId={ConnectionId} UserId={UserId} ChannelId={ChannelId}",
+                Context.ConnectionId, userId, channelId);
+
+            throw new HubException("You do not have access to this channel.");
+        }
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"channel:{channelId}");
+    }
 
     public Task LeaveChannel(Guid channelId)
         => Groups.RemoveFromGroupAsync(Context.ConnectionId, $"channel:{channelId}");
 
     /// <summary>
     /// Client calls this when it opens a DM or group conversation view.
+    /// Throws HubException if the caller is not an active participant.
     /// </summary>
-    public Task JoinConversation(Guid conversationId)
-        => Groups.AddToGroupAsync(Context.ConnectionId, $"conv:{conversationId}");
+    public async Task JoinConversation(Guid conversationId)
+    {
+        var userId = Guid.Parse(Context.User!.GetUserId()
+            ?? throw new HubException("Unauthorized: user Id claim missing."));
+
+        var hasAccess = await _hubAuth.CanAccessConversationAsync(userId, conversationId);
+        if (!hasAccess)
+        {
+            _logger.LogWarning(
+               "[HUB] Rejected JoinConversation — ConnectionId={ConnectionId} UserId={UserId} ConversationId={ConversationId}",
+               Context.ConnectionId, userId, conversationId);
+
+            throw new HubException("You do not have access to this conversation.");
+        }
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"conv:{conversationId}");
+    }
 
     public Task LeaveConversation(Guid conversationId)
         => Groups.RemoveFromGroupAsync(Context.ConnectionId, $"conv:{conversationId}");
+
+    /// <summary>
+    /// Client calls this for each user visible in their sidebar
+    /// to receive that user's presence updates.
+    /// Called after connect, once the sidebar loads.
+    /// </summary>
+    public Task JoinPresence(Guid watchedUserId)
+    => Groups.AddToGroupAsync(Context.ConnectionId, $"presence:{watchedUserId}");
+
+    public Task LeavePresence(Guid watchedUserId)
+        => Groups.RemoveFromGroupAsync(Context.ConnectionId, $"presence:{watchedUserId}");
 
     // ── Typing indicator ──────────────────────────────────────────────────
 
@@ -122,7 +169,7 @@ public class ChatHub : Hub<IChatClient>
     public async Task SendTyping(Guid channelOrConversationId, bool isChannel, bool isTyping)
     {
         var userIdStr = Context.User!.GetUserId()
-            ?? throw new HubException("Unauthorized: user ID claim missing.");
+            ?? throw new HubException("Unauthorized: user Id claim missing.");
 
         var userId = Guid.Parse(userIdStr);
         var userName = Context.User!.GetUserName() ?? string.Empty;
@@ -143,7 +190,7 @@ public class ChatHub : Hub<IChatClient>
     public async Task SetStatus(PresenceStatusEnum status, CustomPresenceStatusEnum? customStatus)
     {
         var userIdStr = Context.User!.GetUserId()
-            ?? throw new HubException("Unauthorized: user ID claim missing.");
+            ?? throw new HubException("Unauthorized: user Id claim missing.");
 
         var userId = Guid.Parse(userIdStr);
 

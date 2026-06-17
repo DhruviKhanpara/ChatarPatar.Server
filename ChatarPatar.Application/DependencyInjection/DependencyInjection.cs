@@ -1,5 +1,6 @@
 ﻿using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Application.ServiceContracts.Notification;
+using ChatarPatar.Application.ServiceContracts.SignalR;
 using ChatarPatar.Application.Services.Notification;
 using ChatarPatar.Application.Services.Notification.BackgroundServices;
 using ChatarPatar.Application.Services.Notification.Dispatcher;
@@ -62,6 +63,7 @@ public static class DependencyInjection
         services.AddScoped<IFileService, FileService>();
 
         services.AddScoped<IPermissionService, PermissionService>();
+        services.AddScoped<IHubAuthorizationService, HubAuthorizationService>();
 
         services.AddScoped<IPresenceService, PresenceService>();
 

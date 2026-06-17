@@ -21,16 +21,18 @@ public interface ISignalRPushService
     /// <summary>
     /// Broadcasts a user's presence change to their own tabs ("user:{userId}")
     /// and to anyone watching them ("presence:{userId}").
-    /// Called by ChatHub on connect/disconnect and by PresenceService on explicit set.
     /// </summary>
     Task BroadcastPresenceAsync(Guid userId, PresencePush presence);
 
     // ── Thread counter ────────────────────────────────────────────────────
 
     /// <summary>
-    /// Pushes a thread reply count update to a channel or conversation group.
-    /// Called after IncrementReplyCountAsync so open clients refresh in place.
+    /// Pushes a thread reply count update to active channel viewers.
     /// </summary>
     Task BroadcastChannelThreadUpdateAsync(Guid channelId, ThreadUpdatePush update);
+
+    /// <summary>
+    /// Pushes a thread reply count update to active conversation viewers.
+    /// </summary>
     Task BroadcastConversationThreadUpdateAsync(Guid conversationId, ThreadUpdatePush update);
 }

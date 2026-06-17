@@ -55,6 +55,16 @@ internal class PermissionService : IPermissionService
         });
     }
 
+    public int GetUserPermissionVersion(Guid userId)
+    {
+        // Version key is long-lived — no expiry. Only bumped on role/membership change.
+        return _cache.GetOrCreate($"permver:{userId}", entry =>
+        {
+            entry.Priority = CacheItemPriority.NeverRemove;
+            return 1;
+        });
+    }
+
     #region Private Section
 
     private async Task<bool> ComputePermissionAsync(PermissionContext ctx, string[] permissions, PermissionCheckLogicEnum logic)
@@ -201,16 +211,6 @@ internal class PermissionService : IPermissionService
             PermissionCheckLogicEnum.Any => permissions.Any(combined.Contains),
             _ => throw new AppException($"{nameof(logic)} not configured")
         };
-    }
-
-    private int GetUserPermissionVersion(Guid userId)
-    {
-        // Version key is long-lived — no expiry. Only bumped on role/membership change.
-        return _cache.GetOrCreate($"permver:{userId}", entry =>
-        {
-            entry.Priority = CacheItemPriority.NeverRemove;
-            return 1;
-        });
     }
 
     #endregion

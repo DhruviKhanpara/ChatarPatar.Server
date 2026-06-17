@@ -1000,32 +1000,7 @@ BEGIN
             CHECK (Status BETWEEN 0 AND 2),
 
         CONSTRAINT CK_UserStatus_CustomStatus
-            CHECK (CustomStatus IS NULL OR CustomStatus BETWEEN 1 AND 6),
-
-        -- Prevent impossible combinations
-        CONSTRAINT CK_UserStatus_Logical
-            CHECK (
-                -- Offline → no custom status
-                (Status = 0 AND CustomStatus IS NULL)
-                OR
-                -- Online → optional active/busy/dnd
-                (
-                    Status = 1
-                    AND (
-                        CustomStatus IS NULL
-                        OR CustomStatus IN (1,2,3)
-                    )
-                )
-                OR
-                -- Away → optional brb/appear_away
-                (
-                    Status = 2
-                    AND (
-                        CustomStatus IS NULL
-                        OR CustomStatus IN (4,5)
-                    )
-                )
-            )
+            CHECK (CustomStatus IS NULL OR CustomStatus BETWEEN 1 AND 6)
     );
 
     CREATE NONCLUSTERED INDEX IX_UserStatus_Status ON UserStatus (Status);
@@ -1099,6 +1074,9 @@ BEGIN
         UsedBy          UNIQUEIDENTIFIER            DEFAULT NULL,
 
         FailedAttempts  INT               NOT NULL  DEFAULT 0,
+
+        VoidedAt        DATETIME2 (7)     NULL,
+        VoidReason      NVARCHAR (100)    NULL,
 
         ExpiresAt       DATETIME2         NOT NULL,
         CreatedAt       DATETIME2         NOT NULL  DEFAULT SYSUTCDATETIME(),

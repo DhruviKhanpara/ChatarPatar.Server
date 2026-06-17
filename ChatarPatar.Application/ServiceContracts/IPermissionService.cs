@@ -7,4 +7,5 @@ public interface IPermissionService
 {
     Task<bool> HasPermissionAsync(PermissionContext ctx, string[] permission, PermissionCheckLogicEnum logic);
     void InvalidateUserPermissions(Guid userId);
+    int GetUserPermissionVersion(Guid userId);
 }

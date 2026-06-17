@@ -17,7 +17,9 @@ public interface IChatClient
     // ── Typing ──────────────────────────────────────────────────────────────
     Task UserTyping(Guid channelOrConversationId, Guid userId, string userName, bool isTyping);
 
+    // ── Presence (user:{userId} + presence:{userId} groups) ───────────────
     Task UserPresenceChanged(PresencePush presence);
+
     Task NotificationReceived(NotificationPush notification);
     Task ReadStateUpdated(ReadStatePush badge);
     Task ThreadUpdated(ThreadUpdatePush update);

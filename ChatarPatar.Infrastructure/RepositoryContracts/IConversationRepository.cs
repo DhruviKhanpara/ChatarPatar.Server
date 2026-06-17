@@ -22,4 +22,11 @@ public interface IConversationRepository : IBaseSoftDeleteRepository<Conversatio
     /// Pass the two IDs in any order — the method normalizes them internally.
     /// </summary>
     Task<Conversation?> GetDirectConversationAsync(Guid userAId, Guid userBId);
+
+    /// <summary>
+    /// Checks whether a user is an active participant of a conversation:
+    ///   - Direct → user must be DirectParticipantAId or DirectParticipantBId
+    ///   - Group  → user must have an active (HasLeft = false) ConversationParticipant row
+    /// </summary>
+    Task<bool> IsActiveParticipantAsync(Guid userId, Guid conversationId);
 }

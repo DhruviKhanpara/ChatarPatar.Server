@@ -19,5 +19,15 @@ public interface IChannelRepository : IBaseSoftDeleteRepository<Channel>
     /// Returns true if a channel with the given name already exists in the team (case-insensitive).
     /// </summary>
     Task<bool> NameExistsInTeamAsync(Guid teamId, string name, Guid? excludeChannelId = null);
+
+    /// <summary>
+    /// Checks whether a user can access a channel — same rule used by
+    /// GetChannelsQuery for GET listings:
+    ///   - Public channel  → user must be an active member of the channel's Team
+    ///   - Private channel → user must have an active ChannelMember row,
+    ///                       UNLESS they are OrgOwner / OrgAdmin / TeamAdmin
+    ///                       of that channel's team (elevated bypass).
+    /// </summary>
+    Task<bool> IsActiveMembershipAsync(Guid userId, Guid channelId);
 }
 

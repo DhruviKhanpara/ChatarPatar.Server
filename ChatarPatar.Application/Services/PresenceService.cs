@@ -53,7 +53,6 @@ internal class PresenceService : IPresenceService
         }
 
         status.Status = PresenceStatusEnum.Offline;
-        status.CustomStatus = null;
         status.LastSeenAt = DateTime.UtcNow;
         status.UpdatedAt = DateTime.UtcNow;
 

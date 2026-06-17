@@ -522,6 +522,9 @@ internal class MessageService : IMessageService
         message.UpdatedAt = DateTime.UtcNow;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
+
+        try { await _signalR.BroadcastChannelMessageDeletedAsync(channelId, messageId, authUserId); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelMessageDeleted failed."); }
     }
 
     #endregion
@@ -1008,6 +1011,9 @@ internal class MessageService : IMessageService
         message.UpdatedAt = DateTime.UtcNow;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
+
+        try { await _signalR.BroadcastConversationMessageDeletedAsync(conversationId, messageId, authUserId); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessageDeleted failed."); }
     }
 
     #endregion
