@@ -31,4 +31,8 @@ public class ConversationDto
     /// Null for Direct.
     /// </summary>
     public DateTime? JoinedAt { get; set; }
+
+    public DateTime? LastMessageAt { get; set; }
+    public int UnreadCount { get; set; }
+    public int MentionCount { get; set; }
 }

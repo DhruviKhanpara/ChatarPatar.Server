@@ -81,6 +81,14 @@ internal class ChannelService : IChannelService
         {
             var pageChannelIds = items.Select(c => c.Id).ToList();
 
+            var readStates = await _repositories.ReadStateRepository
+                .FindByCondition(rs => pageChannelIds.Contains(rs.ChannelId!.Value) && rs.UserId == authUserId)
+                .AsNoTracking()
+                .Select(rs => new { rs.ChannelId, rs.UnreadCount, rs.MentionCount })
+                .ToListAsync();
+
+            var readStateDict = readStates.Where(rs => rs.ChannelId.HasValue).ToDictionary(rs => rs.ChannelId!.Value);
+
             var myMemberships = await _repositories.ChannelMemberRepository
                 .FindByCondition(m => pageChannelIds.Contains(m.ChannelId) && m.UserId == authUserId)
                 .AsNoTracking()
@@ -91,6 +99,12 @@ internal class ChannelService : IChannelService
 
             foreach (var item in items)
             {
+                if (readStateDict.TryGetValue(item.Id, out var rs))
+                {
+                    item.UnreadCount = rs.UnreadCount;
+                    item.MentionCount = rs.MentionCount;
+                }
+
                 myMembershipsDict.TryGetValue(item.Id, out var membership);
                 item.Role = membership?.Role;
                 item.IsMuted = membership?.IsMuted;
@@ -245,6 +259,8 @@ internal class ChannelService : IChannelService
     {
         await _validationService.ValidateAsync<UpdateChannelDto>(dto);
 
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
         var channel = await _repositories.ChannelRepository
             .GetByIdInTeam(channelId, teamId, orgId)
             .Include(c => c.Team)
@@ -262,6 +278,21 @@ internal class ChannelService : IChannelService
 
             if (nameExists)
                 throw new DuplicateEntryAppException("A channel with this name already exists in the team.");
+
+        var systemMessage = new Message
+        {
+            ClientMessageId = Guid.NewGuid(),
+            ChannelId = channelId,
+            SenderId = authUserId,
+
+            Content = $"Channel has been renamed from {channel.Name} to {dto.Name}.",
+            MessageType = MessageTypeEnum.System,
+
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await _repositories.MessageRepository.AddAsync(systemMessage);
         }
 
         _mapper.Map<UpdateChannelDto, Channel>(dto, channel);
@@ -287,11 +318,28 @@ internal class ChannelService : IChannelService
         channel.ArchivedAt = DateTime.UtcNow;
         channel.ArchivedBy = authUserId;
 
+        var systemMessage = new Message
+        {
+            ClientMessageId = Guid.NewGuid(),
+            ChannelId = channelId,
+            SenderId = authUserId,
+
+            Content = "Channel has been archived.",
+            MessageType = MessageTypeEnum.System,
+
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await _repositories.MessageRepository.AddAsync(systemMessage);
+
         await _repositories.UnitOfWork.SaveChangesAsync();
     }
 
     public async Task UnarchiveChannelAsync(Guid orgId, Guid teamId, Guid channelId)
     {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
         var channel = await _repositories.ChannelRepository
             .GetByIdInTeam(channelId, teamId, orgId)
             .Include(c => c.Team)
@@ -308,6 +356,21 @@ internal class ChannelService : IChannelService
         channel.IsArchived = false;
         channel.ArchivedAt = null;
         channel.ArchivedBy = null;
+
+        var systemMessage = new Message
+        {
+            ClientMessageId = Guid.NewGuid(),
+            ChannelId = channelId,
+            SenderId = authUserId,
+
+            Content = "Channel has been un-archived.",
+            MessageType = MessageTypeEnum.System,
+
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await _repositories.MessageRepository.AddAsync(systemMessage);
 
         await _repositories.UnitOfWork.SaveChangesAsync();
     }

@@ -57,6 +57,7 @@ internal class ConversationService : IConversationService
                 c.Type,
                 c.Name,
                 c.CreatedAt,
+                c.LastMessageAt,
 
                 LogoThumbnailUrl = c.LogoFile != null
                     ? c.LogoFile.ThumbnailUrl
@@ -73,7 +74,12 @@ internal class ConversationService : IConversationService
                     })
                     .FirstOrDefault(),
 
-                ActiveParticipantCount = c.ConversationParticipants.Count(p => !p.HasLeft)
+                ActiveParticipantCount = c.ConversationParticipants.Count(p => !p.HasLeft),
+
+                ReadState = c.ReadStates
+                    .Where(rs => rs.UserId == userId)
+                    .Select(rs => new { rs.UnreadCount, rs.MentionCount })
+                    .FirstOrDefault()
             })
             .Select(c => new ConversationDto
             {
@@ -82,6 +88,10 @@ internal class ConversationService : IConversationService
                 Name = c.Name,
                 LogoThumbnailUrl = c.LogoThumbnailUrl,
                 CreatedAt = c.CreatedAt,
+
+                LastMessageAt = c.LastMessageAt,
+                UnreadCount = c.ReadState != null ? c.ReadState.UnreadCount : 0,
+                MentionCount = c.ReadState != null ? c.ReadState.MentionCount : 0,
 
                 ParticipantCount = c.Type == ConversationTypeEnum.Direct ? 2 : c.ActiveParticipantCount,
                 Role = c.Type == ConversationTypeEnum.Direct || c.CallerParticipant == null ? null : c.CallerParticipant.Role,
@@ -386,6 +396,21 @@ internal class ConversationService : IConversationService
             FileType = fileType,
         };
 
+        var systemMessage = new Message
+        {
+            ClientMessageId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            SenderId = authUserId,
+
+            Content = $"Group Icon has been changed.",
+            MessageType = MessageTypeEnum.System,
+
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await _repositories.MessageRepository.AddAsync(systemMessage);
+
         await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
         try
         {
@@ -426,6 +451,24 @@ internal class ConversationService : IConversationService
         if (conversation.Type != ConversationTypeEnum.Group)
             throw new InvalidDataAppException("Only Group conversations can be renamed.");
 
+        if (!string.Equals(conversation.Name, dto.Name.Trim(), StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var systemMessage = new Message
+        {
+            ClientMessageId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            SenderId = userId,
+
+            Content = $"Group has been renamed from {conversation.Name} to {dto.Name}.",
+            MessageType = MessageTypeEnum.System,
+
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await _repositories.MessageRepository.AddAsync(systemMessage);
+
         conversation.Name = dto.Name.Trim();
 
         await _repositories.UnitOfWork.SaveChangesAsync();
@@ -451,6 +494,21 @@ internal class ConversationService : IConversationService
             ?? _httpContext.GetUserId()
             ?? "System";
 
+        var systemMessage = new Message
+        {
+            ClientMessageId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            SenderId = authUserId,
+
+            Content = $"Group logo has been removed.",
+            MessageType = MessageTypeEnum.System,
+
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+
         await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
         try
         {
@@ -464,7 +522,8 @@ internal class ConversationService : IConversationService
 
             conv.LogoFileId = null;
 
-            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
+            await _repositories.MessageRepository.AddAsync(systemMessage);
+
             await tx.CommitAsync();
             _repositories.UnitOfWork.FlushPendingAuditLogs();
 
@@ -492,6 +551,7 @@ internal class ConversationService : IConversationService
                 c.Type,
                 c.Name,
                 c.CreatedAt,
+                c.LastMessageAt,
 
                 LogoThumbnailUrl = c.LogoFile != null
                     ? c.LogoFile.ThumbnailUrl
@@ -508,7 +568,12 @@ internal class ConversationService : IConversationService
                     })
                     .FirstOrDefault(),
 
-                ActiveParticipantCount = c.ConversationParticipants.Count(p => !p.HasLeft)
+                ActiveParticipantCount = c.ConversationParticipants.Count(p => !p.HasLeft),
+
+                ReadState = c.ReadStates
+                    .Where(rs => rs.UserId == userId)
+                    .Select(rs => new { rs.UnreadCount, rs.MentionCount })
+                    .FirstOrDefault()
             })
             .Select(c => new ConversationDto
             {
@@ -517,6 +582,10 @@ internal class ConversationService : IConversationService
                 Name = c.Name,
                 LogoThumbnailUrl = c.LogoThumbnailUrl,
                 CreatedAt = c.CreatedAt,
+
+                LastMessageAt = c.LastMessageAt,
+                UnreadCount = c.ReadState != null ? c.ReadState.UnreadCount : 0,
+                MentionCount = c.ReadState != null ? c.ReadState.MentionCount : 0,
 
                 ParticipantCount = c.Type == ConversationTypeEnum.Direct ? 2 : c.ActiveParticipantCount,
                 Role = c.Type == ConversationTypeEnum.Direct || c.CallerParticipant == null ? null : c.CallerParticipant.Role,
