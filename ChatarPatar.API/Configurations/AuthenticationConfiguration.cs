@@ -1,8 +1,6 @@
-﻿using ChatarPatar.API.Models;
-using ChatarPatar.Common.Consts;
+﻿using ChatarPatar.Common.Consts;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
-using Newtonsoft.Json;
 using System.Net;
 using System.Security.Claims;
 using System.Text;
@@ -12,8 +10,9 @@ namespace ChatarPatar.API.Configuration
     public static class AuthenticationConfiguration
     {
         public static void AddAuthenticationConfiguration(this IServiceCollection services, IConfiguration configuration)
-          {
+        {
             var accessTokenName = configuration.GetSection("TokenSettings:AccessTokenName").Value!;
+            var secretKey = ValidateAndGetSecretKey(configuration);
 
             services.AddAuthentication(option =>
             {
@@ -25,7 +24,7 @@ namespace ChatarPatar.API.Configuration
                 option.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration.GetSection("TokenSettings:SecretKey").Value!)),
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
 
                     ValidateAudience = true,
                     ValidAudiences = configuration.GetSection("TokenSettings:Audience").Get<List<string>>(),
@@ -89,6 +88,8 @@ namespace ChatarPatar.API.Configuration
             });
         }
 
+        #region Private Section
+
         private static void SetErrorContext(HttpContext httpContext, HttpStatusCode statusCode, string exceptionCode, string message)
         {
             httpContext.Items["ExceptionCode"] = exceptionCode;
@@ -96,5 +97,24 @@ namespace ChatarPatar.API.Configuration
 
             httpContext.Response.StatusCode = (int)statusCode;
         }
+
+        private static string ValidateAndGetSecretKey(IConfiguration configuration)
+        {
+            var secretKey = configuration.GetSection("TokenSettings:SecretKey").Value;
+
+            if (string.IsNullOrWhiteSpace(secretKey))
+                throw new InvalidOperationException(
+                    "TokenSettings:SecretKey is missing. Set a strong secret (at least 32 characters) in configuration before starting the application.");
+
+            if (Encoding.UTF8.GetByteCount(secretKey) < 32)
+                throw new InvalidOperationException(
+                    $"TokenSettings:SecretKey is too weak ({Encoding.UTF8.GetByteCount(secretKey)} bytes). " +
+                    "It must be at least 32 bytes (256 bits) for HMAC-SHA256 signing. " +
+                    "Generate one with: openssl rand -base64 32");
+
+            return secretKey;
+        }
+
+        #endregion
     }
 }

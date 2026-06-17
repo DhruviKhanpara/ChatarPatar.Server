@@ -138,6 +138,28 @@ internal class ConversationParticipantService : IConversationParticipantService
             });
         }
 
+        var addedUser = await _repositories.UserRepository
+            .FindByCondition(u => u.Id == dto.UserId)
+            .Select(u => u.Name)
+            .FirstAsync();
+
+        var action = existingParticipant is not null ? "rejoined" : "was added to";
+
+        var systemMessage = new Message
+        {
+            ClientMessageId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            SenderId = userId,
+
+            MessageType = MessageTypeEnum.System,
+            Content = $"{addedUser} {action} the Group.",
+            
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await _repositories.MessageRepository.AddAsync(systemMessage);
+
         await _repositories.UnitOfWork.SaveChangesAsync();
     }
 
@@ -169,6 +191,7 @@ internal class ConversationParticipantService : IConversationParticipantService
     public async Task LeaveConversationAsync(Guid conversationId)
     {
         var userId = Guid.Parse(_httpContext.GetUserId());
+        var userName = _httpContext.GetUserName();
 
         var participant = await _repositories.ConversationParticipantRepository
             .GetActiveParticipant(userId, conversationId)
@@ -197,6 +220,21 @@ internal class ConversationParticipantService : IConversationParticipantService
         participant.HasLeft = true;
         participant.LeftAt = DateTime.UtcNow;
 
+        var systemMessage = new Message
+        {
+            ClientMessageId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            SenderId = userId,
+
+            MessageType = MessageTypeEnum.System,
+            Content = $"{userName} left the Group.",
+
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await _repositories.MessageRepository.AddAsync(systemMessage);
+
         await _repositories.UnitOfWork.SaveChangesAsync();
 
         TryInvalidatePermissions(participant.UserId, "Failed to invalidate permissions for user {UserId} after leaving the group");
@@ -220,6 +258,26 @@ internal class ConversationParticipantService : IConversationParticipantService
 
         participant.HasLeft = true;
         participant.LeftAt = DateTime.UtcNow;
+
+        var removedUser = await _repositories.UserRepository
+            .FindByCondition(u => u.Id == participant.UserId)
+            .Select(u => u.Name)
+            .FirstAsync();
+
+        var systemMessage = new Message
+        {
+            ClientMessageId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            SenderId = userId,
+
+            MessageType = MessageTypeEnum.System,
+            Content = $"{removedUser} removed from the Group.",
+
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await _repositories.MessageRepository.AddAsync(systemMessage);
 
         await _repositories.UnitOfWork.SaveChangesAsync();
 

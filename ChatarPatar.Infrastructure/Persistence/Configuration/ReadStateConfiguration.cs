@@ -66,12 +66,12 @@ public class ReadStateConfiguration : IEntityTypeConfiguration<ReadState>
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(r => r.Channel)
-               .WithMany()
+               .WithMany(r => r.ReadStates)
                .HasForeignKey(r => r.ChannelId)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(r => r.Conversation)
-               .WithMany()
+               .WithMany(r => r.ReadStates)
                .HasForeignKey(r => r.ConversationId)
                .OnDelete(DeleteBehavior.Restrict);
 

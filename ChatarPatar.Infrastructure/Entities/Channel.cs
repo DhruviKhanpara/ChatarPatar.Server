@@ -16,6 +16,7 @@ public class Channel : AuditableEntity
     public User? ArchivedByUser { get; set; }
 
     public virtual List<ChannelMember> ChannelMembers { get; set; } = new List<ChannelMember>();
+    public virtual List<ReadState> ReadStates { get; set; } = new List<ReadState>();
     #endregion
 
     public Guid TeamId { get; set; }

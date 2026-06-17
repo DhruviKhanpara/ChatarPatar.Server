@@ -25,4 +25,6 @@ public class ChannelWithRoleDto : ChannelDto
     public ChannelRoleEnum? Role { get; set; }
     public DateTime? JoinedAt { get; set; }
     public bool? IsMuted { get; set; }
+    public int UnreadCount { get; set; }
+    public int MentionCount { get; set; }
 }

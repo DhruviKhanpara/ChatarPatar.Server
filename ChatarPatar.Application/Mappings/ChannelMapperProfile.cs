@@ -18,7 +18,9 @@ public class ChannelMapperProfile : Profile
             .ForMember(dest => dest.MemberCount, opt => opt.MapFrom(src => src.ChannelMembers.Count(m => !m.IsDeleted)))
             .ForMember(dest => dest.Role, opt => opt.Ignore())
             .ForMember(dest => dest.JoinedAt, opt => opt.Ignore())
-            .ForMember(dest => dest.IsMuted, opt => opt.Ignore());
+            .ForMember(dest => dest.IsMuted, opt => opt.Ignore())
+            .ForMember(dest => dest.UnreadCount, opt => opt.Ignore())
+            .ForMember(dest => dest.MentionCount, opt => opt.Ignore());
 
         CreateMap<CreateChannelDto, Channel>(MemberList.Source)
             .ForMember(dest => dest.RowVersion, opt => opt.Ignore());

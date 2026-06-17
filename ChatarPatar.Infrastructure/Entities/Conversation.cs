@@ -16,6 +16,7 @@ public class Conversation : AuditableEntity
 
     public virtual List<ConversationParticipant> ConversationParticipants { get; set; } = new List<ConversationParticipant>();
     public virtual List<Message> Messages { get; set; } = new List<Message>();
+    public virtual List<ReadState> ReadStates { get; set; } = new List<ReadState>();
     #endregion
 
     public ConversationTypeEnum Type { get; set; }
