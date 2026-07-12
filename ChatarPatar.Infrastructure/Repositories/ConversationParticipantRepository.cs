@@ -15,8 +15,6 @@ internal class ConversationParticipantRepository : BaseRepository<ConversationPa
     public Task<ConversationParticipant?> GetByIdAsync(Guid participantId, Guid conversationId) =>
         FindByCondition(p => p.Id == participantId && p.ConversationId == conversationId)
             .FirstOrDefaultAsync();
-    public Task<bool> IsActiveParticipantAsync(Guid userId, Guid conversationId) =>
-        AnyAsync(p => p.UserId == userId && p.ConversationId == conversationId && !p.HasLeft);
 
     public IQueryable<ConversationParticipant> GetActiveParticipantsQuery(Guid conversationId) =>
         FindByCondition(p => p.ConversationId == conversationId && !p.HasLeft);

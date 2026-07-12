@@ -1,5 +1,7 @@
 ﻿using ChatarPatar.Common.Enums;
 using ChatarPatar.Common.Models;
+using ChatarPatar.Common.SignalR;
+using ChatarPatar.Common.SignalR.Model;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.ExternalServiceContracts.Notification;
 using ChatarPatar.Infrastructure.RepositoryContracts;
@@ -13,23 +15,27 @@ namespace ChatarPatar.Infrastructure.ExternalServices.Notification.Handlers;
 /// Outbox handler for Type = "MessageSent.Channel".
 ///
 /// Responsibility:
-///  1. Fan out ReadState (UnreadCount / MentionCount) increments to every 
+///  1. Fan out ReadState (UnreadCount / MentionCount) increments to every
 ///     active channel member except the sender.
 ///  2. Create Mention notifications for every mentioned user (except sender).
-///  3. Create ThreadReply notification for the thread root's sender (if different
-///     from the current sender and root sender is still an active member).
+///  3. Create ThreadReply notification for the thread root's sender.
+///  4. Push SignalR events post-commit (non-fatal):
+///       a. ReadStateUpdated  → user:{memberId}
+///       b. NotificationReceived → user:{recipientId}
 /// </summary>
 internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
 {
     public string MessageType => MessageSentChannelPayload.OutboxType;
 
     private readonly IRepositoryManager _repositories;
+    private readonly ISignalRPushService _signalR;
     private readonly ILogger<MessageSentChannelOutboxHandler> _logger;
 
-    public MessageSentChannelOutboxHandler(IRepositoryManager repositories, ILogger<MessageSentChannelOutboxHandler> logger)
+    public MessageSentChannelOutboxHandler(IRepositoryManager repositories, ILogger<MessageSentChannelOutboxHandler> logger, ISignalRPushService signalR)
     {
         _repositories = repositories;
         _logger = logger;
+        _signalR = signalR;
     }
 
     public async Task HandleAsync(OutboxMessage message)
@@ -77,10 +83,9 @@ internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
         }
 
         var now = DateTime.UtcNow;
+        var mentionedSet = payload.MentionedUserIds?.ToHashSet() ?? [];
 
         // ── Phase 1: ReadState fanout ──────────────────────────────────────
-
-        var mentionedSet = payload.MentionedUserIds?.ToHashSet() ?? [];
 
         // ── Bulk-load existing ReadState rows for this channel ─────────────
         var existingReadStates = await _repositories.ReadStateRepository
@@ -147,10 +152,7 @@ internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
             await _repositories.NotificationRepository.AddRangeAsync(notifications);
 
 
-        // ── Persist all ReadState updates and notification in a single transaction ──────────
-        // SaveChangesWithoutAuditAsync is used so that updating N data rows
-        // does not produce N individual audit log entries — only the single
-        // summary log below is written after a successful commit.
+        // ── Phase 2: Persist ──────────────────────────────────────────────
         await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
         try
         {
@@ -173,6 +175,49 @@ internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
         // GenericOutboxProcessor's final SaveChangesAsync accidentally re-touches them.
         foreach (var readState in existingReadStates)
             _repositories.UnitOfWork.DetachEntity(readState);
+
+        // ── Phase 4: SignalR pushes (post-commit) ──────────────────────────────
+
+        foreach (var rs in existingReadStates)
+        {
+            // 4a. Badge update
+            try
+            {
+                await _signalR.PushReadStateBadgeAsync(rs.UserId, new ReadStatePush
+                {
+                    ChannelId = payload.ChannelId,
+                    UnreadCount = rs.UnreadCount,
+                    MentionCount = rs.MentionCount,
+                    LastMessageAt = now
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[OUTBOX] ReadStateBadge push failed. UserId={UserId}", rs.UserId);
+            }
+        }
+
+        // 4c. Notifications to each recipient's personal group
+        foreach (var n in notifications)
+        {
+            try
+            {
+                await _signalR.PushNotificationAsync(n.RecipientId, new NotificationPush
+                {
+                    Id = n.Id,
+                    Type = n.Type,
+                    ActorId = n.ActorId,
+                    MessageId = n.MessageId,
+                    ChannelId = n.ChannelId,
+                    Preview = n.Preview,
+                    CreatedAt = n.CreatedAt
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[OUTBOX] NotificationPush failed. UserId={UserId}", n.RecipientId);
+            }
+        }
 
         _logger.LogInformation(
             "[OUTBOX] ReadState fanout complete — MessageId={MessageId} ChannelId={ChannelId} MembersUpdated={Count} MentionsUpdated={MentionCount}",

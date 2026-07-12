@@ -2,7 +2,9 @@
 using AutoMapper.QueryableExtensions;
 using ChatarPatar.Application.DTOs.Common;
 using ChatarPatar.Application.DTOs.ConversationParticipant;
+using ChatarPatar.Application.DTOs.Message;
 using ChatarPatar.Application.ServiceContracts;
+using ChatarPatar.Application.ServiceContracts.SignalR;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.Consts;
 using ChatarPatar.Common.Enums;
@@ -25,8 +27,9 @@ internal class ConversationParticipantService : IConversationParticipantService
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IPermissionService _permissionService;
     private readonly ILogger<ConversationParticipantService> _logger;
+    private readonly ISignalRService _signalR;
 
-    public ConversationParticipantService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IPermissionService permissionService, ILogger<ConversationParticipantService> logger)
+    public ConversationParticipantService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IPermissionService permissionService, ILogger<ConversationParticipantService> logger, ISignalRService signalR)
     {
         _repositories = repositories;
         _mapper = mapper;
@@ -34,6 +37,7 @@ internal class ConversationParticipantService : IConversationParticipantService
         _httpContextAccessor = httpContextAccessor;
         _permissionService = permissionService;
         _logger = logger;
+        _signalR = signalR;
     }
     private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
 
@@ -161,6 +165,11 @@ internal class ConversationParticipantService : IConversationParticipantService
         await _repositories.MessageRepository.AddAsync(systemMessage);
 
         await _repositories.UnitOfWork.SaveChangesAsync();
+
+        var messageDto = await GetSystemMessageDto(systemMessage.Id);
+
+        try { await _signalR.BroadcastConversationMessageAsync(conversationId, messageDto); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessage (add member) failed. ConversationId={Id}", conversationId); }
     }
 
     public async Task UpdateParticipantRoleAsync(Guid conversationId, Guid participantId, UpdateConversationParticipantRoleDto dto)
@@ -237,6 +246,11 @@ internal class ConversationParticipantService : IConversationParticipantService
 
         await _repositories.UnitOfWork.SaveChangesAsync();
 
+        var messageDto = await GetSystemMessageDto(systemMessage.Id);
+
+        try { await _signalR.BroadcastConversationMessageAsync(conversationId, messageDto); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessage (leave) failed. ConversationId={Id}", conversationId); }
+
         TryInvalidatePermissions(participant.UserId, "Failed to invalidate permissions for user {UserId} after leaving the group");
     }
 
@@ -281,6 +295,11 @@ internal class ConversationParticipantService : IConversationParticipantService
 
         await _repositories.UnitOfWork.SaveChangesAsync();
 
+        var messageDto = await GetSystemMessageDto(systemMessage.Id);
+
+        try { await _signalR.BroadcastConversationMessageAsync(conversationId, messageDto); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessage (remove participant) failed. ConversationId={Id}", conversationId); }
+
         TryInvalidatePermissions(participant.UserId, "Failed to invalidate permissions for user {UserId} after removing the group");
     }
 
@@ -308,6 +327,15 @@ internal class ConversationParticipantService : IConversationParticipantService
         {
             throw new InvalidDataAppException($"Group must have at least {ValidationConstants.Conversation.MinGroupParticipantsCount} participants.");
         }
+    }
+
+    private async Task<MessageDto> GetSystemMessageDto(Guid messageId)
+    {
+        return await _repositories.MessageRepository
+            .FindByCondition(m => m.Id == messageId)
+            .AsNoTracking()
+            .ProjectTo<MessageDto>(_mapper.ConfigurationProvider)
+            .FirstAsync();
     }
 
     #endregion

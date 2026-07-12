@@ -5,6 +5,7 @@ using ChatarPatar.Application.DTOs.Message.Pin;
 using ChatarPatar.Application.DTOs.Message.Reaction;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Application.ServiceContracts.Notification;
+using ChatarPatar.Application.ServiceContracts.SignalR;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.AppLogging.Model.LogRequest;
 using ChatarPatar.Common.Consts;
@@ -12,6 +13,7 @@ using ChatarPatar.Common.Enums;
 using ChatarPatar.Common.Helpers;
 using ChatarPatar.Common.HttpUserDetails;
 using ChatarPatar.Common.Models;
+using ChatarPatar.Common.SignalR.Model;
 using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.Helpers;
 using ChatarPatar.Infrastructure.RepositoryContracts;
@@ -29,8 +31,9 @@ internal class MessageService : IMessageService
     private readonly ILogger<MessageService> _logger;
     private readonly IMapper _mapper;
     private readonly IOutboxBackgroundQueue _queue;
+    private readonly ISignalRService _signalR;
 
-    public MessageService(IRepositoryManager repositories, IValidationService validationService, IHttpContextAccessor httpContextAccessor, ILogger<MessageService> logger, IMapper mapper, IOutboxBackgroundQueue queue)
+    public MessageService(IRepositoryManager repositories, IValidationService validationService, IHttpContextAccessor httpContextAccessor, ILogger<MessageService> logger, IMapper mapper, IOutboxBackgroundQueue queue, ISignalRService signalR)
     {
         _repositories = repositories;
         _validationService = validationService;
@@ -38,6 +41,7 @@ internal class MessageService : IMessageService
         _logger = logger;
         _mapper = mapper;
         _queue = queue;
+        _signalR = signalR;
     }
     private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
 
@@ -206,7 +210,7 @@ internal class MessageService : IMessageService
                     .Select(m => (Guid?)m.SenderId)
                     .FirstOrDefaultAsync();
             }
-
+            
             var contentPreview = BuildContentSnapshot(dto.Content, attachedFiles.FirstOrDefault());
 
             var outboxMessage = OutboxMessageFactory.BuildChannelSendMessage(dto.MentionedUserIds, channelId, message.Id, message.SequenceNumber, senderId, authUserName,  dto.ThreadRootMessageId, threadRootSenderId, contentPreview);
@@ -234,10 +238,27 @@ internal class MessageService : IMessageService
             throw;
         }
 
-        // SignalR: wire here once Hub is ready
-        // _hubContext.Clients.Group(groupKey).SendAsync("MessageReceived", dto);
+        var messageDto = await GetMessageDto(message.Id);
 
-        return await GetMessageDto(message.Id);
+        try { await _signalR.BroadcastChannelMessageAsync(channelId, messageDto); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelMessage failed. MessageId={Id}", message.Id); }
+
+        // Push thread counter update to root message viewers
+        if (dto.ThreadRootMessageId.HasValue)
+        {
+            var root = await _repositories.MessageRepository
+                .FindByCondition(m => m.Id == dto.ThreadRootMessageId.Value)
+                .Select(m => new { m.ReplyCount, m.LastReplyAt })
+                .FirstOrDefaultAsync();
+
+            if (root?.LastReplyAt is not null)
+            {
+                try { await _signalR.BroadcastChannelThreadUpdateAsync(channelId, new ThreadUpdatePush(dto.ThreadRootMessageId.Value, root.ReplyCount, root.LastReplyAt.Value)); }
+                catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelThreadUpdate failed."); }
+            }
+        }
+
+        return messageDto;
     }
 
     public async Task<MessageDto> EditChannelMessageAsync(Guid orgId, Guid teamId, Guid channelId, Guid messageId, EditMessageDto dto)
@@ -350,7 +371,12 @@ internal class MessageService : IMessageService
             throw;
         }
 
-        return await GetMessageDto(messageId);
+        var messageDto = await GetMessageDto(messageId);
+        
+        try { await _signalR.BroadcastChannelMessageEditedAsync(channelId, messageDto); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelMessageEdited failed."); }
+        
+        return messageDto;
     }
 
     /// <summary>
@@ -371,7 +397,12 @@ internal class MessageService : IMessageService
         if (!messageExists)
             throw new NotFoundAppException("Message");
 
-        return await ToggleReactionAsync(messageId, channelId, null, authUserId, dto.Emoji);
+        var result = await ToggleReactionAsync(messageId, channelId, null, authUserId, dto.Emoji);
+
+        try { await _signalR.BroadcastChannelReactionAsync(channelId, messageId, result); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelReaction failed."); }
+
+        return result;
     }
 
     public async Task<PinnedMessageResponseDto> PinChannelMessageAsync(Guid channelId, Guid messageId)
@@ -423,7 +454,12 @@ internal class MessageService : IMessageService
             await _repositories.PinnedMessageRepository.AddAsync(pin);
             await _repositories.UnitOfWork.SaveChangesAsync();
 
-            return _mapper.Map<PinnedMessageResponseDto>(pin);
+            var pinDto = _mapper.Map<PinnedMessageResponseDto>(pin);
+
+            try { await _signalR.BroadcastChannelPinAsync(channelId, pinDto); }
+            catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelPin failed."); }
+
+            return pinDto;
         }
         catch (DbUpdateException ex) when (ex.IsPinnedMessagePerChannelUniqueViolation())
         {
@@ -460,6 +496,9 @@ internal class MessageService : IMessageService
         message.UpdatedAt = DateTime.UtcNow;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
+
+        try { await _signalR.BroadcastChannelMessageDeletedAsync(channelId, messageId, authUserId); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelMessageDeleted failed."); }
     }
 
     public async Task ForceDeleteChannelMessageAsync(Guid orgId, Guid teamId, Guid channelId, Guid messageId)
@@ -483,6 +522,9 @@ internal class MessageService : IMessageService
         message.UpdatedAt = DateTime.UtcNow;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
+
+        try { await _signalR.BroadcastChannelMessageDeletedAsync(channelId, messageId, authUserId); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelMessageDeleted failed."); }
     }
 
     #endregion
@@ -702,10 +744,26 @@ internal class MessageService : IMessageService
             throw;
         }
 
-        // SignalR: wire here once Hub is ready
-        // _hubContext.Clients.Group(groupKey).SendAsync("MessageReceived", dto);
+        var messageDto = await GetMessageDto(message.Id);
 
-        return await GetMessageDto(message.Id);
+        try { await _signalR.BroadcastConversationMessageAsync(conversationId, messageDto); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessage failed. MessageId={Id}", message.Id); }
+
+        if (dto.ThreadRootMessageId.HasValue)
+        {
+            var root = await _repositories.MessageRepository
+                .FindByCondition(m => m.Id == dto.ThreadRootMessageId.Value)
+                .Select(m => new { m.ReplyCount, m.LastReplyAt })
+                .FirstOrDefaultAsync();
+
+            if (root?.LastReplyAt is not null)
+            {
+                try { await _signalR.BroadcastConversationThreadUpdateAsync(conversationId, new ThreadUpdatePush(dto.ThreadRootMessageId.Value, root.ReplyCount, root.LastReplyAt.Value)); }
+                catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationThreadUpdate failed."); }
+            }
+        }
+
+        return messageDto;
     }
 
     public async Task<MessageDto> EditConversationMessageAsync(Guid conversationId, Guid messageId, EditMessageDto dto)
@@ -810,7 +868,12 @@ internal class MessageService : IMessageService
             throw;
         }
 
-        return await GetMessageDto(messageId);
+        var messageDto = await GetMessageDto(messageId);
+
+        try { await _signalR.BroadcastConversationMessageEditedAsync(conversationId, messageDto); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessageEdited failed."); }
+
+        return messageDto;
     }
 
     /// <summary>
@@ -831,7 +894,12 @@ internal class MessageService : IMessageService
         if (!messageExists)
             throw new NotFoundAppException("Message");
 
-        return await ToggleReactionAsync(messageId, null, conversationId, authUserId, dto.Emoji);
+        var result = await ToggleReactionAsync(messageId, null, conversationId, authUserId, dto.Emoji);
+        
+        try { await _signalR.BroadcastConversationReactionAsync(conversationId, messageId, result); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationReaction failed."); }
+        
+        return result;
     }
 
     public async Task<PinnedMessageResponseDto> PinConversationMessageAsync(Guid conversationId, Guid messageId)
@@ -875,7 +943,12 @@ internal class MessageService : IMessageService
             await _repositories.PinnedMessageRepository.AddAsync(pin);
             await _repositories.UnitOfWork.SaveChangesAsync();
 
-            return _mapper.Map<PinnedMessageResponseDto>(pin);
+            var pinDto = _mapper.Map<PinnedMessageResponseDto>(pin);
+
+            try { await _signalR.BroadcastConversationPinAsync(conversationId, pinDto); }
+            catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelPin failed."); }
+
+            return pinDto;
         }
         catch (DbUpdateException ex) when (ex.IsPinnedMessagePerConversationUniqueViolation())
         {
@@ -912,6 +985,9 @@ internal class MessageService : IMessageService
         message.UpdatedAt = DateTime.UtcNow;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
+
+        try { await _signalR.BroadcastConversationMessageDeletedAsync(conversationId, messageId, authUserId); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessageDeleted failed."); }
     }
 
     public async Task ForceDeleteConversationMessageAsync(Guid conversationId, Guid messageId)
@@ -935,6 +1011,9 @@ internal class MessageService : IMessageService
         message.UpdatedAt = DateTime.UtcNow;
 
         await _repositories.UnitOfWork.SaveChangesAsync();
+
+        try { await _signalR.BroadcastConversationMessageDeletedAsync(conversationId, messageId, authUserId); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessageDeleted failed."); }
     }
 
     #endregion

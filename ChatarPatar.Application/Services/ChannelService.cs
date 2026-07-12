@@ -2,7 +2,9 @@
 using AutoMapper.QueryableExtensions;
 using ChatarPatar.Application.Common.Extensions;
 using ChatarPatar.Application.DTOs.Channel;
+using ChatarPatar.Application.DTOs.Message;
 using ChatarPatar.Application.ServiceContracts;
+using ChatarPatar.Application.ServiceContracts.SignalR;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.AppLogging.Model.LogRequest;
 using ChatarPatar.Common.Enums;
@@ -13,6 +15,7 @@ using ChatarPatar.Infrastructure.Entities;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace ChatarPatar.Application.Services;
 
@@ -22,13 +25,17 @@ internal class ChannelService : IChannelService
     private readonly IMapper _mapper;
     private readonly IValidationService _validationService;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly ISignalRService _signalR;
+    private readonly ILogger<ChannelService> _logger;
 
-    public ChannelService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor)
+    public ChannelService(IRepositoryManager repositories, IMapper mapper, IValidationService validationService, IHttpContextAccessor httpContextAccessor, ISignalRService signalR, ILogger<ChannelService> logger)
     {
         _repositories = repositories;
         _mapper = mapper;
         _validationService = validationService;
         _httpContextAccessor = httpContextAccessor;
+        _signalR = signalR;
+        _logger = logger;
     }
     private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
 
@@ -271,13 +278,18 @@ internal class ChannelService : IChannelService
 
         channel.EnsureEditable();
 
-        if (!string.Equals(channel.Name, dto.Name.Trim(), StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(channel.Name, dto.Name.Trim(), StringComparison.OrdinalIgnoreCase))
         {
-            var nameExists = await _repositories.ChannelRepository
+            _mapper.Map<UpdateChannelDto, Channel>(dto, channel);
+            await _repositories.UnitOfWork.SaveChangesAsync();
+            return;
+        }
+
+        var nameExists = await _repositories.ChannelRepository
                 .NameExistsInTeamAsync(teamId, dto.Name, excludeChannelId: channelId);
 
-            if (nameExists)
-                throw new DuplicateEntryAppException("A channel with this name already exists in the team.");
+        if (nameExists)
+            throw new DuplicateEntryAppException("A channel with this name already exists in the team.");
 
         var systemMessage = new Message
         {
@@ -293,11 +305,15 @@ internal class ChannelService : IChannelService
         };
 
         await _repositories.MessageRepository.AddAsync(systemMessage);
-        }
 
         _mapper.Map<UpdateChannelDto, Channel>(dto, channel);
 
         await _repositories.UnitOfWork.SaveChangesAsync();
+
+        var messageDto = await GetSystemMessageDto(systemMessage.Id);
+
+        try { await _signalR.BroadcastChannelMessageAsync(channelId, messageDto); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelMessage (rename) failed. ChannelId={Id}", channelId); }
     }
 
     public async Task ArchiveChannelAsync(Guid orgId, Guid teamId, Guid channelId)
@@ -334,6 +350,11 @@ internal class ChannelService : IChannelService
         await _repositories.MessageRepository.AddAsync(systemMessage);
 
         await _repositories.UnitOfWork.SaveChangesAsync();
+
+        var messageDto = await GetSystemMessageDto(systemMessage.Id);
+
+        try { await _signalR.BroadcastChannelMessageAsync(channelId, messageDto); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelMessage (archive) failed. ChannelId={Id}", channelId); }
     }
 
     public async Task UnarchiveChannelAsync(Guid orgId, Guid teamId, Guid channelId)
@@ -373,5 +394,23 @@ internal class ChannelService : IChannelService
         await _repositories.MessageRepository.AddAsync(systemMessage);
 
         await _repositories.UnitOfWork.SaveChangesAsync();
+
+        var messageDto = await GetSystemMessageDto(systemMessage.Id);
+
+        try { await _signalR.BroadcastChannelMessageAsync(channelId, messageDto); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelMessage (unarchive) failed. ChannelId={Id}", channelId); }
     }
+
+    #region Private Section
+
+    private async Task<MessageDto> GetSystemMessageDto(Guid messageId)
+    {
+        return await _repositories.MessageRepository
+            .FindByCondition(m => m.Id == messageId)
+            .AsNoTracking()
+            .ProjectTo<MessageDto>(_mapper.ConfigurationProvider)
+            .FirstAsync();
+    }
+
+    #endregion
 }

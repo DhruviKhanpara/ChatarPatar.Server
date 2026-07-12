@@ -31,6 +31,12 @@ public class ResponseWrapperMiddleware
 
     public async Task Invoke(HttpContext httpContext)
     {
+        if (httpContext.Request.Path.StartsWithSegments("/hubs"))
+        {
+            await _next(httpContext);
+            return;
+        }
+
         Stream originalStream = httpContext.Response.Body;
 
         await using var memoryStream = new MemoryStream();

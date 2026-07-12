@@ -14,7 +14,6 @@ public static class DbConstraints
     {
         public const string CKStatus = "CK_UserStatus_Status";
         public const string CKCustomStatus = "CK_UserStatus_CustomStatus";
-        public const string CKLogical = "CK_UserStatus_Logical";
 
         public const string IXStatus = "IX_UserStatus_Status";
     }

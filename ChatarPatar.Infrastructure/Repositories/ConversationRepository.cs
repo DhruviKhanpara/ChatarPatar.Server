@@ -44,5 +44,18 @@ internal class ConversationRepository : BaseSoftDeleteRepository<Conversation>, 
             c.DirectParticipantBId == userB)
             .FirstOrDefaultAsync();
     }
+
+    public Task<bool> IsActiveParticipantAsync(Guid userId, Guid conversationId)
+    {
+        return AnyAsync(c =>
+            c.Id == conversationId &&
+            (
+                (c.Type == ConversationTypeEnum.Direct &&
+                    (c.DirectParticipantAId == userId || c.DirectParticipantBId == userId))
+                ||
+                (c.Type == ConversationTypeEnum.Group &&
+                    c.ConversationParticipants.Any(p => p.UserId == userId && !p.HasLeft))
+            ));
+    }
 }
 

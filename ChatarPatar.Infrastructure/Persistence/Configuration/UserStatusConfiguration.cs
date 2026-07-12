@@ -18,10 +18,6 @@ public class UserStatusConfiguration : IEntityTypeConfiguration<UserStatus>
             t.HasCheckConstraint(
                 DbConstraints.UserStatuses.CKCustomStatus,
                 "CustomStatus IS NULL OR CustomStatus BETWEEN 1 AND 6");
-
-            t.HasCheckConstraint(
-                DbConstraints.UserStatuses.CKLogical,
-                "(Status = 0 AND CustomStatus IS NULL) OR (Status = 1 AND (CustomStatus IS NULL OR CustomStatus IN (1,2,3))) OR (Status = 2 AND (CustomStatus IS NULL OR CustomStatus IN (4,5)))");
         });
 
         builder.HasKey(u => u.UserId);

@@ -1,7 +1,11 @@
-﻿using ChatarPatar.Application.DTOs.Common;
+﻿using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using ChatarPatar.Application.DTOs.Common;
 using ChatarPatar.Application.DTOs.Conversation;
+using ChatarPatar.Application.DTOs.Message;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Application.ServiceContracts.Notification;
+using ChatarPatar.Application.ServiceContracts.SignalR;
 using ChatarPatar.Common.AppExceptions.CustomExceptions;
 using ChatarPatar.Common.AppLogging.Model.LogRequest;
 using ChatarPatar.Common.Enums;
@@ -26,8 +30,10 @@ internal class ConversationService : IConversationService
     private readonly IExternalServiceManager _externalServiceManager;
     private readonly ILogger<ConversationService> _logger;
     private readonly IOutboxBackgroundQueue _queue;
+    private readonly ISignalRService _signalR;
+    private readonly IMapper _mapper;
 
-    public ConversationService(IRepositoryManager repositories, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IExternalServiceManager externalServiceManager, ILogger<ConversationService> logger, IOutboxBackgroundQueue queue)
+    public ConversationService(IRepositoryManager repositories, IValidationService validationService, IHttpContextAccessor httpContextAccessor, IExternalServiceManager externalServiceManager, ILogger<ConversationService> logger, IOutboxBackgroundQueue queue, ISignalRService signalR, IMapper mapper)
     {
         _repositories = repositories;
         _validationService = validationService;
@@ -35,6 +41,8 @@ internal class ConversationService : IConversationService
         _externalServiceManager = externalServiceManager;
         _logger = logger;
         _queue = queue;
+        _signalR = signalR;
+        _mapper = mapper;
     }
     private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");
 
@@ -433,6 +441,11 @@ internal class ConversationService : IConversationService
 
             throw;
         }
+
+        var messageDto = await GetSystemMessageDto(systemMessage.Id);
+
+        try { await _signalR.BroadcastConversationMessageAsync(conversationId, messageDto); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessage (Group logo update) failed. ConversationId={Id}", conversationId); }
     }
 
     public async Task UpdateGroupConversationAsync(Guid conversationId, UpdateGroupConversationDto dto)
@@ -472,6 +485,11 @@ internal class ConversationService : IConversationService
         conversation.Name = dto.Name.Trim();
 
         await _repositories.UnitOfWork.SaveChangesAsync();
+
+        var messageDto = await GetSystemMessageDto(systemMessage.Id);
+
+        try { await _signalR.BroadcastConversationMessageAsync(conversationId, messageDto); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessage (rename) failed. ConversationId={Id}", conversationId); }
     }
 
     public async Task RemoveGroupConversationLogoAsync(Guid conversationId)
@@ -534,6 +552,11 @@ internal class ConversationService : IConversationService
             await tx.RollbackAsync();
             throw;
         }
+
+        var messageDto = await GetSystemMessageDto(systemMessage.Id);
+
+        try { await _signalR.BroadcastConversationMessageAsync(conversationId, messageDto); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessage (remove logo) failed. ConversationId={Id}", conversationId); }
     }
 
     #region Private section
@@ -604,6 +627,15 @@ internal class ConversationService : IConversationService
             .FirstOrDefaultAsync();
 
         return conversation;
+    }
+
+    private async Task<MessageDto> GetSystemMessageDto(Guid messageId)
+    {
+        return await _repositories.MessageRepository
+            .FindByCondition(m => m.Id == messageId)
+            .AsNoTracking()
+            .ProjectTo<MessageDto>(_mapper.ConfigurationProvider)
+            .FirstAsync();
     }
 
     #endregion
