@@ -1,5 +1,4 @@
 ﻿using ChatarPatar.Common.Consts;
-using ChatarPatar.Common.Enums;
 using ChatarPatar.Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -18,8 +17,8 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
                 "(ChannelId IS NULL AND ConversationId IS NOT NULL)");
 
             t.HasCheckConstraint(
-                DbConstraints.Messages.CKDmStatus,
-                "DmStatus IS NULL OR DmStatus IN ('Sending','Sent','Delivered','Seen')");
+                DbConstraints.Messages.CKSeenAfterDelivered,
+                "DmSeenAt IS NULL OR DmDeliveredAt IS NULL OR DmSeenAt >= DmDeliveredAt");
 
             t.HasCheckConstraint(
                 DbConstraints.Messages.CKThreadReplyRule,
@@ -56,7 +55,7 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.Property(m => m.Content)
                .HasMaxLength(ValidationConstants.Message.Lengths.Content)
                .IsUnicode(true);
-        
+
         builder.Property(n => n.MessageType)
                .HasConversion<byte>();
 
@@ -77,18 +76,6 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
 
         builder.Property(x => x.RowVersion)
                .IsRowVersion();
-
-        // ----------------------------
-        // Enum Conversion
-        // ----------------------------
-
-        builder.Property(m => m.DmStatus)
-               .HasConversion(
-                   v => v!.ToString(),
-                   v => Enum.Parse<DmMessageStatusEnum>(v))
-               .HasMaxLength(ValidationConstants.Message.Lengths.DmStatus)
-               .IsRequired(false)
-               .IsUnicode(true);
 
         // ----------------------------
         // Relationships
@@ -150,7 +137,7 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
                .HasDatabaseName(DbConstraints.Messages.IXActiveConversationMessage)
                .HasFilter("[IsDeleted] = 0 AND [ConversationId] IS NOT NULL");
 
-        builder.HasIndex(m => new { m.SenderId, m.CreatedAt})
+        builder.HasIndex(m => new { m.SenderId, m.CreatedAt })
                .HasDatabaseName(DbConstraints.Messages.IXSenderId)
                .HasFilter("[IsDeleted] = 0");
 

@@ -143,7 +143,7 @@ internal class PermissionService : IPermissionService
                     if (!isElevatedOrgRole && channel.Role == null)
                         return false; // not a member of this private channel
 
-                    if (RolePermissions.ChannelRolePermissions.TryGetValue(channel.Role.Value, out var channelPerms))
+                    if (channel.Role.HasValue && RolePermissions.ChannelRolePermissions.TryGetValue(channel.Role.Value, out var channelPerms))
                         combined.UnionWith(channelPerms);
                 }
                 else

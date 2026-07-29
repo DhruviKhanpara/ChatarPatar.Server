@@ -6,6 +6,6 @@ public interface IOutboxMessageRepository
 {
     Task AddAsync(OutboxMessage message);
     Task AddRangeAsync(List<OutboxMessage> messages);
-    Task<List<OutboxMessage>> GetUnprocessedAsync();
+    Task<List<OutboxMessage>> GetUnprocessedAsync(int batchSize, CancellationToken cancellationToken);
     void Update(OutboxMessage message);
 }

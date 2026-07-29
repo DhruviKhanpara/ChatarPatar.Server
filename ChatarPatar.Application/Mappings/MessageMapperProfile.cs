@@ -17,7 +17,9 @@ public class MessageMapperProfile : Profile
             .ForMember(dest => dest.SenderAvatarThumbnailUrl, opt => opt.MapFrom(src => src.Sender.AvatarFile != null ? src.Sender.AvatarFile.ThumbnailUrl : null))
             .ForMember(dest => dest.Attachments, opt => opt.MapFrom(src => src.MessageAttachments.OrderBy(a => a.DisplayOrder)))
             .ForMember(dest => dest.Mentions, opt => opt.MapFrom(src => src.MessageMentions))
-            .ForMember(dest => dest.Reactions, opt => opt.Ignore());
+            .ForMember(dest => dest.Reactions, opt => opt.Ignore())
+            .ForMember(dest => dest.GroupDeliveredAt, opt => opt.Ignore())
+            .ForMember(dest => dest.GroupSeenAt, opt => opt.Ignore());
 
         // Message Attachment
         CreateMap<MessageAttachment, MessageAttachmentDto>()

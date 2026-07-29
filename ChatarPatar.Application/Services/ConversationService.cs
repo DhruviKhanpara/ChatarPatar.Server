@@ -464,7 +464,7 @@ internal class ConversationService : IConversationService
         if (conversation.Type != ConversationTypeEnum.Group)
             throw new InvalidDataAppException("Only Group conversations can be renamed.");
 
-        if (!string.Equals(conversation.Name, dto.Name.Trim(), StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(conversation.Name, dto.Name.Trim(), StringComparison.OrdinalIgnoreCase))
             return;
 
         var systemMessage = new Message

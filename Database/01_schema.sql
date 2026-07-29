@@ -561,7 +561,6 @@ BEGIN
     	-- replies needs to show "5 replies, last reply 2h ago."
     	ReplyCount		    INT				  NOT NULL DEFAULT 0,  -- only meaningful when ThreadId IS NULL
         -- 1-on-1 DM delivery state (NULL for channel messages):
-        DmStatus            NVARCHAR(20)        NULL,       -- 'Sending' | 'Sent' | 'Delivered' | 'Seen'
         DmDeliveredAt       DATETIME2           NULL,
         DmSeenAt            DATETIME2           NULL,
     	LastReplyAt         DATETIME2			  NULL,
@@ -585,7 +584,7 @@ BEGIN
             (ChannelId IS NOT NULL AND ConversationId IS NULL) OR
             (ChannelId IS NULL AND ConversationId IS NOT NULL)
         ),
-        CONSTRAINT CK_Messages_DmStatus CHECK (DmStatus IS NULL OR DmStatus IN ('Sending','Sent','Delivered','Seen')),
+        CONSTRAINT CK_Messages_DmSeenAfterDelivered CHECK (DmSeenAt IS NULL OR DmDeliveredAt IS NULL OR DmSeenAt >= DmDeliveredAt),
         CONSTRAINT CK_Messages_ThreadReplyRule CHECK (
             (ThreadRootMessageId IS NULL) OR (ReplyCount = 0)
         ),  -- ReplyCount only allowed on root messages
