@@ -2,5 +2,5 @@
 
 public interface IOutboxProcessor
 {
-    Task ProcessAsync();
+    Task<int> ProcessAsync(int batchSize, CancellationToken cancellationToken);
 }

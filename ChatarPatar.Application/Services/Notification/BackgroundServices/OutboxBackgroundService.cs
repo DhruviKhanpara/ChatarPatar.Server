@@ -8,6 +8,8 @@ namespace ChatarPatar.Application.Services.Notification.BackgroundServices;
 
 internal class OutboxBackgroundService : BackgroundService
 {
+    private const int BatchSize = 50;
+
     private readonly IServiceProvider _serviceProvider;
     private readonly IOutboxBackgroundQueue _queue;
     private readonly ILogger<OutboxBackgroundService> _logger;
@@ -42,7 +44,13 @@ internal class OutboxBackgroundService : BackgroundService
                     // Timeout expired — that's fine, just run the processor anyway
                 }
 
-                await ProcessAsync(stoppingToken);
+                while (true)
+                {
+                    var batchCount = await ProcessAsync(stoppingToken);
+
+                    if (batchCount < BatchSize)
+                        break;
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -57,17 +65,24 @@ internal class OutboxBackgroundService : BackgroundService
         }
     }
 
-    private async Task ProcessAsync(CancellationToken stoppingToken)
+    /// <summary>
+    /// Processes a batch of outbox messages.
+    /// </summary>
+    /// <returns>
+    /// The number of messages fetched for processing.
+    /// </returns>
+    private async Task<int> ProcessAsync(CancellationToken stoppingToken)
     {
         try
         {
             using var scope = _serviceProvider.CreateScope();
             var processor = scope.ServiceProvider.GetRequiredService<IOutboxProcessor>();
-            await processor.ProcessAsync();
+            return await processor.ProcessAsync(BatchSize, stoppingToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[OUTBOX] Processor error");
+            return 0;
         }
     }
 }

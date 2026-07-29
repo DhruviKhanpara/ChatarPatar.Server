@@ -539,11 +539,12 @@ internal class MessageService : IMessageService
     {
         var authUserId = Guid.Parse(_httpContext.GetUserId());
 
-        var conversationExists = await _repositories.ConversationRepository
+        var conversationContext = await _repositories.ConversationRepository
             .GetByIdForUser(conversationId, authUserId)
-            .AnyAsync();
+            .Select(c => new { Role = (ConversationTypeEnum?)c.Type, ParticipantCount = c.ConversationParticipants.Count() })
+            .FirstOrDefaultAsync();
 
-        if (!conversationExists)
+        if (conversationContext is null)
             throw new NotFoundAppException("Conversation");
 
         var pageSize = Math.Clamp(queryParams.PageSize, 1, 100);
@@ -557,6 +558,11 @@ internal class MessageService : IMessageService
 
         // Stamp ReactedByMe for the calling user across all returned messages
         await StampReactionsAsync(messages, authUserId);
+
+        // Group conversations only — Direct DMs already carry DmDeliveredAt/DmSeenAt
+        // straight off the Message row via the projection above.
+        if (conversationContext.Role == ConversationTypeEnum.Group && conversationContext.ParticipantCount <= ValidationConstants.Conversation.GroupReceiptThreshold)
+            await StampGroupTicksAsync(messages, authUserId);
 
         var hasMore = messages.Count > pageSize;
 
@@ -1090,10 +1096,6 @@ internal class MessageService : IMessageService
             Content = dto.Content?.Trim(),
             MessageType = messageType,
 
-            DmStatus = conversationId.HasValue
-                ? DmMessageStatusEnum.Sent
-                : null,
-
             CreatedAt = DateTime.UtcNow,
         };
     }
@@ -1413,6 +1415,48 @@ internal class MessageService : IMessageService
         {
             if (grouped.TryGetValue(message.Id, out var reactionSummaries))
                 message.Reactions = reactionSummaries;
+        }
+    }
+
+    /// <summary>
+    /// Populates GroupDeliveredAt/GroupSeenAt for the caller's own messages in a
+    /// Group conversation. Only the sender's messages get ticks — you don't need
+    /// a tick on a message you received. "Delivered to all" / "seen by all":
+    /// null unless every other participant's receipt has reached that stage.
+    /// </summary>
+    private async Task StampGroupTicksAsync(List<MessageDto> messages, Guid authUserId)
+    {
+        var ownMessageIds = messages
+            .Where(m => m.SenderId == authUserId)
+            .Select(m => m.Id)
+            .ToList();
+
+        if (ownMessageIds.Count == 0)
+            return;
+
+        var receipts = await _repositories.MessageReceiptRepository
+            .FindByCondition(r => ownMessageIds.Contains(r.MessageId))
+            .Select(r => new { r.MessageId, r.DeliveredAt, r.SeenAt })
+            .AsNoTracking()
+            .ToListAsync();
+
+        if (receipts.Count == 0)
+            return;
+
+        var grouped = receipts.GroupBy(r => r.MessageId).ToDictionary(g => g.Key, g => g.ToList());
+
+        foreach (var message in messages)
+        {
+            if (!grouped.TryGetValue(message.Id, out var messageReceipts) || messageReceipts.Count == 0)
+                continue;
+
+            message.GroupDeliveredAt = messageReceipts.All(r => r.DeliveredAt.HasValue)
+                ? messageReceipts.Max(r => r.DeliveredAt)
+                : null;
+
+            message.GroupSeenAt = messageReceipts.All(r => r.SeenAt.HasValue)
+                ? messageReceipts.Max(r => r.SeenAt)
+                : null;
         }
     }
 

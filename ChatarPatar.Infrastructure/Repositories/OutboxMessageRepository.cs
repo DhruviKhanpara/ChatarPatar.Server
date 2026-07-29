@@ -17,10 +17,13 @@ internal class OutboxMessageRepository : IOutboxMessageRepository
     public async Task AddRangeAsync(List<OutboxMessage> messages) => 
         await _context.OutboxMessages.AddRangeAsync(messages);
 
-    public async Task<List<OutboxMessage>> GetUnprocessedAsync() => 
+    public async Task<List<OutboxMessage>> GetUnprocessedAsync(int batchSize, CancellationToken cancellationToken) => 
         await _context.OutboxMessages
             .Where(x => !x.IsProcessed && (x.NextAttemptAt == null || x.NextAttemptAt <= DateTime.UtcNow))
-            .ToListAsync();
+            .OrderBy(x => x.NextAttemptAt)
+            .ThenBy(x => x.CreatedAt)
+            .Take(batchSize)
+            .ToListAsync(cancellationToken);
 
     public void Update(OutboxMessage message) => 
         _context.OutboxMessages.Update(message);

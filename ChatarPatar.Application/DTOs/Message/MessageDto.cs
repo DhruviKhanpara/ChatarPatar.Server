@@ -28,11 +28,13 @@ public sealed class MessageDto
 
     public int ReplyCount { get; set; }
     public DateTime? LastReplyAt { get; set; }
-    public DateTime? DmSeenAt { get; set; }
 
     // DM-only; null for channel messages
-    public DmMessageStatusEnum? DmStatus { get; set; }
     public DateTime? DmDeliveredAt { get; set; }
+    public DateTime? DmSeenAt { get; set; }
+
+    public DateTime? GroupDeliveredAt { get; set; }
+    public DateTime? GroupSeenAt { get; set; }
 
     public List<MessageAttachmentDto> Attachments { get; set; } = [];
     public List<MessageMentionDto> Mentions { get; set; } = [];

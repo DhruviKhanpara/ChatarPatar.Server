@@ -25,9 +25,12 @@ internal class GenericOutboxProcessor : IOutboxProcessor
         _retrySettings = retrySettings.Value;
     }
 
-    public async Task ProcessAsync()
+    public async Task<int> ProcessAsync(int batchSize, CancellationToken cancellationToken)
     {
-        var messages = await _repositoryManager.OutboxMessageRepository.GetUnprocessedAsync();
+        var messages = await _repositoryManager.OutboxMessageRepository.GetUnprocessedAsync(batchSize, cancellationToken);
+
+        if (messages.Count == 0)
+            return 0;
 
         foreach (var message in messages)
         {
@@ -71,13 +74,12 @@ internal class GenericOutboxProcessor : IOutboxProcessor
                 }
                 
                 _repositoryManager.OutboxMessageRepository.Update(message);
+
+                await _repositoryManager.UnitOfWork.SaveChangesAsync();
             }
         }
 
-        using (LogContext.PushProperty(LoggingProperties.UserName, "System"))
-        {
-            await _repositoryManager.UnitOfWork.SaveChangesAsync();
-        }
+        return messages.Count;
     }
 
     private static string ExtractInitiatedBy(string payload)

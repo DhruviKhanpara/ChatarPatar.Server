@@ -48,7 +48,6 @@ public class Message : BaseEntity
     public DateTime? LastReplyAt { get; set; }
 
     // 1-on-1 DM state
-    public DmMessageStatusEnum? DmStatus { get; set; }
     public DateTime? DmDeliveredAt { get; set; }
     public DateTime? DmSeenAt { get; set; }
 

@@ -193,7 +193,7 @@ public static class DbConstraints
         public const string FKDeletedByUser = "FK_Messages_DeletedBy";
 
         public const string CKMessageSource = "CK_Messages_Source";
-        public const string CKDmStatus = "CK_Messages_DmStatus";
+        public const string CKSeenAfterDelivered = "CK_Messages_DmSeenAfterDelivered";
         public const string CKThreadReplyRule = "CK_Messages_ThreadReplyRule";
         public const string CKType = "CK_Messages_MessageType";
         public const string CKNoSelfThread = "CK_Messages_NoSelfThread";
