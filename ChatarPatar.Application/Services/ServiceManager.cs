@@ -36,4 +36,6 @@ internal sealed class ServiceManager : IServiceManager
     public IFileService FileService => Get<IFileService>();
 
     public IPermissionService PermissionService => Get<IPermissionService>();
+
+    public IPresenceService PresenceService => Get<IPresenceService>();
 }

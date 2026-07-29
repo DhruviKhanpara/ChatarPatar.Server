@@ -74,4 +74,10 @@ public sealed class SignalRService : ISignalRService
 
     public Task BroadcastConversationPinAsync(Guid conversationId, PinnedMessageResponseDto pin)
         => _hub.Clients.Group($"conv:{conversationId}").MessagePinned(pin);
+
+    public Task BroadcastConversationMessageDeliveredAsync(Guid conversationId, MessageDeliveredPush payload)
+        => _hub.Clients.Group($"conv:{conversationId}").MessageDelivered(payload);
+
+    public Task BroadcastConversationMessageSeenAsync(Guid conversationId, MessageSeenPush payload)
+        => _hub.Clients.Group($"conv:{conversationId}").MessageSeen(payload);
 }

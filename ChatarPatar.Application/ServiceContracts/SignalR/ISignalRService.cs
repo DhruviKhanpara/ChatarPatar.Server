@@ -2,6 +2,7 @@
 using ChatarPatar.Application.DTOs.Message.Pin;
 using ChatarPatar.Application.DTOs.Message.Reaction;
 using ChatarPatar.Common.SignalR;
+using ChatarPatar.Common.SignalR.Model;
 
 namespace ChatarPatar.Application.ServiceContracts.SignalR;
 
@@ -20,4 +21,8 @@ public interface ISignalRService : ISignalRPushService
     Task BroadcastConversationMessageDeletedAsync(Guid conversationId, Guid messageId, Guid deletedBy);
     Task BroadcastConversationReactionAsync(Guid conversationId, Guid messageId, MessageReactionToggleResultDto result);
     Task BroadcastConversationPinAsync(Guid conversationId, PinnedMessageResponseDto pin);
+
+    // ── Conversation delivery/seen state (Direct DM + small Group DM only) ─
+    Task BroadcastConversationMessageDeliveredAsync(Guid conversationId, MessageDeliveredPush payload);
+    Task BroadcastConversationMessageSeenAsync(Guid conversationId, MessageSeenPush payload);
 }

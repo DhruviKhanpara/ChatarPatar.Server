@@ -666,7 +666,6 @@ internal class MessageService : IMessageService
                         {
                             MessageId = message.Id,
                             UserId = participantId,
-                            DeliveredAt = now,
                             SeenAt = null,
                             CreatedAt = now,
                             UpdatedAt = now
@@ -976,6 +975,69 @@ internal class MessageService : IMessageService
 
     public async Task<ReadStateDto> MarkConversationMessageUnreadAsync(Guid conversationId, Guid messageId)
         => await MarkConversationMessageAsync(conversationId, messageId, markUnread: true);
+
+    public async Task MarkMessageDeliveredAsync(Guid conversationId, Guid messageId, Guid ackingUserId)
+    {
+        if (!await _repositories.ConversationRepository.IsActiveParticipantAsync(ackingUserId, conversationId))
+            return;
+
+        var conversationType = await _repositories.ConversationRepository
+            .FindByCondition(c => c.Id == conversationId)
+            .Select(c => (ConversationTypeEnum?)c.Type)
+            .FirstOrDefaultAsync();
+
+        if (conversationType is null)
+            return;
+
+        var updated = conversationType == ConversationTypeEnum.Direct
+            ? await _repositories.MessageRepository.MarkDmDeliveredAsync(messageId, conversationId, ackingUserId)
+            : await _repositories.MessageReceiptRepository.MarkDeliveredAsync(messageId, ackingUserId);
+
+        if (!updated)
+            return;
+
+        try
+        {
+            await _signalR.BroadcastConversationMessageDeliveredAsync(conversationId, new MessageDeliveredPush
+            {
+                ConversationId = conversationId,
+                MessageId = messageId,
+                RecipientUserId = ackingUserId,
+                DeliveredAt = DateTime.UtcNow
+            });
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessageDelivered failed."); }
+    }
+
+    /// <summary>
+    /// Called from the SignalR hub when a client marks messages as seen in real
+    /// time (e.g. conversation is open and focused) — independent of the REST
+    /// "mark read" endpoint, which also calls into <see cref="MarkConversationReadAndSeenAsync"/>
+    /// under the hood so both paths behave identically.
+    /// </summary>
+    public async Task MarkMessagesSeenAsync(Guid conversationId, Guid upToMessageId, Guid ackingUserId)
+    {
+        if (!await _repositories.ConversationRepository.IsActiveParticipantAsync(ackingUserId, conversationId))
+            return; // best-effort ack — don't throw over a race (e.g. user just left)
+
+        var conversationType = await _repositories.ConversationRepository
+            .FindByCondition(c => c.Id == conversationId)
+            .Select(c => (ConversationTypeEnum?)c.Type)
+            .FirstOrDefaultAsync();
+
+        if (conversationType is null)
+            return;
+
+        var sequenceNumber = await _repositories.MessageRepository
+            .FindByCondition(m => m.Id == upToMessageId && m.ConversationId == conversationId)
+            .Select(m => (long?)m.SequenceNumber)
+            .FirstOrDefaultAsync();
+
+        if (sequenceNumber is null)
+            return;
+
+        await MarkConversationReadAndSeenAsync(conversationId, upToMessageId, ackingUserId, conversationType, sequenceNumber.Value);
+    }
 
     public async Task DeleteConversationMessageAsync(Guid conversationId, Guid messageId)
     {
@@ -1506,6 +1568,11 @@ internal class MessageService : IMessageService
         if (!await _repositories.ConversationRepository.IsActiveParticipantAsync(authUserId, conversationId))
             throw new ForbiddenAppException();
 
+        var conversationType = await _repositories.ConversationRepository
+            .FindByCondition(c => c.Id == conversationId)
+            .Select(c => c.Type)
+            .FirstOrDefaultAsync();
+
         var sequenceNumber = await _repositories.MessageRepository
             .FindByCondition(m => m.Id == messageId && m.ConversationId == conversationId)
             .Select(m => (long?)m.SequenceNumber)
@@ -1514,28 +1581,111 @@ internal class MessageService : IMessageService
         if (sequenceNumber is null)
             throw new NotFoundAppException("Message");
 
-        var updated = markUnread
-            ? await _repositories.ReadStateRepository.MarkAsUnreadAsync(authUserId, null, conversationId, messageId, sequenceNumber.Value)
-            : await _repositories.ReadStateRepository.MarkAsReadAsync(authUserId, null, conversationId, messageId, sequenceNumber.Value);
+        ReadState readState;
+
+        if (markUnread)
+        {
+            var updated = await _repositories.ReadStateRepository.MarkAsUnreadAsync(authUserId, null, conversationId, messageId, sequenceNumber.Value);
+
+            // Marking unread only resets this user's own badge — it never revokes a Seen
+            // receipt the other side(s) already got, matching how the badge/receipt split
+            // works everywhere else (WhatsApp/Slack included).
+            readState = await _repositories.ReadStateRepository
+                .FindByCondition(rs => rs.UserId == authUserId && rs.ConversationId == conversationId)
+                .AsNoTracking()
+                .FirstOrDefaultAsync()
+                ?? throw new NotFoundAppException("Conversation membership");
+
+            if (updated)
+            {
+                try
+                {
+                    await _signalR.PushReadStateBadgeAsync(authUserId, new ReadStatePush
+                    {
+                        ConversationId = conversationId,
+                        UnreadCount = readState.UnreadCount,
+                        MentionCount = readState.MentionCount,
+                        LastMessageAt = readState.LastReadAt ?? DateTime.UtcNow
+                    });
+                }
+                catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] PushReadStateBadge failed."); }
+            }
+        }
+        else
+        {
+            // Same path the SignalR "AckMessagesSeen" hub method uses — advances
+            // ReadState (UnreadCount/MentionCount/LastReadSequenceNumber/etc.) AND
+            // stamps per-message Seen state together, so REST and hub stay in sync.
+            readState = await MarkConversationReadAndSeenAsync(conversationId, messageId, authUserId, conversationType, sequenceNumber.Value);
+        }
+
+        return MapReadState(readState);
+    }
+
+    /// <summary>
+    /// Shared by the SignalR "AckMessagesSeen" hub path and the REST "mark read"
+    /// endpoint. Advances the caller's ReadState — UnreadCount, MentionCount,
+    /// LastReadSequenceNumber, LastReadMessageId, LastReadAt — via the existing
+    /// ReadStateRepository.MarkAsReadAsync, stamps per-message Seen state
+    /// (DmSeenAt / MessageReceipts.SeenAt) via StampSeenAndBroadcastAsync, and
+    /// pushes the updated badge back to the caller.
+    /// </summary>
+    private async Task<ReadState> MarkConversationReadAndSeenAsync(Guid conversationId, Guid messageId, Guid userId, ConversationTypeEnum? conversationType, long sequenceNumber)
+    {
+        var updated = await _repositories.ReadStateRepository.MarkAsReadAsync(userId, null, conversationId, messageId, sequenceNumber);
+
+        await StampSeenAndBroadcastAsync(conversationId, conversationType, userId, sequenceNumber);
 
         var readState = await _repositories.ReadStateRepository
-            .FindByCondition(rs => rs.UserId == authUserId && rs.ConversationId == conversationId)
+            .FindByCondition(rs => rs.UserId == userId && rs.ConversationId == conversationId)
             .AsNoTracking()
             .FirstOrDefaultAsync()
             ?? throw new NotFoundAppException("Conversation membership");
 
         if (updated)
         {
-            await _signalR.PushReadStateBadgeAsync(authUserId, new ReadStatePush
+            try
             {
-                ConversationId = conversationId,
-                UnreadCount = readState.UnreadCount,
-                MentionCount = readState.MentionCount,
-                LastMessageAt = readState.LastReadAt ?? DateTime.UtcNow
-            });
+                await _signalR.PushReadStateBadgeAsync(userId, new ReadStatePush
+                {
+                    ConversationId = conversationId,
+                    UnreadCount = readState.UnreadCount,
+                    MentionCount = readState.MentionCount,
+                    LastMessageAt = readState.LastReadAt ?? DateTime.UtcNow
+                });
+            }
+            catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] PushReadStateBadge failed."); }
         }
 
-        return MapReadState(readState);
+        return readState;
+    }
+
+    /// <summary>
+    /// Shared by both the REST "mark read" flow and the SignalR "AckMessagesSeen"
+    /// hub method. Stamps DmSeenAt (Direct) or MessageReceipts.SeenAt (Group) on
+    /// every not-yet-seen message up to the given sequence, sent by someone else,
+    /// then broadcasts the result to the conversation group.
+    /// </summary>
+    private async Task StampSeenAndBroadcastAsync(Guid conversationId, ConversationTypeEnum? conversationType, Guid ackingUserId, long upToSequence)
+    {
+        var seenMessageIds = conversationType == ConversationTypeEnum.Direct
+            ? await _repositories.MessageRepository.MarkDmSeenUpToAsync(conversationId, ackingUserId, upToSequence)
+            : await _repositories.MessageReceiptRepository.MarkSeenUpToAsync(conversationId, ackingUserId, upToSequence);
+
+        if (seenMessageIds.Count == 0)
+            return;
+
+        try
+        {
+            await _signalR.BroadcastConversationMessageSeenAsync(conversationId, new MessageSeenPush
+            {
+                ConversationId = conversationId,
+                MessageIds = seenMessageIds,
+                RecipientUserId = ackingUserId,
+                SeenAt = DateTime.UtcNow
+            });
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessageSeen failed."); }
     }
 
     private static ReadStateDto MapReadState(ReadState rs) => new()

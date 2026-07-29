@@ -24,4 +24,6 @@ public interface IServiceManager
     IFileService FileService { get; }
 
     IPermissionService PermissionService { get; }
+
+    IPresenceService PresenceService { get; }
 }
