@@ -65,7 +65,7 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
         builder.HasIndex(c => new { c.DirectParticipantAId, c.DirectParticipantBId })
                .IsUnique()
                .HasDatabaseName(DbConstraints.Conversations.UniqueDirectConversationParticipants)
-               .HasFilter("[Type] = 'Direct'");
+               .HasFilter("[Type] = 'Direct' and [IsDeleted]=(0)");
 
         // ----------------------------
         // Indexes

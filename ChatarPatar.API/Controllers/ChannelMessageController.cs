@@ -2,6 +2,7 @@
 using ChatarPatar.API.Attributes;
 using ChatarPatar.Application.DTOs.Message;
 using ChatarPatar.Application.DTOs.Message.Reaction;
+using ChatarPatar.Application.DTOs.ReadState;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Common.Consts;
 using ChatarPatar.Common.Enums;
@@ -38,12 +39,41 @@ public class ChannelMessageController : ControllerBase
     }
 
     /// <summary>
-    /// Sends a message to a channel.
+    /// Sends a message in a channel.
     /// </summary>
     [HttpPost]
-    [RequirePermission(PermissionCheckLogicEnum.Any, Permissions.MESSAGE_SEND, Permissions.MESSAGE_THREAD_REPLY)]
-    public async Task<ActionResult<MessageDto>> SendMessage([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid channelId, [FromBody] SendMessageDto dto)
+    [RequirePermission(PermissionCheckLogicEnum.Any, Permissions.MESSAGE_SEND)]
+    public async Task<ActionResult<MessageDto>> SendMessage([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid channelId, [FromBody] SendMessageRequest model)
     {
+        var dto = new SendMessageDto
+        {
+            ClientMessageId = model.ClientMessageId,
+            Content = model.Content,
+            FileIds = model.FileIds,
+            MentionedUserIds = model.MentionedUserIds,
+            ThreadRootMessageId = null
+        };
+
+        var result = await _services.MessageService.SendChannelMessageAsync(orgId, teamId, channelId, dto);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Reply to a message in a channel.
+    /// </summary>
+    [HttpPost("{threadId:guid}/replies")]
+    [RequirePermission(PermissionCheckLogicEnum.Any, Permissions.MESSAGE_THREAD_REPLY)]
+    public async Task<ActionResult<MessageDto>> ReplyMessage([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid channelId, [FromRoute] Guid threadId, [FromBody] SendMessageRequest model)
+    {
+        var dto = new SendMessageDto
+        {
+            ClientMessageId = model.ClientMessageId,
+            Content = model.Content,
+            FileIds = model.FileIds,
+            MentionedUserIds = model.MentionedUserIds,
+            ThreadRootMessageId = threadId
+        };
+
         var result = await _services.MessageService.SendChannelMessageAsync(orgId, teamId, channelId, dto);
         return Ok(result);
     }
@@ -85,6 +115,28 @@ public class ChannelMessageController : ControllerBase
     public async Task<ActionResult<MessageDto>> PinMessage([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid channelId, [FromRoute] Guid messageId)
     {
         var result = await _services.MessageService.PinChannelMessageAsync(channelId, messageId);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Channel message - Mark as read.
+    /// </summary>
+    [HttpPatch("{messageId:guid}/read")]
+    [SkipPermission]
+    public async Task<ActionResult<ReadStateDto>> MarkRead([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid channelId, [FromRoute] Guid messageId)
+    {
+        var result = await _services.MessageService.MarkChannelMessageReadAsync(orgId, teamId, channelId, messageId);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Channel message - Mark as un-read.
+    /// </summary>
+    [HttpPatch("{messageId:guid}/unread")]
+    [SkipPermission]
+    public async Task<ActionResult<ReadStateDto>> MarkUnread([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid channelId, [FromRoute] Guid messageId)
+    {
+        var result = await _services.MessageService.MarkChannelMessageUnreadAsync(orgId, teamId, channelId, messageId);
         return Ok(result);
     }
 

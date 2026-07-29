@@ -10,6 +10,11 @@ public static class RolePermissions
     /// </summary>
     #region Private section
 
+    // ORG_OWNERSHIP_TRANSFER is intentionally not assigned to any explicit role.
+    // Only OrgOwner receives this permission via the wildcard ("*").
+    // This prevents accidental delegation of ownership transfer to OrgAdmin or
+    // other future roles by adding the permission explicitly.
+
     private static readonly Dictionary<OrganizationRoleEnum, HashSet<string>> Organization =
     new Dictionary<OrganizationRoleEnum, HashSet<string>>()
     {
@@ -35,7 +40,10 @@ public static class RolePermissions
             Permissions.TEAM_CHANNELS_CREATE,
             Permissions.TEAM_CHANNELS_DELETE,
             Permissions.TEAM_CHANNELS_ARCHIVE,
+            Permissions.CHANNEL_MEMBERS_ADD,
+            Permissions.CHANNEL_MEMBERS_REMOVE,
             Permissions.CHANNEL_MEMBERS_ROLE_CHANGE,
+            Permissions.MESSAGE_SEND,
             Permissions.MESSAGE_DELETE_ANY,
             Permissions.MESSAGE_PIN,
         },

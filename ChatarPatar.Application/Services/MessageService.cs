@@ -3,6 +3,7 @@ using AutoMapper.QueryableExtensions;
 using ChatarPatar.Application.DTOs.Message;
 using ChatarPatar.Application.DTOs.Message.Pin;
 using ChatarPatar.Application.DTOs.Message.Reaction;
+using ChatarPatar.Application.DTOs.ReadState;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Application.ServiceContracts.Notification;
 using ChatarPatar.Application.ServiceContracts.SignalR;
@@ -210,10 +211,10 @@ internal class MessageService : IMessageService
                     .Select(m => (Guid?)m.SenderId)
                     .FirstOrDefaultAsync();
             }
-            
+
             var contentPreview = BuildContentSnapshot(dto.Content, attachedFiles.FirstOrDefault());
 
-            var outboxMessage = OutboxMessageFactory.BuildChannelSendMessage(dto.MentionedUserIds, channelId, message.Id, message.SequenceNumber, senderId, authUserName,  dto.ThreadRootMessageId, threadRootSenderId, contentPreview);
+            var outboxMessage = OutboxMessageFactory.BuildChannelSendMessage(dto.MentionedUserIds, channelId, message.Id, message.SequenceNumber, senderId, authUserName, dto.ThreadRootMessageId, threadRootSenderId, contentPreview);
 
             await _repositories.OutboxMessageRepository.AddAsync(outboxMessage);
 
@@ -329,10 +330,7 @@ internal class MessageService : IMessageService
             if (fileIdsToRemove.Count > 0)
                 filesToCleanup = await RemoveAttachmentsAsync(messageId, fileIdsToRemove, authUserId);
 
-            if (newFiles.Count > 0)
-                await AttachFilesAsync(message.Entity, fileIdsToAdd, newFiles, channelId);
-
-            await ReorderAttachmentsAsync(messageId, dto.FileIds);
+            await AttachFilesAsync(message.Entity, dto.FileIds, newFiles, channelId);
 
             if (mentionIdsToRemove.Count > 0)
                 await RemoveMentionsAsync(mentionIdsToRemove);
@@ -474,6 +472,12 @@ internal class MessageService : IMessageService
             return _mapper.Map<PinnedMessageResponseDto>(concurrentPin);
         }
     }
+
+    public async Task<ReadStateDto> MarkChannelMessageReadAsync(Guid orgId, Guid teamId, Guid channelId, Guid messageId)
+    => await MarkChannelMessageAsync(orgId, teamId, channelId, messageId, markUnread: false);
+
+    public async Task<ReadStateDto> MarkChannelMessageUnreadAsync(Guid orgId, Guid teamId, Guid channelId, Guid messageId)
+        => await MarkChannelMessageAsync(orgId, teamId, channelId, messageId, markUnread: true);
 
     public async Task DeleteChannelMessageAsync(Guid orgId, Guid teamId, Guid channelId, Guid messageId)
     {
@@ -826,10 +830,7 @@ internal class MessageService : IMessageService
             if (fileIdsToRemove.Count > 0)
                 filesToCleanup = await RemoveAttachmentsAsync(messageId, fileIdsToRemove, authUserId);
 
-            if (newFiles.Count > 0)
-                await AttachFilesAsync(message.Entity, fileIdsToAdd, newFiles, null, conversationId);
-
-            await ReorderAttachmentsAsync(messageId, dto.FileIds);
+            await AttachFilesAsync(message.Entity, dto.FileIds, newFiles, null, conversationId);
 
             if (mentionIdsToRemove.Count > 0)
                 await RemoveMentionsAsync(mentionIdsToRemove);
@@ -964,6 +965,12 @@ internal class MessageService : IMessageService
         }
     }
 
+    public async Task<ReadStateDto> MarkConversationMessageReadAsync(Guid conversationId, Guid messageId)
+    => await MarkConversationMessageAsync(conversationId, messageId, markUnread: false);
+
+    public async Task<ReadStateDto> MarkConversationMessageUnreadAsync(Guid conversationId, Guid messageId)
+        => await MarkConversationMessageAsync(conversationId, messageId, markUnread: true);
+
     public async Task DeleteConversationMessageAsync(Guid conversationId, Guid messageId)
     {
         var authUserId = Guid.Parse(_httpContext.GetUserId());
@@ -1096,6 +1103,20 @@ internal class MessageService : IMessageService
         if (fileIds.Count == 0)
             return;
 
+        var surviving = await _repositories.MessageAttachmentRepository
+            .FindByCondition(a => a.MessageId == message.Id)
+            .ToListAsync();
+
+        var desiredOrder = fileIds
+            .Select((fileId, idx) => (fileId, idx))
+            .ToDictionary(x => x.fileId, x => x.idx);
+
+        foreach (var attachment in surviving)
+        {
+            if (desiredOrder.TryGetValue(attachment.FileId, out var newOrder))
+                attachment.DisplayOrder = newOrder;
+        }
+
         foreach (var file in attachedFiles)
         {
             file.Status = FileStatusEnum.Attached;
@@ -1104,12 +1125,19 @@ internal class MessageService : IMessageService
             file.ConversationId = conversationId;
         }
 
-        var attachments = fileIds
-            .Select((fileId, idx) => new MessageAttachment
+        var attachments = attachedFiles
+            .Select(x =>
             {
-                MessageId = message.Id,
-                FileId = fileId,
-                DisplayOrder = idx,
+                var attachment = new MessageAttachment
+                {
+                    MessageId = message.Id,
+                    FileId = x.Id
+                };
+
+                if (desiredOrder.TryGetValue(attachment.FileId, out var newOrder))
+                    attachment.DisplayOrder = newOrder;
+
+                return attachment;
             })
             .ToList();
 
@@ -1186,26 +1214,6 @@ internal class MessageService : IMessageService
         }
 
         return filesToDelete.Select(x => (x.PublicId, x.FileType)).ToList();
-    }
-
-    private async Task ReorderAttachmentsAsync(Guid messageId, List<Guid> orderedFileIds)
-    {
-        if (orderedFileIds.Count == 0)
-            return;
-
-        var surviving = await _repositories.MessageAttachmentRepository
-            .FindByCondition(a => a.MessageId == messageId)
-            .ToListAsync();
-
-        var desiredOrder = orderedFileIds
-            .Select((fileId, idx) => (fileId, idx))
-            .ToDictionary(x => x.fileId, x => x.idx);
-
-        foreach (var attachment in surviving)
-        {
-            if (desiredOrder.TryGetValue(attachment.FileId, out var newOrder))
-                attachment.DisplayOrder = newOrder;
-        }
     }
 
     private async Task RemoveMentionsAsync(List<Guid> mentionIds)
@@ -1407,6 +1415,95 @@ internal class MessageService : IMessageService
                 message.Reactions = reactionSummaries;
         }
     }
+
+    private async Task<ReadStateDto> MarkChannelMessageAsync(Guid orgId, Guid teamId, Guid channelId, Guid messageId, bool markUnread)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        if (!await _repositories.ChannelRepository.IsActiveMembershipAsync(authUserId, channelId))
+            throw new ForbiddenAppException();
+
+        var sequenceNumber = await _repositories.MessageRepository
+            .FindByCondition(m => m.Id == messageId && m.ChannelId == channelId && m.Channel != null && m.Channel.OrgId == orgId && m.Channel.TeamId == teamId)
+            .Select(m => (long?)m.SequenceNumber)
+            .FirstOrDefaultAsync();
+
+        if (sequenceNumber is null)
+            throw new NotFoundAppException("Message");
+
+        var updated = markUnread
+            ? await _repositories.ReadStateRepository.MarkAsUnreadAsync(authUserId, channelId, null, messageId, sequenceNumber.Value)
+            : await _repositories.ReadStateRepository.MarkAsReadAsync(authUserId, channelId, null, messageId, sequenceNumber.Value);
+
+        var readState = await _repositories.ReadStateRepository
+            .FindByCondition(rs => rs.UserId == authUserId && rs.ChannelId == channelId)
+            .AsNoTracking()
+            .FirstOrDefaultAsync()
+            ?? throw new NotFoundAppException("Channel membership");
+
+        if (updated)
+        {
+            await _signalR.PushReadStateBadgeAsync(authUserId, new ReadStatePush
+            {
+                ChannelId = channelId,
+                UnreadCount = readState.UnreadCount,
+                MentionCount = readState.MentionCount,
+                LastMessageAt = readState.LastReadAt ?? DateTime.UtcNow
+            });
+        }
+
+        return MapReadState(readState);
+    }
+
+    private async Task<ReadStateDto> MarkConversationMessageAsync(Guid conversationId, Guid messageId, bool markUnread)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        if (!await _repositories.ConversationRepository.IsActiveParticipantAsync(authUserId, conversationId))
+            throw new ForbiddenAppException();
+
+        var sequenceNumber = await _repositories.MessageRepository
+            .FindByCondition(m => m.Id == messageId && m.ConversationId == conversationId)
+            .Select(m => (long?)m.SequenceNumber)
+            .FirstOrDefaultAsync();
+
+        if (sequenceNumber is null)
+            throw new NotFoundAppException("Message");
+
+        var updated = markUnread
+            ? await _repositories.ReadStateRepository.MarkAsUnreadAsync(authUserId, null, conversationId, messageId, sequenceNumber.Value)
+            : await _repositories.ReadStateRepository.MarkAsReadAsync(authUserId, null, conversationId, messageId, sequenceNumber.Value);
+
+        var readState = await _repositories.ReadStateRepository
+            .FindByCondition(rs => rs.UserId == authUserId && rs.ConversationId == conversationId)
+            .AsNoTracking()
+            .FirstOrDefaultAsync()
+            ?? throw new NotFoundAppException("Conversation membership");
+
+        if (updated)
+        {
+            await _signalR.PushReadStateBadgeAsync(authUserId, new ReadStatePush
+            {
+                ConversationId = conversationId,
+                UnreadCount = readState.UnreadCount,
+                MentionCount = readState.MentionCount,
+                LastMessageAt = readState.LastReadAt ?? DateTime.UtcNow
+            });
+        }
+
+        return MapReadState(readState);
+    }
+
+    private static ReadStateDto MapReadState(ReadState rs) => new()
+    {
+        ChannelId = rs.ChannelId,
+        ConversationId = rs.ConversationId,
+        UnreadCount = rs.UnreadCount,
+        MentionCount = rs.MentionCount,
+        LastReadSequenceNumber = rs.LastReadSequenceNumber,
+        LastReadMessageId = rs.LastReadMessageId,
+        LastReadAt = rs.LastReadAt
+    };
 
     #endregion
 }

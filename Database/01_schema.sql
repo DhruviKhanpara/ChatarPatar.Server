@@ -865,6 +865,7 @@ BEGIN
         LastReadAt              DATETIME2         NULL,
 
         CreatedAt       DATETIME2         NOT NULL DEFAULT SYSUTCDATETIME(),
+        UpdatedAt       DATETIME2         NULL,
         RowVersion      ROWVERSION        NOT NULL,
 
         CONSTRAINT PK_ReadStates PRIMARY KEY (Id),
@@ -1117,6 +1118,10 @@ BEGIN
     CREATE NONCLUSTERED INDEX IX_OrgInvites_Email
         ON OrganizationInvites (Email)
         WHERE IsUsed = 0;
+
+    CREATE UNIQUE INDEX UX_OrgInvites_Email_OrgId
+        ON OrganizationInvites (OrganizationId, Email) 
+        WHERE ([IsUsed]=(0));
 
     -- TTL cleanup job (SQL Server has no native TTL unlike MongoDB)
     -- Schedule a nightly SQL Agent job:
