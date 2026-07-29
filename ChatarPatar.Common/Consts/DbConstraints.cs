@@ -56,6 +56,7 @@ public static class DbConstraints
         public const string CKFailedAttempts = "CK_OrgInvites_FailedAttempts";
 
         public const string UniqueToken = "UQ_OrgInvites_Token";
+        public const string UniqueEmailPerOrgId = "UX_OrgInvites_Email_OrgId";
 
         public const string IXExpiresAt = "IX_OrgInvites_ExpiresAt";
         public const string IXEmail = "IX_OrgInvites_Email";

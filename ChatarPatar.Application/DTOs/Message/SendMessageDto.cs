@@ -29,3 +29,11 @@ public sealed class SendMessageDto
     /// </summary>
     public Guid? ThreadRootMessageId { get; set; }
 }
+
+public sealed class SendMessageRequest
+{
+    public Guid ClientMessageId { get; set; }
+    public string? Content { get; set; }
+    public List<Guid> FileIds { get; set; } = [];
+    public List<Guid> MentionedUserIds { get; set; } = [];
+}

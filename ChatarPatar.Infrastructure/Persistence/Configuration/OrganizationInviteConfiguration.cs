@@ -79,6 +79,11 @@ public class OrganizationInviteConfiguration : IEntityTypeConfiguration<Organiza
                .IsUnique()
                .HasDatabaseName(DbConstraints.OrganizationInvites.UniqueToken);
 
+        builder.HasIndex(o => new {o.OrganizationId, o.Email})
+               .IsUnique()
+               .HasDatabaseName(DbConstraints.OrganizationInvites.UniqueEmailPerOrgId)
+               .HasFilter("[IsUsed] = 0");
+
         // ----------------------------
         // Indexes
         // ----------------------------

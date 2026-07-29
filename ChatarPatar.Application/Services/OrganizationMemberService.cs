@@ -168,50 +168,63 @@ internal class OrganizationMemberService : IOrganizationMemberService
     {
         var authUserId = Guid.Parse(_httpContext.GetUserId());
 
-        var authUserMembership = await _repositories.OrganizationMemberRepository
+        var context = await _repositories.OrganizationMemberRepository
             .GetOrgMemberAsync(userId: authUserId, orgId: orgId)
+            .AsNoTracking()
+            .Select(x => new { x.Id })
             .FirstOrDefaultAsync();
 
-        if (authUserMembership is null)
+        if (context is null)
             throw new NotFoundAppException("Organization membership");
 
-        if (authUserMembership.Role != OrganizationRoleEnum.OrgOwner)
-            throw new InvalidDataAppException("You must be the organization owner to transfer ownership");
-
-        if (authUserMembership.Id == membershipId)
+        if (context.Id == membershipId)
             throw new InvalidDataAppException("Cannot transfer ownership to yourself");
 
-        var requestedMembership = await _repositories.OrganizationMemberRepository
+        var requestedMembershipExists = await _repositories.OrganizationMemberRepository
             .GetByIdInOrg(id: membershipId, orgId: orgId)
-            .FirstOrDefaultAsync();
+            .AnyAsync();
 
-        if (requestedMembership is null)
+        if (!requestedMembershipExists)
             throw new NotFoundAppException("Organization membership");
-
-        if (requestedMembership.Role == OrganizationRoleEnum.OrgOwner)
-            throw new InvalidDataAppException("Target user is already the owner");
 
         await using var transaction = await _repositories.UnitOfWork.BeginTransactionAsync();
         try
         {
+            var lockedRows = new Dictionary<Guid, OrganizationMember>();
+            foreach (var id in new[] { context.Id, membershipId }.OrderBy(x => x))
+            {
+                var row = await _repositories.OrganizationMemberRepository.GetByIdWithUpdateLockAsync(id);
+                if (row is null)
+                    throw new NotFoundAppException("Organization membership");
+
+                lockedRows[id] = row;
+            }
+
+            var authUserMembership = lockedRows[context.Id];
+            var requestedMembership = lockedRows[membershipId];
+
+            if (authUserMembership.Role != OrganizationRoleEnum.OrgOwner)
+                throw new InvalidDataAppException("You must be the organization owner to transfer ownership");
+
+            if (requestedMembership.Role == OrganizationRoleEnum.OrgOwner)
+                throw new InvalidDataAppException("Target user is already the owner");
+
             requestedMembership.Role = OrganizationRoleEnum.OrgOwner;
             authUserMembership.Role = OrganizationRoleEnum.OrgAdmin;
 
             await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
-
             await transaction.CommitAsync();
 
-            // Only write audit logs AFTER commit succeeds.
             _repositories.UnitOfWork.FlushPendingAuditLogs();
+
+            TryInvalidatePermissions(authUserMembership.UserId, "Error while invalidating permissions for user {UserId}");
+            TryInvalidatePermissions(requestedMembership.UserId, "Error while invalidating permissions for user {UserId}");
         }
         catch
         {
             await transaction.RollbackAsync();
             throw;
         }
-
-        TryInvalidatePermissions(authUserMembership.UserId, "Error while invalidating permissions for user {UserId}");
-        TryInvalidatePermissions(requestedMembership.UserId, "Error while invalidating permissions for user {UserId}");
     }
 
     public async Task LeaveOrganizationAsync(Guid orgId)
