@@ -1537,7 +1537,7 @@ internal class MessageService : IMessageService
         if (sequenceNumber is null)
             throw new NotFoundAppException("Message");
 
-        var updated = markUnread
+        var updatedReadState = markUnread
             ? await _repositories.ReadStateRepository.MarkAsUnreadAsync(authUserId, channelId, null, messageId, sequenceNumber.Value)
             : await _repositories.ReadStateRepository.MarkAsReadAsync(authUserId, channelId, null, messageId, sequenceNumber.Value);
 
@@ -1547,7 +1547,7 @@ internal class MessageService : IMessageService
             .FirstOrDefaultAsync()
             ?? throw new NotFoundAppException("Channel membership");
 
-        if (updated)
+        if (updatedReadState is not null)
         {
             await _signalR.PushReadStateBadgeAsync(authUserId, new ReadStatePush
             {
@@ -1585,7 +1585,7 @@ internal class MessageService : IMessageService
 
         if (markUnread)
         {
-            var updated = await _repositories.ReadStateRepository.MarkAsUnreadAsync(authUserId, null, conversationId, messageId, sequenceNumber.Value);
+            var updatedReadState = await _repositories.ReadStateRepository.MarkAsUnreadAsync(authUserId, null, conversationId, messageId, sequenceNumber.Value);
 
             // Marking unread only resets this user's own badge — it never revokes a Seen
             // receipt the other side(s) already got, matching how the badge/receipt split
@@ -1596,7 +1596,7 @@ internal class MessageService : IMessageService
                 .FirstOrDefaultAsync()
                 ?? throw new NotFoundAppException("Conversation membership");
 
-            if (updated)
+            if (updatedReadState is not null)
             {
                 try
                 {
@@ -1632,7 +1632,7 @@ internal class MessageService : IMessageService
     /// </summary>
     private async Task<ReadState> MarkConversationReadAndSeenAsync(Guid conversationId, Guid messageId, Guid userId, ConversationTypeEnum? conversationType, long sequenceNumber)
     {
-        var updated = await _repositories.ReadStateRepository.MarkAsReadAsync(userId, null, conversationId, messageId, sequenceNumber);
+        var updatedReadState = await _repositories.ReadStateRepository.MarkAsReadAsync(userId, null, conversationId, messageId, sequenceNumber);
 
         await StampSeenAndBroadcastAsync(conversationId, conversationType, userId, sequenceNumber);
 
@@ -1642,7 +1642,7 @@ internal class MessageService : IMessageService
             .FirstOrDefaultAsync()
             ?? throw new NotFoundAppException("Conversation membership");
 
-        if (updated)
+        if (updatedReadState is not null)
         {
             try
             {
