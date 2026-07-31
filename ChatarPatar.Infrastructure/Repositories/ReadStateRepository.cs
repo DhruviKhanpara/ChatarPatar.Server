@@ -132,61 +132,79 @@ internal class ReadStateRepository : BaseRepository<ReadState>, IReadStateReposi
                  .SetProperty(rs => rs.UpdatedAt, DateTime.UtcNow));
     }
 
-    public async Task<bool> MarkAsReadAsync(Guid userId, Guid? channelId, Guid? conversationId, Guid messageId, long sequenceNumber)
+    public async Task<ReadState?> MarkAsReadAsync(Guid userId, Guid? channelId, Guid? conversationId, Guid messageId, long sequenceNumber)
     {
-        var rows = await FindByCondition(rs => rs.UserId == userId
+        var readState = await _context.ReadStates
+            .FirstOrDefaultAsync(rs => rs.UserId == userId
                 && rs.ChannelId == channelId
-                && rs.ConversationId == conversationId
-                && rs.LastReadSequenceNumber < sequenceNumber)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(rs => rs.UnreadCount, rs => Math.Max(0, rs.UnreadCount -
-                    _context.Messages.Count(m =>
-                        m.ChannelId == channelId &&
-                        m.ConversationId == conversationId &&
-                        m.SenderId != userId &&
-                        m.SequenceNumber > rs.LastReadSequenceNumber &&
-                        m.SequenceNumber <= sequenceNumber)))
-                .SetProperty(rs => rs.MentionCount, rs => Math.Max(0, rs.MentionCount -
-                    _context.MessagesMentions.Count(mm =>
-                        mm.ChannelId == channelId &&
-                        mm.ConversationId == conversationId &&
-                        mm.MentionedUserId == userId &&
-                        mm.Message.SequenceNumber > rs.LastReadSequenceNumber &&
-                        mm.Message.SequenceNumber <= sequenceNumber)))
-                .SetProperty(rs => rs.LastReadSequenceNumber, sequenceNumber)
-                .SetProperty(rs => rs.LastReadMessageId, messageId)
-                .SetProperty(rs => rs.LastReadAt, DateTime.UtcNow)
-                .SetProperty(rs => rs.UpdatedAt, DateTime.UtcNow));
+                && rs.ConversationId == conversationId);
 
-        return rows > 0;
+        if (readState is null || readState.LastReadSequenceNumber >= sequenceNumber)
+            return null; // no matching ReadState, or already read past this point
+
+        var unreadCount = await _context.Messages
+            .Where(m => m.ChannelId == channelId
+                && m.ConversationId == conversationId
+                && m.SenderId != userId
+                && m.SequenceNumber > sequenceNumber)
+            .CountAsync();
+
+        var mentionCount = await _context.MessagesMentions
+            .Where(mm => mm.ChannelId == channelId
+                && mm.ConversationId == conversationId
+                && mm.MentionedUserId == userId
+                && mm.Message.SequenceNumber > sequenceNumber)
+            .CountAsync();
+
+        var now = DateTime.UtcNow;
+
+        readState.UnreadCount = Math.Max(0, unreadCount);
+        readState.MentionCount = Math.Max(0, mentionCount);
+        readState.LastReadSequenceNumber = sequenceNumber;
+        readState.LastReadMessageId = messageId;
+        readState.LastReadAt = now;
+        readState.UpdatedAt = now;
+
+        return readState;
     }
 
-    public async Task<bool> MarkAsUnreadAsync(Guid userId, Guid? channelId, Guid? conversationId, Guid messageId, long sequenceNumber)
+    public async Task<ReadState?> MarkAsUnreadAsync(Guid userId, Guid? channelId, Guid? conversationId, Guid messageId, long sequenceNumber)
     {
         var newCursor = sequenceNumber - 1;
 
-        var rows = await _context.ReadStates
-            .Where(rs => rs.UserId == userId
+        var readState = await _context.ReadStates
+            .FirstOrDefaultAsync(rs => rs.UserId == userId
                 && rs.ChannelId == channelId
                 && rs.ConversationId == conversationId
-                && rs.LastReadSequenceNumber > newCursor)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(rs => rs.UnreadCount, _ => _context.Messages.Count(m =>
-                    m.ChannelId == channelId &&
-                    m.ConversationId == conversationId &&
-                    m.SenderId != userId &&
-                    m.SequenceNumber > newCursor))
-                .SetProperty(rs => rs.MentionCount, _ => _context.MessagesMentions.Count(mm =>
-                    mm.ChannelId == channelId &&
-                    mm.ConversationId == conversationId &&
-                    mm.MentionedUserId == userId &&
-                    mm.Message.SequenceNumber > newCursor))
-                .SetProperty(rs => rs.LastReadSequenceNumber, newCursor)
-                .SetProperty(rs => rs.LastReadMessageId, (Guid?)null)
-                .SetProperty(rs => rs.LastReadAt, DateTime.UtcNow)
-                .SetProperty(rs => rs.UpdatedAt, DateTime.UtcNow));
+                && rs.LastReadSequenceNumber > newCursor);
 
-        return rows > 0;
+        if (readState is null)
+            return null; // already at or before this cursor — nothing to do
+
+        var unreadCount = await _context.Messages
+            .Where(m => m.ChannelId == channelId
+                && m.ConversationId == conversationId
+                && m.SenderId != userId
+                && m.SequenceNumber > newCursor)
+            .CountAsync();
+
+        var mentionCount = await _context.MessagesMentions
+            .Where(mm => mm.ChannelId == channelId
+                && mm.ConversationId == conversationId
+                && mm.MentionedUserId == userId
+                && mm.Message.SequenceNumber > newCursor)
+            .CountAsync();
+
+        var now = DateTime.UtcNow;
+
+        readState.UnreadCount = Math.Max(0, unreadCount);
+        readState.MentionCount = Math.Max(0, mentionCount);
+        readState.LastReadSequenceNumber = newCursor;
+        readState.LastReadMessageId = null;
+        readState.LastReadAt = now;
+        readState.UpdatedAt = now;
+
+        return readState;
     }
 
     #region Private Section

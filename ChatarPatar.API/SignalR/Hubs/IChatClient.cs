@@ -14,6 +14,10 @@ public interface IChatClient
     Task ReactionToggled(Guid messageId, MessageReactionToggleResultDto result);
     Task MessagePinned(PinnedMessageResponseDto pin);
 
+    // ── Delivery / seen state (Direct DM + small Group DM only) ────────────
+    Task MessageDelivered(MessageDeliveredPush payload);
+    Task MessageSeen(MessageSeenPush payload);
+
     // ── Typing ──────────────────────────────────────────────────────────────
     Task UserTyping(Guid channelOrConversationId, Guid userId, string userName, bool isTyping);
 

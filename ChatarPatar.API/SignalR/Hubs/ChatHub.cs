@@ -24,15 +24,15 @@ namespace ChatarPatar.API.SignalR.Hubs;
 [Authorize]
 public class ChatHub : Hub<IChatClient>
 {
-    private readonly IPresenceService _presenceService;
+    private readonly IServiceManager _services;
     private readonly ISignalRService _signalRService;
     private readonly UserConnectionTracker _connectionTracker;
     private readonly IHubAuthorizationService _hubAuth;
     private readonly ILogger<ChatHub> _logger;
 
-    public ChatHub(IPresenceService presenceService, ISignalRService signalRService, UserConnectionTracker connectionTracker, IHubAuthorizationService hubAuth, ILogger<ChatHub> logger)
+    public ChatHub(IServiceManager services, ISignalRService signalRService, UserConnectionTracker connectionTracker, IHubAuthorizationService hubAuth, ILogger<ChatHub> logger)
     {
-        _presenceService = presenceService;
+        _services = services;
         _signalRService = signalRService;
         _connectionTracker = connectionTracker;
         _hubAuth = hubAuth;
@@ -57,10 +57,10 @@ public class ChatHub : Hub<IChatClient>
         if (isFirstConnection)
         {
             // Persist Online status via service (no repo here)
-            await _presenceService.OnUserConnectedAsync(userId);
+            await _services.PresenceService.OnUserConnectedAsync(userId);
 
             // Broadcast to others who share channels/conversations with this user
-            var statusDto = await _presenceService.GetStatusAsync(userId);
+            var statusDto = await _services.PresenceService.GetStatusAsync(userId);
             await _signalRService.BroadcastPresenceAsync(userId, statusDto);
         }
 
@@ -84,9 +84,9 @@ public class ChatHub : Hub<IChatClient>
 
         if (isLastConnection)
         {
-            await _presenceService.OnUserDisconnectedAsync(userId);
+            await _services.PresenceService.OnUserDisconnectedAsync(userId);
 
-            var statusDto = await _presenceService.GetStatusAsync(userId);
+            var statusDto = await _services.PresenceService.GetStatusAsync(userId);
             await _signalRService.BroadcastPresenceAsync(userId, statusDto);
         }
 
@@ -182,6 +182,59 @@ public class ChatHub : Hub<IChatClient>
             .UserTyping(channelOrConversationId, userId, userName, isTyping);
     }
 
+    // ── Delivery ack ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Client calls this the moment it actually receives a MessageReceived push
+    /// for a conversation message (Direct DM or small Group DM). Best-effort:
+    /// swallows failures rather than tearing down the connection, since a lost
+    /// ack just means the tick updates a little later via the next Seen batch.
+    /// </summary>
+    public async Task AckMessageDelivered(Guid conversationId, Guid messageId)
+    {
+        var userIdStr = Context.User!.GetUserId()
+            ?? throw new HubException("Unauthorized: user Id claim missing.");
+
+        var userId = Guid.Parse(userIdStr);
+
+        try
+        {
+            await _services.MessageService.MarkMessageDeliveredAsync(conversationId, messageId, userId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "[HUB] AckMessageDelivered failed — UserId={UserId} ConversationId={ConversationId} MessageId={MessageId}",
+                userId, conversationId, messageId);
+        }
+    }
+
+    /// <summary>
+    /// Client calls this in real time when the conversation is open/focused and
+    /// the user has actually seen messages up to (and including) upToMessageId
+    /// — independent of the REST "mark read" endpoint, which stamps the same
+    /// Seen state. Best-effort: swallows failures rather than tearing down the
+    /// connection.
+    /// </summary>
+    public async Task AckMessagesSeen(Guid conversationId, Guid upToMessageId)
+    {
+        var userIdStr = Context.User!.GetUserId()
+            ?? throw new HubException("Unauthorized: user Id claim missing.");
+
+        var userId = Guid.Parse(userIdStr);
+
+        try
+        {
+            await _services.MessageService.MarkMessagesSeenAsync(conversationId, upToMessageId, userId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "[HUB] AckMessagesSeen failed — UserId={UserId} ConversationId={ConversationId} UpToMessageId={UpToMessageId}",
+                userId, conversationId, upToMessageId);
+        }
+    }
+
     // ── Custom status (user picks "Busy" / "Do Not Disturb" from UI) ──────
 
     /// <summary>
@@ -194,9 +247,9 @@ public class ChatHub : Hub<IChatClient>
 
         var userId = Guid.Parse(userIdStr);
 
-        await _presenceService.SetCustomStatusAsync(userId, status, customStatus);
+        await _services.PresenceService.SetCustomStatusAsync(userId, status, customStatus);
 
-        var statusDto = await _presenceService.GetStatusAsync(userId);
+        var statusDto = await _services.PresenceService.GetStatusAsync(userId);
         await _signalRService.BroadcastPresenceAsync(userId, statusDto);
     }
 }

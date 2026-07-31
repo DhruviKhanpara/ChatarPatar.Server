@@ -32,7 +32,7 @@ public interface IReadStateRepository : IBaseRepository<ReadState>
 
     Task IncrementUnreadAsync(Guid userId, Guid conversationId, bool incrementMention);
 
-    Task<bool> MarkAsReadAsync(Guid userId, Guid? channelId, Guid? conversationId, Guid messageId, long sequenceNumber);
+    Task<ReadState?> MarkAsReadAsync(Guid userId, Guid? channelId, Guid? conversationId, Guid messageId, long sequenceNumber);
 
-    Task<bool> MarkAsUnreadAsync(Guid userId, Guid? channelId, Guid? conversationId, Guid messageId, long sequenceNumber);
+    Task<ReadState?> MarkAsUnreadAsync(Guid userId, Guid? channelId, Guid? conversationId, Guid messageId, long sequenceNumber);
 }

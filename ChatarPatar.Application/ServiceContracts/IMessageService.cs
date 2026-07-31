@@ -26,6 +26,21 @@ public interface IMessageService
     Task<ReadStateDto> MarkConversationMessageReadAsync(Guid conversationId, Guid messageId);
     Task<ReadStateDto> MarkChannelMessageReadAsync(Guid orgId, Guid teamId, Guid channelId, Guid messageId);
 
+    /// <summary>
+    /// Called from the SignalR hub (not a controller) when a recipient's client
+    /// confirms it actually received a conversation message. Takes the acking
+    /// user explicitly since Hub invocations don't run inside an HTTP request —
+    /// IHttpContextAccessor is not reliably populated there.
+    /// </summary>
+    Task MarkMessageDeliveredAsync(Guid conversationId, Guid messageId, Guid ackingUserId);
+
+    /// <summary>
+    /// Called from the SignalR hub when a client acks messages as seen in real
+    /// time (independent of the REST "mark read" endpoint, which stamps Seen
+    /// state the same way under the hood).
+    /// </summary>
+    Task MarkMessagesSeenAsync(Guid conversationId, Guid upToMessageId, Guid ackingUserId);
+
     Task<ReadStateDto> MarkConversationMessageUnreadAsync(Guid conversationId, Guid messageId);
     Task<ReadStateDto> MarkChannelMessageUnreadAsync(Guid orgId, Guid teamId, Guid channelId, Guid messageId);
 
