@@ -1,9 +1,11 @@
 ﻿using Asp.Versioning;
 using ChatarPatar.API.Attributes;
+using ChatarPatar.API.Configurations;
 using ChatarPatar.Application.DTOs.User;
 using ChatarPatar.Application.ServiceContracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace ChatarPatar.API.Controllers;
 
@@ -22,6 +24,7 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     [AllowAnonymous]
     [SkipPermission]
+    [EnableRateLimiting(RateLimitingConfiguration.AuthStrictPolicy)]
     public async Task<ActionResult<LoginResponseDto>> Login([FromBody] UserLoginDto login)
     {
         var authUser = await _services.AuthService.LoginUserAsync(login);
@@ -31,6 +34,7 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     [AllowAnonymous]
     [SkipPermission]
+    [EnableRateLimiting(RateLimitingConfiguration.AuthModeratePolicy)]
     public async Task<ActionResult<LoginResponseDto>> Register([FromBody] UserRegisterDto user)
     {
         var authUser = await _services.AuthService.RegisterUserAsync(user);
@@ -71,6 +75,7 @@ public class AuthController : ControllerBase
     [HttpPost("verify-email")]
     [Authorize]
     [SkipPermission]
+    [EnableRateLimiting(RateLimitingConfiguration.AuthStrictPolicy)]
     public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailDto dto)
     {
         await _services.AuthService.VerifyEmailAsync(dto);
@@ -83,6 +88,7 @@ public class AuthController : ControllerBase
     [HttpPost("resend-verification")]
     [Authorize]
     [SkipPermission]
+    [EnableRateLimiting(RateLimitingConfiguration.AuthModeratePolicy)]
     public async Task<IActionResult> ResendVerification()
     {
         await _services.AuthService.ResendVerificationOtpAsync();
@@ -95,6 +101,7 @@ public class AuthController : ControllerBase
     [HttpPost("forgot-password")]
     [AllowAnonymous]
     [SkipPermission]
+    [EnableRateLimiting(RateLimitingConfiguration.AuthModeratePolicy)]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
     {
         await _services.AuthService.ForgotPasswordAsync(dto);
@@ -107,6 +114,7 @@ public class AuthController : ControllerBase
     [HttpPost("reset-password")]
     [AllowAnonymous]
     [SkipPermission]
+    [EnableRateLimiting(RateLimitingConfiguration.AuthStrictPolicy)]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
     {
         await _services.AuthService.ResetPasswordAsync(dto);
