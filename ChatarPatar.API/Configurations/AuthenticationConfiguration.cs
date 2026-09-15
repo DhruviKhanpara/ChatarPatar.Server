@@ -41,18 +41,11 @@ namespace ChatarPatar.API.Configuration
                 {
                     OnMessageReceived = context =>
                     {
-                        if (string.IsNullOrWhiteSpace(context.Token))
-                        {
-                            context.Request.Cookies.TryGetValue(accessTokenName, out var token);
-                            context.Token = token;
-                        }
+                        context.Request.Cookies.TryGetValue(accessTokenName, out var token);
 
-                        // WebSocket query-string token for SignalR
-                        if (string.IsNullOrWhiteSpace(context.Token))
+                        if (!string.IsNullOrWhiteSpace(token))
                         {
-                            var accessToken = context.Request.Query[accessTokenName].ToString();
-                            if (!string.IsNullOrEmpty(accessToken) && context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
-                                context.Token = accessToken;
+                            context.Token = token;
                         }
 
                         return Task.CompletedTask;

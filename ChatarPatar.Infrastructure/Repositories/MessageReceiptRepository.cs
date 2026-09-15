@@ -46,4 +46,7 @@ internal class MessageReceiptRepository : BaseRepository<MessageReceipt>, IMessa
 
         return idsToUpdate;
     }
+
+    public IQueryable<MessageReceipt> GetForMessage(Guid messageId) =>
+        FindByCondition(r => r.MessageId == messageId);
 }

@@ -445,7 +445,7 @@ internal class ConversationService : IConversationService
         var messageDto = await GetSystemMessageDto(systemMessage.Id);
 
         try { await _signalR.BroadcastConversationMessageAsync(conversationId, messageDto); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessage (Group logo update) failed. ConversationId={Id}", conversationId); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} (Group logo update) failed. ConversationId={Id}", nameof(_signalR.BroadcastConversationMessageAsync), conversationId); }
     }
 
     public async Task UpdateGroupConversationAsync(Guid conversationId, UpdateGroupConversationDto dto)
@@ -489,7 +489,7 @@ internal class ConversationService : IConversationService
         var messageDto = await GetSystemMessageDto(systemMessage.Id);
 
         try { await _signalR.BroadcastConversationMessageAsync(conversationId, messageDto); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessage (rename) failed. ConversationId={Id}", conversationId); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} (rename) failed. ConversationId={Id}", nameof(_signalR.BroadcastConversationMessageAsync), conversationId); }
     }
 
     public async Task RemoveGroupConversationLogoAsync(Guid conversationId)
@@ -525,8 +525,6 @@ internal class ConversationService : IConversationService
             UpdatedAt = DateTime.UtcNow
         };
 
-        await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
-
         await using var tx = await _repositories.UnitOfWork.BeginTransactionAsync();
         try
         {
@@ -541,6 +539,7 @@ internal class ConversationService : IConversationService
             conv.LogoFileId = null;
 
             await _repositories.MessageRepository.AddAsync(systemMessage);
+            await _repositories.UnitOfWork.SaveChangesWithoutAuditAsync();
 
             await tx.CommitAsync();
             _repositories.UnitOfWork.FlushPendingAuditLogs();
@@ -556,7 +555,7 @@ internal class ConversationService : IConversationService
         var messageDto = await GetSystemMessageDto(systemMessage.Id);
 
         try { await _signalR.BroadcastConversationMessageAsync(conversationId, messageDto); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessage (remove logo) failed. ConversationId={Id}", conversationId); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} (remove logo) failed. ConversationId={Id}", nameof(_signalR.BroadcastConversationMessageAsync), conversationId); }
     }
 
     #region Private section

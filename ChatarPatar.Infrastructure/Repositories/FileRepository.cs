@@ -20,7 +20,9 @@ internal class FileRepository : BaseSoftDeleteRepository<FileEntity>, IFileRepos
                 f.UploadedByUserId == uploadedByUserId &&
                 f.UsageContext == FileUsageContextEnum.Attachment &&
                 f.Status == FileStatusEnum.Pending &&
-                !f.IsDeleted)
+                !f.IsDeleted &&
+                f.ExpiresAt.HasValue &&
+                f.ExpiresAt > DateTime.UtcNow)
             .ToListAsync();
     }
 

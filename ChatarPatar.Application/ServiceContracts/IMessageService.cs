@@ -1,6 +1,8 @@
-﻿using ChatarPatar.Application.DTOs.Message;
+﻿using ChatarPatar.Application.DTOs.Common;
+using ChatarPatar.Application.DTOs.Message;
 using ChatarPatar.Application.DTOs.Message.Pin;
 using ChatarPatar.Application.DTOs.Message.Reaction;
+using ChatarPatar.Application.DTOs.Message.Receipt;
 using ChatarPatar.Application.DTOs.ReadState;
 using ChatarPatar.Common.Models;
 
@@ -17,11 +19,25 @@ public interface IMessageService
     Task<MessageDto> EditChannelMessageAsync(Guid orgId, Guid teamId, Guid channelId, Guid messageId, EditMessageDto dto);
     Task<MessageDto> EditConversationMessageAsync(Guid conversationId, Guid messageId, EditMessageDto dto);
 
+    /// <summary>
+    /// Per-user delivered/seen breakdown for a single message. Only ever
+    /// populated for Group conversations that were at or under
+    /// ValidationConstants.Conversation.GroupReceiptThreshold at send time —
+    /// channels and Direct DMs return IsTracked = false.
+    /// </summary>
+    Task<MessageReceiptsSummaryDto> GetConversationMessageReceiptsAsync(Guid conversationId, Guid messageId);
+
     Task<MessageReactionToggleResultDto> ToggleChannelMessageReactionAsync(Guid orgId, Guid teamId, Guid channelId, Guid messageId, MessageReactionToggleDto dto);
     Task<MessageReactionToggleResultDto> ToggleConversationMessageReactionAsync(Guid conversationId, Guid messageId, MessageReactionToggleDto dto);
 
+    Task<PagedResult<PinnedMessageListItemDto>> GetConversationPinnedMessagesAsync(Guid conversationId, PaginationParams paginationParams);
+    Task<PagedResult<PinnedMessageListItemDto>> GetChannelPinnedMessagesAsync(Guid orgId, Guid teamId, Guid channelId, PaginationParams paginationParams);
+
     Task<PinnedMessageResponseDto> PinConversationMessageAsync(Guid conversationId, Guid messageId);
     Task<PinnedMessageResponseDto> PinChannelMessageAsync(Guid channelId, Guid messageId);
+
+    Task<PinnedMessageResponseDto> UnPinConversationMessageAsync(Guid conversationId, Guid messageId);
+    Task<PinnedMessageResponseDto> UnPinChannelMessageAsync(Guid channelId, Guid messageId);
 
     Task<ReadStateDto> MarkConversationMessageReadAsync(Guid conversationId, Guid messageId);
     Task<ReadStateDto> MarkChannelMessageReadAsync(Guid orgId, Guid teamId, Guid channelId, Guid messageId);

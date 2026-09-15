@@ -13,6 +13,7 @@ public interface IChatClient
     Task MessageDeleted(Guid messageId, Guid channelOrConversationId, bool isChannel);
     Task ReactionToggled(Guid messageId, MessageReactionToggleResultDto result);
     Task MessagePinned(PinnedMessageResponseDto pin);
+    Task MessageUnPinned(PinnedMessageResponseDto pin);
 
     // ── Delivery / seen state (Direct DM + small Group DM only) ────────────
     Task MessageDelivered(MessageDeliveredPush payload);

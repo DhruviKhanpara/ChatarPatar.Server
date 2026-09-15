@@ -60,6 +60,17 @@ public class ExceptionHandlingMiddleware
 
             SetErrorContext(httpContext, HttpStatusCode.Conflict, ExceptionCodes.DUPLICATE_RESOURCE, message);
         }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            _logger.LogWarning(
+                ex, 
+                "Concurrency conflict: {ExceptionMessage}", 
+                ex.Message
+            );
+
+            SetErrorContext(httpContext, HttpStatusCode.Conflict, ExceptionCodes.CONCURRENCY_CONFLICT,
+                "This was changed by someone else just now. Please refresh and try again.");
+        }
         catch (Exception ex)
         {
             _logger.LogError(

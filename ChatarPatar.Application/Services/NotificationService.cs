@@ -10,24 +10,19 @@ using ChatarPatar.Common.Models;
 using ChatarPatar.Infrastructure.RepositoryContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace ChatarPatar.Application.Services;
 
 internal class NotificationService : INotificationService
 {
     private readonly IRepositoryManager _repositories;
-    private readonly IValidationService _validationService;
     private readonly IHttpContextAccessor _httpContextAccessor;
-    private readonly ILogger<NotificationService> _logger;
     private readonly IMapper _mapper;
 
-    public NotificationService(IRepositoryManager repositories, IValidationService validationService, IHttpContextAccessor httpContextAccessor, ILogger<NotificationService> logger, IMapper mapper)
+    public NotificationService(IRepositoryManager repositories, IHttpContextAccessor httpContextAccessor, IMapper mapper)
     {
         _repositories = repositories;
-        _validationService = validationService;
         _httpContextAccessor = httpContextAccessor;
-        _logger = logger;
         _mapper = mapper;
     }
     private HttpContext _httpContext => _httpContextAccessor.HttpContext ?? throw new AppException("No HTTP context available");

@@ -1,7 +1,10 @@
 ﻿using Asp.Versioning;
 using ChatarPatar.API.Attributes;
+using ChatarPatar.Application.DTOs.Common;
 using ChatarPatar.Application.DTOs.Message;
+using ChatarPatar.Application.DTOs.Message.Pin;
 using ChatarPatar.Application.DTOs.Message.Reaction;
+using ChatarPatar.Application.DTOs.Message.Receipt;
 using ChatarPatar.Application.DTOs.ReadState;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Common.Consts;
@@ -35,6 +38,30 @@ public class ConversationMessageController : ControllerBase
     public async Task<ActionResult<CursorPagedResult<MessageDto>>> GetMessages([FromRoute] Guid conversationId, [FromQuery] MessageQueryParams queryParams)
     {
         var result = await _services.MessageService.GetConversationMessagesAsync(conversationId, queryParams);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Per-user delivered/seen breakdown for a single message. Only ever
+    /// populated for small-group conversations — IsTracked is false for
+    /// Direct DMs and groups that were over threshold at send time.
+    /// </summary>
+    [HttpGet("{messageId:guid}/receipts")]
+    [SkipPermission]
+    public async Task<ActionResult<MessageReceiptsSummaryDto>> GetReceipts([FromRoute] Guid conversationId, [FromRoute] Guid messageId)
+    {
+        var result = await _services.MessageService.GetConversationMessageReceiptsAsync(conversationId, messageId);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Returns a paged list of pinned messages for a conversation, most recently pinned first.
+    /// </summary>
+    [HttpGet("pins")]
+    [SkipPermission]
+    public async Task<ActionResult<PagedResult<PinnedMessageListItemDto>>> GetPinnedMessages([FromRoute] Guid conversationId, [FromQuery] PaginationParams paginationParams)
+    {
+        var result = await _services.MessageService.GetConversationPinnedMessagesAsync(conversationId, paginationParams);
         return Ok(result);
     }
 
@@ -112,9 +139,20 @@ public class ConversationMessageController : ControllerBase
     /// </summary>
     [HttpPost("{messageId:guid}/pin")]
     [RequirePermission(PermissionCheckLogicEnum.Any, Permissions.MESSAGE_PIN)]
-    public async Task<ActionResult<MessageDto>> PinMessage([FromRoute] Guid conversationId, [FromRoute] Guid messageId)
+    public async Task<ActionResult<PinnedMessageResponseDto>> PinMessage([FromRoute] Guid conversationId, [FromRoute] Guid messageId)
     {
         var result = await _services.MessageService.PinConversationMessageAsync(conversationId, messageId);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Unpin a message from a conversation.
+    /// </summary>
+    [HttpDelete("{messageId:guid}/pin")]
+    [RequirePermission(PermissionCheckLogicEnum.Any, Permissions.MESSAGE_PIN)]
+    public async Task<ActionResult<PinnedMessageResponseDto>> UnPinMessage([FromRoute] Guid conversationId, [FromRoute] Guid messageId)
+    {
+        var result = await _services.MessageService.UnPinConversationMessageAsync(conversationId, messageId);
         return Ok(result);
     }
 
@@ -123,7 +161,7 @@ public class ConversationMessageController : ControllerBase
     /// </summary>
     [HttpPatch("{messageId:guid}/read")]
     [SkipPermission]
-    public async Task<ActionResult<ReadStateDto>> MarkRead([FromRoute] Guid conversationId, [FromForm] Guid messageId)
+    public async Task<ActionResult<ReadStateDto>> MarkRead([FromRoute] Guid conversationId, [FromRoute] Guid messageId)
     {
         var result = await _services.MessageService.MarkConversationMessageReadAsync(conversationId, messageId);
         return Ok(result);
@@ -134,7 +172,7 @@ public class ConversationMessageController : ControllerBase
     /// </summary>
     [HttpPatch("{messageId:guid}/unread")]
     [SkipPermission]
-    public async Task<ActionResult<ReadStateDto>> MarkUnread([FromRoute] Guid conversationId, [FromForm] Guid messageId)
+    public async Task<ActionResult<ReadStateDto>> MarkUnread([FromRoute] Guid conversationId, [FromRoute] Guid messageId)
     {
         var result = await _services.MessageService.MarkConversationMessageUnreadAsync(conversationId, messageId);
         return Ok(result);

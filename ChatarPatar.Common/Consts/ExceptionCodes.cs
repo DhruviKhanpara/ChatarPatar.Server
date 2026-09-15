@@ -33,6 +33,7 @@ public static class ExceptionCodes
     public const string DUPLICATE_RESOURCE = "DUPLICATE_RESOURCE";
     public const string INVALID_DATA = "INVALID_DATA";
     public const string VALIDATION_FAILED = "VALIDATION_FAILED";
+    public const string CONCURRENCY_CONFLICT = "CONCURRENCY_CONFLICT";
 
     // ── User ───────────────────────────────────────────────────────────────
     public const string INVALID_CREDENTIALS = "INVALID_CREDENTIALS";

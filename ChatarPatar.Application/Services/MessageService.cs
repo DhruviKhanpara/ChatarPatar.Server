@@ -1,8 +1,10 @@
 ﻿using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using ChatarPatar.Application.DTOs.Common;
 using ChatarPatar.Application.DTOs.Message;
 using ChatarPatar.Application.DTOs.Message.Pin;
 using ChatarPatar.Application.DTOs.Message.Reaction;
+using ChatarPatar.Application.DTOs.Message.Receipt;
 using ChatarPatar.Application.DTOs.ReadState;
 using ChatarPatar.Application.ServiceContracts;
 using ChatarPatar.Application.ServiceContracts.Notification;
@@ -242,7 +244,7 @@ internal class MessageService : IMessageService
         var messageDto = await GetMessageDto(message.Id);
 
         try { await _signalR.BroadcastChannelMessageAsync(channelId, messageDto); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelMessage failed. MessageId={Id}", message.Id); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed. MessageId={Id}", nameof(_signalR.BroadcastChannelMessageAsync), message.Id); }
 
         // Push thread counter update to root message viewers
         if (dto.ThreadRootMessageId.HasValue)
@@ -255,7 +257,7 @@ internal class MessageService : IMessageService
             if (root?.LastReplyAt is not null)
             {
                 try { await _signalR.BroadcastChannelThreadUpdateAsync(channelId, new ThreadUpdatePush(dto.ThreadRootMessageId.Value, root.ReplyCount, root.LastReplyAt.Value)); }
-                catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelThreadUpdate failed."); }
+                catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.BroadcastChannelThreadUpdateAsync)); }
             }
         }
 
@@ -370,10 +372,10 @@ internal class MessageService : IMessageService
         }
 
         var messageDto = await GetMessageDto(messageId);
-        
+
         try { await _signalR.BroadcastChannelMessageEditedAsync(channelId, messageDto); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelMessageEdited failed."); }
-        
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.BroadcastChannelMessageEditedAsync)); }
+
         return messageDto;
     }
 
@@ -397,10 +399,62 @@ internal class MessageService : IMessageService
 
         var result = await ToggleReactionAsync(messageId, channelId, null, authUserId, dto.Emoji);
 
-        try { await _signalR.BroadcastChannelReactionAsync(channelId, messageId, result); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelReaction failed."); }
+        try { await _signalR.BroadcastChannelReactionToggledAsync(channelId, messageId, result); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.BroadcastChannelReactionToggledAsync)); }
 
         return result;
+    }
+
+    public async Task<PagedResult<PinnedMessageListItemDto>> GetChannelPinnedMessagesAsync(Guid orgId, Guid teamId, Guid channelId, PaginationParams paginationParams)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var callerContext = await _repositories.TeamRepository
+            .GetByIdInOrg(teamId, orgId)
+            .AsNoTracking()
+            .Select(t => new
+            {
+                OrgRole = t.Organization.OrganizationMembers
+                    .Where(m => m.UserId == authUserId && !m.IsDeleted)
+                    .Select(m => (OrganizationRoleEnum?)m.Role)
+                    .FirstOrDefault(),
+                TeamRole = t.TeamMembers
+                    .Where(m => m.UserId == authUserId && !m.IsDeleted)
+                    .Select(m => (TeamRoleEnum?)m.Role)
+                    .FirstOrDefault()
+            })
+            .FirstOrDefaultAsync();
+
+        if (callerContext == null || callerContext.OrgRole == null)
+            throw new NotFoundAppException("Channel");
+
+        var callerIsAdmin = callerContext.OrgRole is OrganizationRoleEnum.OrgOwner or OrganizationRoleEnum.OrgAdmin || callerContext.TeamRole is TeamRoleEnum.TeamAdmin;
+
+        var channelQuery = _repositories.ChannelRepository
+            .GetByIdInTeam(channelId, teamId, orgId)
+            .AsNoTracking();
+
+        if (!callerIsAdmin)
+            channelQuery = channelQuery.Where(c => !c.IsPrivate || c.ChannelMembers.Any(m => m.UserId == authUserId && !m.IsDeleted));
+
+        var channelExists = await channelQuery.AnyAsync();
+
+        if (!channelExists)
+            throw new NotFoundAppException("Channel");
+
+        var pinQuery = _repositories.PinnedMessageRepository
+            .PinInChannel(channelId)
+            .AsNoTracking();
+
+        var totalCount = await pinQuery.CountAsync();
+
+        var pins = await pinQuery
+            .OrderByDescending(p => p.PinnedAt)
+            .PaginateOffset(paginationParams.PageSize, paginationParams.PageNumber)
+            .ProjectTo<PinnedMessageListItemDto>(_mapper.ConfigurationProvider)
+            .ToListAsync();
+
+        return new PagedResult<PinnedMessageListItemDto>(pins, totalCount, paginationParams.PageNumber, paginationParams.PageSize);
     }
 
     public async Task<PinnedMessageResponseDto> PinChannelMessageAsync(Guid channelId, Guid messageId)
@@ -430,7 +484,7 @@ internal class MessageService : IMessageService
             throw new InvalidDataAppException("Cannot pin in an archived channel.");
 
         var existPin = await _repositories.PinnedMessageRepository
-            .ActivePinInChannel(messageId, channelId)
+            .MessagePinInChannel(messageId, channelId)
             .AsNoTracking()
             .SingleOrDefaultAsync();
 
@@ -455,14 +509,14 @@ internal class MessageService : IMessageService
             var pinDto = _mapper.Map<PinnedMessageResponseDto>(pin);
 
             try { await _signalR.BroadcastChannelPinAsync(channelId, pinDto); }
-            catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelPin failed."); }
+            catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.BroadcastChannelPinAsync)); }
 
             return pinDto;
         }
         catch (DbUpdateException ex) when (ex.IsPinnedMessagePerChannelUniqueViolation())
         {
             var concurrentPin = await _repositories.PinnedMessageRepository
-                .ActivePinInChannel(messageId, channelId)
+                .MessagePinInChannel(messageId, channelId)
                 .AsNoTracking()
                 .SingleOrDefaultAsync();
 
@@ -471,6 +525,36 @@ internal class MessageService : IMessageService
 
             return _mapper.Map<PinnedMessageResponseDto>(concurrentPin);
         }
+    }
+
+    public async Task<PinnedMessageResponseDto> UnPinChannelMessageAsync(Guid channelId, Guid messageId)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var existingPin = await _repositories.PinnedMessageRepository
+            .MessagePinInChannel(messageId, channelId)
+            .SingleOrDefaultAsync();
+
+        if (existingPin is null)
+            throw new NotFoundAppException("Pinned Message");
+
+        var result = _mapper.Map<PinnedMessageResponseDto>(existingPin);
+        result.UnPinnedByUserId = authUserId;
+        result.UnPinnedAt = DateTime.UtcNow;
+
+        _repositories.PinnedMessageRepository.Remove(existingPin);
+
+        try { await _repositories.UnitOfWork.SaveChangesAsync(); }
+        catch (DbUpdateConcurrencyException)
+        {
+            _repositories.UnitOfWork.DetachEntity(existingPin);
+            return result; // best-effort: if the pin was already removed, treat as success
+        }
+
+        try { await _signalR.BroadcastChannelUnPinAsync(channelId, result); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.BroadcastChannelUnPinAsync)); }
+
+        return result;
     }
 
     public async Task<ReadStateDto> MarkChannelMessageReadAsync(Guid orgId, Guid teamId, Guid channelId, Guid messageId)
@@ -502,7 +586,7 @@ internal class MessageService : IMessageService
         await _repositories.UnitOfWork.SaveChangesAsync();
 
         try { await _signalR.BroadcastChannelMessageDeletedAsync(channelId, messageId, authUserId); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelMessageDeleted failed."); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.BroadcastChannelMessageDeletedAsync)); }
     }
 
     public async Task ForceDeleteChannelMessageAsync(Guid orgId, Guid teamId, Guid channelId, Guid messageId)
@@ -528,7 +612,7 @@ internal class MessageService : IMessageService
         await _repositories.UnitOfWork.SaveChangesAsync();
 
         try { await _signalR.BroadcastChannelMessageDeletedAsync(channelId, messageId, authUserId); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelMessageDeleted failed."); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.BroadcastChannelMessageDeletedAsync)); }
     }
 
     #endregion
@@ -756,7 +840,7 @@ internal class MessageService : IMessageService
         var messageDto = await GetMessageDto(message.Id);
 
         try { await _signalR.BroadcastConversationMessageAsync(conversationId, messageDto); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessage failed. MessageId={Id}", message.Id); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed. MessageId={Id}", nameof(_signalR.BroadcastConversationMessageAsync), message.Id); }
 
         if (dto.ThreadRootMessageId.HasValue)
         {
@@ -768,7 +852,7 @@ internal class MessageService : IMessageService
             if (root?.LastReplyAt is not null)
             {
                 try { await _signalR.BroadcastConversationThreadUpdateAsync(conversationId, new ThreadUpdatePush(dto.ThreadRootMessageId.Value, root.ReplyCount, root.LastReplyAt.Value)); }
-                catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationThreadUpdate failed."); }
+                catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.BroadcastConversationThreadUpdateAsync)); }
             }
         }
 
@@ -877,9 +961,53 @@ internal class MessageService : IMessageService
         var messageDto = await GetMessageDto(messageId);
 
         try { await _signalR.BroadcastConversationMessageEditedAsync(conversationId, messageDto); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessageEdited failed."); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.BroadcastConversationMessageEditedAsync)); }
 
         return messageDto;
+    }
+
+    /// <summary>
+    /// Per-user delivered/seen breakdown for a single conversation message.
+    /// Any active participant may view it — not just the sender
+    /// </summary>
+    public async Task<MessageReceiptsSummaryDto> GetConversationMessageReceiptsAsync(Guid conversationId, Guid messageId)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var isParticipant = await _repositories.ConversationRepository
+            .GetByIdForUser(conversationId, authUserId)
+            .AnyAsync();
+
+        if (!isParticipant)
+            throw new NotFoundAppException("Conversation");
+
+        var messageExists = await _repositories.MessageRepository
+            .GetByIdInConversation(messageId, conversationId)
+            .AnyAsync();
+
+        if (!messageExists)
+            throw new NotFoundAppException("Message");
+
+        var receipts = await _repositories.MessageReceiptRepository
+            .GetForMessage(messageId)
+            .AsNoTracking()
+            .Select(r => new MessageReceiptItemDto
+            {
+                UserId = r.UserId,
+                UserName = r.User.Name,
+                DeliveredAt = r.DeliveredAt,
+                SeenAt = r.SeenAt
+            })
+            .ToListAsync();
+
+        // Empty means never receipt-tracked (channel / Direct DM / group was
+        // over threshold at send time) — distinct from "tracked, unseen".
+        return new MessageReceiptsSummaryDto
+        {
+            MessageId = messageId,
+            IsTracked = receipts.Count > 0,
+            Receipts = receipts
+        };
     }
 
     /// <summary>
@@ -901,11 +1029,42 @@ internal class MessageService : IMessageService
             throw new NotFoundAppException("Message");
 
         var result = await ToggleReactionAsync(messageId, null, conversationId, authUserId, dto.Emoji);
-        
-        try { await _signalR.BroadcastConversationReactionAsync(conversationId, messageId, result); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationReaction failed."); }
-        
+
+        try { await _signalR.BroadcastConversationReactionToggledAsync(conversationId, messageId, result); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.BroadcastConversationReactionToggledAsync)); }
+
         return result;
+    }
+
+    /// <summary>
+    /// Lists pinned messages for a conversation, most recently pinned first.
+    /// Access is scoped to conversations the caller participates in, same
+    /// as GetConversationMessagesAsync.
+    /// </summary>
+    public async Task<PagedResult<PinnedMessageListItemDto>> GetConversationPinnedMessagesAsync(Guid conversationId, PaginationParams paginationParams)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var conversationExists = await _repositories.ConversationRepository
+            .GetByIdForUser(conversationId, authUserId)
+            .AnyAsync();
+
+        if (!conversationExists)
+            throw new NotFoundAppException("Conversation");
+
+        var pinQuery = _repositories.PinnedMessageRepository
+            .PinInConversation(conversationId)
+            .AsNoTracking();
+
+        var totalCount = await pinQuery.CountAsync();
+
+        var pins = await pinQuery
+            .OrderByDescending(p => p.PinnedAt)
+            .PaginateOffset(paginationParams.PageSize, paginationParams.PageNumber)
+            .ProjectTo<PinnedMessageListItemDto>(_mapper.ConfigurationProvider)
+            .ToListAsync();
+
+        return new PagedResult<PinnedMessageListItemDto>(pins, totalCount, paginationParams.PageNumber, paginationParams.PageSize);
     }
 
     public async Task<PinnedMessageResponseDto> PinConversationMessageAsync(Guid conversationId, Guid messageId)
@@ -927,7 +1086,7 @@ internal class MessageService : IMessageService
             throw new NotFoundAppException("Message");
 
         var existPin = await _repositories.PinnedMessageRepository
-            .ActivePinInConversation(messageId, conversationId)
+            .MessagePinInConversation(messageId, conversationId)
             .AsNoTracking()
             .SingleOrDefaultAsync();
 
@@ -952,14 +1111,14 @@ internal class MessageService : IMessageService
             var pinDto = _mapper.Map<PinnedMessageResponseDto>(pin);
 
             try { await _signalR.BroadcastConversationPinAsync(conversationId, pinDto); }
-            catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelPin failed."); }
+            catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.BroadcastConversationPinAsync)); }
 
             return pinDto;
         }
         catch (DbUpdateException ex) when (ex.IsPinnedMessagePerConversationUniqueViolation())
         {
             var concurrentPin = await _repositories.PinnedMessageRepository
-                .ActivePinInConversation(messageId, conversationId)
+                .MessagePinInConversation(messageId, conversationId)
                 .AsNoTracking()
                 .SingleOrDefaultAsync();
 
@@ -968,6 +1127,36 @@ internal class MessageService : IMessageService
 
             return _mapper.Map<PinnedMessageResponseDto>(concurrentPin);
         }
+    }
+
+    public async Task<PinnedMessageResponseDto> UnPinConversationMessageAsync(Guid conversationId, Guid messageId)
+    {
+        var authUserId = Guid.Parse(_httpContext.GetUserId());
+
+        var existingPin = await _repositories.PinnedMessageRepository
+            .MessagePinInConversation(messageId, conversationId)
+            .SingleOrDefaultAsync();
+
+        if (existingPin is null)
+            throw new NotFoundAppException("Pinned Message");
+
+        var result = _mapper.Map<PinnedMessageResponseDto>(existingPin);
+        result.UnPinnedByUserId = authUserId;
+        result.UnPinnedAt = DateTime.UtcNow;
+
+        _repositories.PinnedMessageRepository.Remove(existingPin);
+
+        try { await _repositories.UnitOfWork.SaveChangesAsync(); }
+        catch (DbUpdateConcurrencyException)
+        {
+            _repositories.UnitOfWork.DetachEntity(existingPin);
+            return result; // best-effort: if the pin was already removed, treat as success
+        }
+
+        try { await _signalR.BroadcastConversationUnPinAsync(conversationId, result); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.BroadcastConversationUnPinAsync)); }
+
+        return result;
     }
 
     public async Task<ReadStateDto> MarkConversationMessageReadAsync(Guid conversationId, Guid messageId)
@@ -1006,7 +1195,7 @@ internal class MessageService : IMessageService
                 DeliveredAt = DateTime.UtcNow
             });
         }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessageDelivered failed."); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.BroadcastConversationMessageDeliveredAsync)); }
     }
 
     /// <summary>
@@ -1062,7 +1251,7 @@ internal class MessageService : IMessageService
         await _repositories.UnitOfWork.SaveChangesAsync();
 
         try { await _signalR.BroadcastConversationMessageDeletedAsync(conversationId, messageId, authUserId); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessageDeleted failed."); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.BroadcastConversationMessageDeletedAsync)); }
     }
 
     public async Task ForceDeleteConversationMessageAsync(Guid conversationId, Guid messageId)
@@ -1088,7 +1277,7 @@ internal class MessageService : IMessageService
         await _repositories.UnitOfWork.SaveChangesAsync();
 
         try { await _signalR.BroadcastConversationMessageDeletedAsync(conversationId, messageId, authUserId); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessageDeleted failed."); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.BroadcastConversationMessageDeletedAsync)); }
     }
 
     #endregion
@@ -1541,22 +1730,32 @@ internal class MessageService : IMessageService
             ? await _repositories.ReadStateRepository.MarkAsUnreadAsync(authUserId, channelId, null, messageId, sequenceNumber.Value)
             : await _repositories.ReadStateRepository.MarkAsReadAsync(authUserId, channelId, null, messageId, sequenceNumber.Value);
 
-        var readState = await _repositories.ReadStateRepository
-            .FindByCondition(rs => rs.UserId == authUserId && rs.ChannelId == channelId)
-            .AsNoTracking()
-            .FirstOrDefaultAsync()
-            ?? throw new NotFoundAppException("Channel membership");
-
         if (updatedReadState is not null)
         {
-            await _signalR.PushReadStateBadgeAsync(authUserId, new ReadStatePush
+            await _repositories.UnitOfWork.SaveChangesAsync();
+
+            try
             {
-                ChannelId = channelId,
-                UnreadCount = readState.UnreadCount,
-                MentionCount = readState.MentionCount,
-                LastMessageAt = readState.LastReadAt ?? DateTime.UtcNow
-            });
+                await _signalR.PushReadStateBadgeAsync(authUserId, new ReadStatePush
+                {
+                    ChannelId = channelId,
+                    UnreadCount = updatedReadState.UnreadCount,
+                    MentionCount = updatedReadState.MentionCount,
+                    LastMessageAt = updatedReadState.LastReadAt ?? DateTime.UtcNow
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.BroadcastConversationUnPinAsync));
+            }
         }
+
+        var readState = updatedReadState
+            ?? await _repositories.ReadStateRepository
+                .FindByCondition(rs => rs.UserId == authUserId && rs.ChannelId == channelId)
+                .AsNoTracking()
+                .FirstOrDefaultAsync()
+            ?? throw new NotFoundAppException("Channel membership");
 
         return MapReadState(readState);
     }
@@ -1590,26 +1789,36 @@ internal class MessageService : IMessageService
             // Marking unread only resets this user's own badge — it never revokes a Seen
             // receipt the other side(s) already got, matching how the badge/receipt split
             // works everywhere else (WhatsApp/Slack included).
-            readState = await _repositories.ReadStateRepository
-                .FindByCondition(rs => rs.UserId == authUserId && rs.ConversationId == conversationId)
-                .AsNoTracking()
-                .FirstOrDefaultAsync()
-                ?? throw new NotFoundAppException("Conversation membership");
-
             if (updatedReadState is not null)
             {
                 try
                 {
-                    await _signalR.PushReadStateBadgeAsync(authUserId, new ReadStatePush
+                    await _repositories.UnitOfWork.SaveChangesAsync();
+
+                    try
                     {
-                        ConversationId = conversationId,
-                        UnreadCount = readState.UnreadCount,
-                        MentionCount = readState.MentionCount,
-                        LastMessageAt = readState.LastReadAt ?? DateTime.UtcNow
-                    });
+                        await _signalR.PushReadStateBadgeAsync(authUserId, new ReadStatePush
+                        {
+                            ConversationId = conversationId,
+                            UnreadCount = updatedReadState.UnreadCount,
+                            MentionCount = updatedReadState.MentionCount,
+                            LastMessageAt = updatedReadState.LastReadAt ?? DateTime.UtcNow
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.BroadcastConversationUnPinAsync));
+                    }
                 }
-                catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] PushReadStateBadge failed."); }
+                catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.PushReadStateBadgeAsync)); }
             }
+
+            readState = updatedReadState
+                ?? await _repositories.ReadStateRepository
+                    .FindByCondition(rs => rs.UserId == authUserId && rs.ConversationId == conversationId)
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync()
+                ?? throw new NotFoundAppException("Conversation membership");
         }
         else
         {
@@ -1636,26 +1845,28 @@ internal class MessageService : IMessageService
 
         await StampSeenAndBroadcastAsync(conversationId, conversationType, userId, sequenceNumber);
 
-        var readState = await _repositories.ReadStateRepository
-            .FindByCondition(rs => rs.UserId == userId && rs.ConversationId == conversationId)
-            .AsNoTracking()
-            .FirstOrDefaultAsync()
-            ?? throw new NotFoundAppException("Conversation membership");
-
         if (updatedReadState is not null)
         {
+            await _repositories.UnitOfWork.SaveChangesAsync();
+
             try
             {
                 await _signalR.PushReadStateBadgeAsync(userId, new ReadStatePush
                 {
                     ConversationId = conversationId,
-                    UnreadCount = readState.UnreadCount,
-                    MentionCount = readState.MentionCount,
-                    LastMessageAt = readState.LastReadAt ?? DateTime.UtcNow
+                    UnreadCount = updatedReadState.UnreadCount,
+                    MentionCount = updatedReadState.MentionCount,
+                    LastMessageAt = updatedReadState.LastReadAt ?? DateTime.UtcNow
                 });
             }
-            catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] PushReadStateBadge failed."); }
+            catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.PushReadStateBadgeAsync)); }
         }
+
+        var readState = await _repositories.ReadStateRepository
+            .FindByCondition(rs => rs.UserId == userId && rs.ConversationId == conversationId)
+            .AsNoTracking()
+            .FirstOrDefaultAsync()
+            ?? throw new NotFoundAppException("Conversation membership");
 
         return readState;
     }
@@ -1685,7 +1896,7 @@ internal class MessageService : IMessageService
                 SeenAt = DateTime.UtcNow
             });
         }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessageSeen failed."); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} failed.", nameof(_signalR.BroadcastConversationMessageSeenAsync)); }
     }
 
     private static ReadStateDto MapReadState(ReadState rs) => new()

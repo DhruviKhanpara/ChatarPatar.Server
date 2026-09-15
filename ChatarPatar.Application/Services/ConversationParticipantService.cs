@@ -169,7 +169,7 @@ internal class ConversationParticipantService : IConversationParticipantService
         var messageDto = await GetSystemMessageDto(systemMessage.Id);
 
         try { await _signalR.BroadcastConversationMessageAsync(conversationId, messageDto); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessage (add member) failed. ConversationId={Id}", conversationId); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} (add member) failed. ConversationId={Id}", nameof(_signalR.BroadcastConversationMessageAsync), conversationId); }
     }
 
     public async Task UpdateParticipantRoleAsync(Guid conversationId, Guid participantId, UpdateConversationParticipantRoleDto dto)
@@ -249,7 +249,7 @@ internal class ConversationParticipantService : IConversationParticipantService
         var messageDto = await GetSystemMessageDto(systemMessage.Id);
 
         try { await _signalR.BroadcastConversationMessageAsync(conversationId, messageDto); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessage (leave) failed. ConversationId={Id}", conversationId); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} (leave) failed. ConversationId={Id}", nameof(_signalR.BroadcastConversationMessageAsync), conversationId); }
 
         TryInvalidatePermissions(participant.UserId, "Failed to invalidate permissions for user {UserId} after leaving the group");
     }
@@ -298,7 +298,7 @@ internal class ConversationParticipantService : IConversationParticipantService
         var messageDto = await GetSystemMessageDto(systemMessage.Id);
 
         try { await _signalR.BroadcastConversationMessageAsync(conversationId, messageDto); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastConversationMessage (remove participant) failed. ConversationId={Id}", conversationId); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} (remove participant) failed. ConversationId={Id}", nameof(_signalR.BroadcastConversationMessageAsync), conversationId); }
 
         TryInvalidatePermissions(participant.UserId, "Failed to invalidate permissions for user {UserId} after removing the group");
     }

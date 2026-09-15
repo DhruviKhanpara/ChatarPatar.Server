@@ -84,7 +84,7 @@ public class Program
         builder.Services.AddScoped<ISignalRService>(sp => sp.GetRequiredService<SignalRService>());
         builder.Services.AddScoped<ISignalRPushService>(sp => sp.GetRequiredService<SignalRService>());
 
-        // CORS configuration to allow requests from Angular app
+        // CORS configuration to allow requests from UI
         builder.Services.AddCorsConfiguration(builder.Configuration);
 
         var app = builder.Build();

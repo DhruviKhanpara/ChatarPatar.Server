@@ -54,11 +54,14 @@ public sealed class SignalRService : ISignalRService
     public Task BroadcastChannelMessageDeletedAsync(Guid channelId, Guid messageId, Guid deletedBy)
         => _hub.Clients.Group($"channel:{channelId}").MessageDeleted(messageId, channelId, isChannel: true);
 
-    public Task BroadcastChannelReactionAsync(Guid channelId, Guid messageId, MessageReactionToggleResultDto result)
+    public Task BroadcastChannelReactionToggledAsync(Guid channelId, Guid messageId, MessageReactionToggleResultDto result)
         => _hub.Clients.Group($"channel:{channelId}").ReactionToggled(messageId, result);
 
     public Task BroadcastChannelPinAsync(Guid channelId, PinnedMessageResponseDto pin)
         => _hub.Clients.Group($"channel:{channelId}").MessagePinned(pin);
+
+    public Task BroadcastChannelUnPinAsync(Guid channelId, PinnedMessageResponseDto pin)
+        => _hub.Clients.Group($"channel:{channelId}").MessageUnPinned(pin);
 
     public Task BroadcastConversationMessageAsync(Guid conversationId, MessageDto message)
         => _hub.Clients.Group($"conv:{conversationId}").MessageReceived(message);
@@ -69,11 +72,14 @@ public sealed class SignalRService : ISignalRService
     public Task BroadcastConversationMessageDeletedAsync(Guid conversationId, Guid messageId, Guid deletedBy)
         => _hub.Clients.Group($"conv:{conversationId}").MessageDeleted(messageId, conversationId, isChannel: false);
 
-    public Task BroadcastConversationReactionAsync(Guid conversationId, Guid messageId, MessageReactionToggleResultDto result)
+    public Task BroadcastConversationReactionToggledAsync(Guid conversationId, Guid messageId, MessageReactionToggleResultDto result)
         => _hub.Clients.Group($"conv:{conversationId}").ReactionToggled(messageId, result);
 
     public Task BroadcastConversationPinAsync(Guid conversationId, PinnedMessageResponseDto pin)
         => _hub.Clients.Group($"conv:{conversationId}").MessagePinned(pin);
+
+    public Task BroadcastConversationUnPinAsync(Guid conversationId, PinnedMessageResponseDto pin)
+        => _hub.Clients.Group($"conv:{conversationId}").MessageUnPinned(pin);
 
     public Task BroadcastConversationMessageDeliveredAsync(Guid conversationId, MessageDeliveredPush payload)
         => _hub.Clients.Group($"conv:{conversationId}").MessageDelivered(payload);

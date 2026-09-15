@@ -16,12 +16,6 @@ public class PinnedMessageConfiguration : IEntityTypeConfiguration<PinnedMessage
                 DbConstraints.PinnedMessages.CKMessageSource,
                 "(ChannelId IS NOT NULL AND ConversationId IS NULL) OR " +
                 "(ChannelId IS NULL AND ConversationId IS NOT NULL)");
-
-            // Unpin consistency
-            t.HasCheckConstraint(
-                DbConstraints.PinnedMessages.CKUnpinConsistency,
-                "(UnPinnedAt IS NULL AND UnPinnedByUserId IS NULL) OR " +
-                "(UnPinnedAt IS NOT NULL AND UnPinnedByUserId IS NOT NULL)");
         });
 
         builder.HasKey(p => p.Id);
@@ -67,12 +61,6 @@ public class PinnedMessageConfiguration : IEntityTypeConfiguration<PinnedMessage
                .HasConstraintName(DbConstraints.PinnedMessages.FKPinnedByUser)
                .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasOne(p => p.UnPinnedByUser)
-               .WithMany()
-               .HasForeignKey(p => p.UnPinnedByUserId)
-               .HasConstraintName(DbConstraints.PinnedMessages.FKUnPinnedByUser)
-               .OnDelete(DeleteBehavior.Restrict);
-
         // ----------------------------
         // Indexes
         // ----------------------------
@@ -80,19 +68,17 @@ public class PinnedMessageConfiguration : IEntityTypeConfiguration<PinnedMessage
         builder.HasIndex(p => new { p.MessageId, p.ChannelId })
                .IsUnique()
                .HasDatabaseName(DbConstraints.PinnedMessages.UniquePinnedMessagePerChannel)
-               .HasFilter("[ChannelId] IS NOT NULL AND [UnPinnedAt] IS NULL");
+               .HasFilter("[ChannelId] IS NOT NULL");
 
         builder.HasIndex(p => new { p.MessageId, p.ConversationId })
                .IsUnique()
                .HasDatabaseName(DbConstraints.PinnedMessages.UniquePinnedMessagePerConversation)
-               .HasFilter("[ConversationId] IS NOT NULL AND [UnPinnedAt] IS NULL");
+               .HasFilter("[ConversationId] IS NOT NULL");
 
         builder.HasIndex(p => new { p.ChannelId, p.PinnedAt })
-               .HasDatabaseName(DbConstraints.PinnedMessages.IXChannelMessagePinnedAt)
-               .HasFilter("[UnPinnedAt] IS NULL");
+               .HasDatabaseName(DbConstraints.PinnedMessages.IXChannelMessagePinnedAt);
 
         builder.HasIndex(p => new { p.ConversationId, p.PinnedAt })
-               .HasDatabaseName(DbConstraints.PinnedMessages.IXConversationMessagePinnedAt)
-               .HasFilter("[UnPinnedAt] IS NULL");
+               .HasDatabaseName(DbConstraints.PinnedMessages.IXConversationMessagePinnedAt);
     }
 }
