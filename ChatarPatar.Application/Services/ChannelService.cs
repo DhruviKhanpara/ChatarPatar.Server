@@ -313,7 +313,7 @@ internal class ChannelService : IChannelService
         var messageDto = await GetSystemMessageDto(systemMessage.Id);
 
         try { await _signalR.BroadcastChannelMessageAsync(channelId, messageDto); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelMessage (rename) failed. ChannelId={Id}", channelId); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} (rename) failed. ChannelId={Id}", nameof(_signalR.BroadcastChannelMessageAsync), channelId); }
     }
 
     public async Task ArchiveChannelAsync(Guid orgId, Guid teamId, Guid channelId)
@@ -354,7 +354,7 @@ internal class ChannelService : IChannelService
         var messageDto = await GetSystemMessageDto(systemMessage.Id);
 
         try { await _signalR.BroadcastChannelMessageAsync(channelId, messageDto); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelMessage (archive) failed. ChannelId={Id}", channelId); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} (archive) failed. ChannelId={Id}", nameof(_signalR.BroadcastChannelMessageAsync), channelId); }
     }
 
     public async Task UnarchiveChannelAsync(Guid orgId, Guid teamId, Guid channelId)
@@ -398,7 +398,7 @@ internal class ChannelService : IChannelService
         var messageDto = await GetSystemMessageDto(systemMessage.Id);
 
         try { await _signalR.BroadcastChannelMessageAsync(channelId, messageDto); }
-        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] BroadcastChannelMessage (unarchive) failed. ChannelId={Id}", channelId); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[SignalR] {MethodName} (unarchive) failed. ChannelId={Id}", nameof(_signalR.BroadcastChannelMessageAsync), channelId); }
     }
 
     #region Private Section

@@ -38,5 +38,10 @@ public class MessageMapperProfile : Profile
 
         // Message Pinned
         CreateMap<PinnedMessage, PinnedMessageResponseDto>();
+
+        CreateMap<PinnedMessage, PinnedMessageListItemDto>()
+            .ForMember(dest => dest.PinnedByUserName, opt => opt.MapFrom(src => src.PinnedByUser.Name))
+            .ForMember(dest => dest.SenderId, opt => opt.MapFrom(src => src.Message.SenderId))
+            .ForMember(dest => dest.SenderName, opt => opt.MapFrom(src => src.Message.Sender.Name));
     }
 }

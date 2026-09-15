@@ -8,15 +8,19 @@ internal class PinnedMessageRepository : BaseRepository<PinnedMessage>, IPinnedM
 {
     public PinnedMessageRepository(AppDbContext context) : base(context) { }
 
-    public IQueryable<PinnedMessage> ActivePinInChannel(Guid messageId, Guid channelId) =>
+    public IQueryable<PinnedMessage> MessagePinInChannel(Guid messageId, Guid channelId) =>
         FindByCondition(x =>
             x.MessageId == messageId
-            && x.ChannelId == channelId
-            && x.UnPinnedAt == null);
+            && x.ChannelId == channelId);
 
-    public IQueryable<PinnedMessage> ActivePinInConversation(Guid messageId, Guid conversationId) =>
+    public IQueryable<PinnedMessage> MessagePinInConversation(Guid messageId, Guid conversationId) =>
         FindByCondition(x =>
             x.MessageId == messageId
-            && x.ConversationId == conversationId
-            && x.UnPinnedAt == null);
+            && x.ConversationId == conversationId);
+
+    public IQueryable<PinnedMessage> PinInChannel(Guid channelId) =>
+        FindByCondition(x => x.ChannelId == channelId);
+
+    public IQueryable<PinnedMessage> PinInConversation(Guid conversationId) =>
+        FindByCondition(x => x.ConversationId == conversationId);
 }

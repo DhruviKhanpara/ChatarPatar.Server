@@ -339,10 +339,6 @@
         <!-- Step 2: Connect -->
         <div>
           <div class="section-label">2 · Hub Connection</div>
-          <div class="field">
-            <label>Token (auto-filled after login, or paste manually)</label>
-            <input id="token" placeholder="eyJ..." />
-          </div>
           <div class="btn-row">
             <button class="btn-primary" id="btnConnect" onclick="connect()">
               Connect
@@ -465,7 +461,10 @@
           <div class="section-label">6 · Delivered / Seen Acks (Hub)</div>
           <div class="field">
             <label>Conversation ID (reuses field above if left blank)</label>
-            <input id="ackConvId" placeholder="guid — defaults to Conversation ID above" />
+            <input
+              id="ackConvId"
+              placeholder="guid — defaults to Conversation ID above"
+            />
           </div>
           <div class="field">
             <label>Message ID (for Delivered ack — single message)</label>
@@ -476,17 +475,22 @@
           </button>
 
           <div class="field" style="margin-top: 10px">
-            <label>Up-To Message ID (for Seen ack — marks everything up to & including this)</label>
+            <label
+              >Up-To Message ID (for Seen ack — marks everything up to &
+              including this)</label
+            >
             <input id="seenUpToMsgId" placeholder="guid" />
           </div>
           <button class="btn-secondary btn-sm" onclick="ackSeen()">
             AckMessagesSeen
           </button>
           <p style="font-size: 10px; color: var(--muted); margin-top: 6px">
-            Watch the log for outgoing <code>MessageDelivered</code>/<code>MessageSeen</code>
+            Watch the log for outgoing <code>MessageDelivered</code>/<code
+              >MessageSeen</code
+            >
             pushes echoed back on <code>conv:{id}</code> — needs another
-            connected client (open this page twice, log in as both
-            participants) to see the full round trip.
+            connected client (open this page twice, log in as both participants)
+            to see the full round trip.
           </p>
         </div>
 
@@ -502,7 +506,10 @@
           </p>
           <div class="field">
             <label>Conversation ID (reuses field above if left blank)</label>
-            <input id="restConvId" placeholder="guid — defaults to Conversation ID above" />
+            <input
+              id="restConvId"
+              placeholder="guid — defaults to Conversation ID above"
+            />
           </div>
           <div class="field">
             <label>Message ID</label>
@@ -609,31 +616,17 @@
         try {
           const res = await fetch(`${base}/api/v1/auth/login`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+            },
             credentials: "include", // important: receives the HttpOnly cookie
-            body: JSON.stringify({ identifier: email, password }),
+            body: JSON.stringify({
+              identifier: email,
+              password,
+            }),
           });
 
-          const json = await res.json();
-          log("IN", "tag-in", `HTTP ${res.status} — Login response`, json);
-
-          // Token may come in response body (mobile mode) or in cookie (web mode).
-          // Try body first, cookie is used automatically by the browser for subsequent requests.
-          const token = json?.result?.accessToken || json?.accessToken || "";
-          if (token) {
-            document.getElementById("token").value = token;
-            log(
-              "SYS",
-              "tag-sys",
-              "Token extracted from response body and filled in.",
-            );
-          } else {
-            log(
-              "SYS",
-              "tag-sys",
-              "No token in response body — assuming HttpOnly cookie was set. SignalR will use cookie automatically.",
-            );
-          }
+          log("SYS", "tag-sys", "Login successful. Cookie stored by browser.");
         } catch (err) {
           log("ERR", "tag-err", "Login failed", { error: err.message });
         }
@@ -643,16 +636,11 @@
 
       async function connect() {
         const base = getVal("baseUrl");
-        const token = getVal("token");
 
         const hubUrl = `${base}/hubs/chat`;
 
         const builder = new signalR.HubConnectionBuilder()
           .withUrl(hubUrl, {
-            // If token is in the input, pass it as query param (?access_token=...)
-            // AuthenticationConfiguration reads this for WebSocket upgrades.
-            // If empty, SignalR falls back to the HttpOnly cookie automatically.
-            accessTokenFactory: token ? () => token : undefined,
             withCredentials: true, // sends cookies (for HttpOnly cookie auth)
           })
           .withAutomaticReconnect([0, 2000, 5000, 10000])
@@ -894,9 +882,16 @@
           });
 
           const json = await res.json().catch(() => null);
-          log("IN", "tag-in", `HTTP ${res.status} — Mark ${action} response`, json);
+          log(
+            "IN",
+            "tag-in",
+            `HTTP ${res.status} — Mark ${action} response`,
+            json,
+          );
         } catch (err) {
-          log("ERR", "tag-err", `Mark ${action} failed`, { error: err.message });
+          log("ERR", "tag-err", `Mark ${action} failed`, {
+            error: err.message,
+          });
         }
       }
 

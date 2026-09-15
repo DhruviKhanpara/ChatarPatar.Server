@@ -262,18 +262,16 @@ public static class DbConstraints
     {
         public const string FKMessage = "FK_PinnedMessages_Message";
         public const string FKPinnedByUser = "FK_PinnedMessages_PinnedBy";
-        public const string FKUnPinnedByUser = "FK_PinnedMessages_UnPinnedBy";
         public const string FKChannel = "FK_PinnedMessages_Channel";
         public const string FKConversation = "FK_PinnedMessages_Conv";
 
         public const string CKMessageSource = "CK_PinnedMessages_Source";
-        public const string CKUnpinConsistency = "CK_PinnedMessages_UnpinConsistency";
 
-        public const string UniquePinnedMessagePerChannel = "UX_Pinned_Channel_Active";
-        public const string UniquePinnedMessagePerConversation = "UX_Pinned_Conversation_Active";
+        public const string UniquePinnedMessagePerChannel = "UX_Pinned_Channel";
+        public const string UniquePinnedMessagePerConversation = "UX_Pinned_Conversation";
 
-        public const string IXChannelMessagePinnedAt = "IX_Pinned_Channel_Active";
-        public const string IXConversationMessagePinnedAt = "IX_Pinned_Conversation_Active";
+        public const string IXChannelMessagePinnedAt = "IX_Pinned_Channel_PinnedAt";
+        public const string IXConversationMessagePinnedAt = "IX_Pinned_Conversation_PinnedAt";
     }
 
     public static class ReadStates

@@ -1,6 +1,8 @@
 ﻿using Asp.Versioning;
 using ChatarPatar.API.Attributes;
+using ChatarPatar.Application.DTOs.Common;
 using ChatarPatar.Application.DTOs.Message;
+using ChatarPatar.Application.DTOs.Message.Pin;
 using ChatarPatar.Application.DTOs.Message.Reaction;
 using ChatarPatar.Application.DTOs.ReadState;
 using ChatarPatar.Application.ServiceContracts;
@@ -35,6 +37,17 @@ public class ChannelMessageController : ControllerBase
     public async Task<ActionResult<CursorPagedResult<MessageDto>>> GetMessages([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid channelId, [FromQuery] MessageQueryParams queryParams)
     {
         var result = await _services.MessageService.GetChannelMessagesAsync(orgId, teamId, channelId, queryParams);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Returns a paged list of pinned messages for a channel, most recently pinned first.
+    /// </summary>
+    [HttpGet("pins")]
+    [SkipPermission]
+    public async Task<ActionResult<PagedResult<PinnedMessageListItemDto>>> GetPinnedMessages([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid channelId, [FromQuery] PaginationParams paginationParams)
+    {
+        var result = await _services.MessageService.GetChannelPinnedMessagesAsync(orgId, teamId, channelId, paginationParams);
         return Ok(result);
     }
 
@@ -112,9 +125,20 @@ public class ChannelMessageController : ControllerBase
     /// </summary>
     [HttpPost("{messageId:guid}/pin")]
     [RequirePermission(PermissionCheckLogicEnum.Any, Permissions.MESSAGE_PIN)]
-    public async Task<ActionResult<MessageDto>> PinMessage([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid channelId, [FromRoute] Guid messageId)
+    public async Task<ActionResult<PinnedMessageResponseDto>> PinMessage([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid channelId, [FromRoute] Guid messageId)
     {
         var result = await _services.MessageService.PinChannelMessageAsync(channelId, messageId);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Unpin a message from a channel.
+    /// </summary>
+    [HttpDelete("{messageId:guid}/pin")]
+    [RequirePermission(PermissionCheckLogicEnum.Any, Permissions.MESSAGE_PIN)]
+    public async Task<ActionResult<PinnedMessageResponseDto>> UnPinMessage([FromRoute] Guid orgId, [FromRoute] Guid teamId, [FromRoute] Guid channelId, [FromRoute] Guid messageId)
+    {
+        var result = await _services.MessageService.UnPinChannelMessageAsync(channelId, messageId);
         return Ok(result);
     }
 

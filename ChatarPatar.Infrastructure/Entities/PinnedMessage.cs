@@ -15,8 +15,6 @@ public class PinnedMessage : BaseEntity
     public Conversation? Conversation { get; set; }
     [ForeignKey(nameof(PinnedByUserId))]
     public User PinnedByUser { get; set; } = null!;
-    [ForeignKey(nameof(UnPinnedByUserId))]
-    public User? UnPinnedByUser { get; set; }
     #endregion
 
     public Guid MessageId { get; set; }
@@ -26,9 +24,6 @@ public class PinnedMessage : BaseEntity
 
     public Guid PinnedByUserId { get; set; }
     public DateTime PinnedAt { get; set; }
-
-    public Guid? UnPinnedByUserId { get; set; }
-    public DateTime? UnPinnedAt { get; set; }
 
     public string? ContentSnapshot { get; set; }
 

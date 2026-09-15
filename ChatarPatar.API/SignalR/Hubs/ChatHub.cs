@@ -17,8 +17,7 @@ namespace ChatarPatar.API.SignalR.Hubs;
 ///   - Typing relay → fire-and-forget, never persisted
 ///
 /// Auth: JWT bearer token.
-/// The browser cannot send Authorization headers over WebSocket, so the
-/// token is passed as ?access_token=... query parameter.
+/// The browser will send Authorization cookie over WebSocket.
 /// </summary>
 
 [Authorize]

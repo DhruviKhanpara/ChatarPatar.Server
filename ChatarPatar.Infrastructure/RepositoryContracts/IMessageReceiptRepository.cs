@@ -16,4 +16,11 @@ public interface IMessageReceiptRepository : IBaseRepository<MessageReceipt>
     /// including the given sequence number. Returns the message ids updated.
     /// </summary>
     Task<List<Guid>> MarkSeenUpToAsync(Guid conversationId, Guid userId, long upToSequence);
+
+    /// <summary>
+    /// All receipt rows for a single message. Empty means the message was
+    /// never receipt-tracked (channel, Direct DM, or group over threshold
+    /// at send time) — not that nobody's seen it.
+    /// </summary>
+    IQueryable<MessageReceipt> GetForMessage(Guid messageId);
 }

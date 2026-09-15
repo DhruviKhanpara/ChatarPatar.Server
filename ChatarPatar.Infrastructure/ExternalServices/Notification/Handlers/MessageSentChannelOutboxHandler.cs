@@ -178,9 +178,11 @@ internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
 
         // ── Phase 4: SignalR pushes (post-commit) ──────────────────────────────
 
-        foreach (var rs in existingReadStates)
+        var pushOptions = new ParallelOptions { MaxDegreeOfParallelism = 20 };
+
+        // 4a. Badge update
+        await Parallel.ForEachAsync(existingReadStates, pushOptions, async (rs, _) =>
         {
-            // 4a. Badge update
             try
             {
                 await _signalR.PushReadStateBadgeAsync(rs.UserId, new ReadStatePush
@@ -195,10 +197,10 @@ internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
             {
                 _logger.LogWarning(ex, "[OUTBOX] ReadStateBadge push failed. UserId={UserId}", rs.UserId);
             }
-        }
+        });
 
         // 4c. Notifications to each recipient's personal group
-        foreach (var n in notifications)
+        await Parallel.ForEachAsync(notifications, pushOptions, async (n, _) =>
         {
             try
             {
@@ -217,7 +219,7 @@ internal sealed class MessageSentChannelOutboxHandler : IOutboxMessageHandler
             {
                 _logger.LogWarning(ex, "[OUTBOX] NotificationPush failed. UserId={UserId}", n.RecipientId);
             }
-        }
+        });
 
         _logger.LogInformation(
             "[OUTBOX] ReadState fanout complete — MessageId={MessageId} ChannelId={ChannelId} MembersUpdated={Count} MentionsUpdated={MentionCount}",

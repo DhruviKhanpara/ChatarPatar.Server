@@ -6,4 +6,6 @@ public class PinnedMessageResponseDto
     public Guid MessageId { get; set; }
     public Guid PinnedByUserId { get; set; }
     public DateTime PinnedAt { get; set; }
+    public Guid? UnPinnedByUserId { get; set; }
+    public DateTime? UnPinnedAt { get; set; }
 }
