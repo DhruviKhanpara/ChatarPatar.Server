@@ -87,6 +87,8 @@ public class Program
         // CORS configuration to allow requests from UI
         builder.Services.AddCorsConfiguration(builder.Configuration);
 
+        builder.Services.AddRateLimitingConfiguration();
+
         var app = builder.Build();
 
         // Configure the HTTP request pipeline.
@@ -124,6 +126,8 @@ public class Program
 
         app.UseAuthentication();
         app.UseAuthorization();
+
+        app.UseRateLimiter();
 
         // after auth — claims are now populated
         app.UseMiddleware<LoggingMiddleware>();
